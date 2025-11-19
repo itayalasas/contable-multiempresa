@@ -127,6 +127,51 @@ export default function Facturas() {
     });
   };
 
+  const handleVerDetalles = async (factura: FacturaVenta) => {
+    try {
+      const facturaCompleta = await import('../../services/supabase/facturas').then(m =>
+        m.obtenerFacturaPorId(factura.id)
+      );
+
+      const detalles = `
+Factura: ${facturaCompleta.serie}-${facturaCompleta.numero_factura}
+Cliente: ${facturaCompleta.cliente?.razon_social}
+Documento: ${facturaCompleta.cliente?.numero_documento}
+Email: ${facturaCompleta.cliente?.email || 'N/A'}
+Teléfono: ${facturaCompleta.cliente?.telefono || 'N/A'}
+
+Fecha Emisión: ${new Date(facturaCompleta.fecha_emision).toLocaleDateString()}
+Estado: ${getEstadoLabel(facturaCompleta.estado)}
+DGI: ${facturaCompleta.dgi_enviada ? `Enviada (CAE: ${facturaCompleta.dgi_cae})` : 'Pendiente'}
+
+Items:
+${facturaCompleta.items?.map((item, i) =>
+  `${i + 1}. ${item.descripcion}
+   Cantidad: ${item.cantidad} x $${parseFloat(item.precio_unitario).toFixed(2)}
+   Subtotal: $${parseFloat(item.subtotal).toFixed(2)}
+   IVA (${(item.tasa_iva * 100).toFixed(0)}%): $${parseFloat(item.monto_iva).toFixed(2)}
+   Total: $${parseFloat(item.total).toFixed(2)}`
+).join('\n\n')}
+
+Subtotal: $${parseFloat(facturaCompleta.subtotal).toLocaleString()}
+IVA: $${parseFloat(facturaCompleta.total_iva).toLocaleString()}
+TOTAL: $${parseFloat(facturaCompleta.total).toLocaleString()} ${facturaCompleta.moneda}
+      `.trim();
+
+      mostrarNotificacion('info', 'Detalles de la Factura', detalles);
+    } catch (error: any) {
+      mostrarNotificacion('error', 'Error', error.message);
+    }
+  };
+
+  const handleDescargarPDF = (factura: FacturaVenta) => {
+    mostrarNotificacion(
+      'info',
+      'Generar PDF',
+      `La generación de PDF para la factura ${factura.numero_factura} estará disponible próximamente.`
+    );
+  };
+
   const mostrarNotificacion = (
     type: 'success' | 'error' | 'warning' | 'info',
     title: string,
@@ -369,48 +414,57 @@ export default function Facturas() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Ver detalles - siempre visible */}
+                        <button
+                          onClick={() => handleVerDetalles(factura)}
+                          className="text-gray-600 hover:text-gray-900"
+                          title="Ver detalles"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                        </button>
+
+                        {/* Editar - solo borrador */}
                         {factura.estado === 'borrador' && (
-                          <>
-                            <button
-                              onClick={() => handleEditFactura(factura)}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="Editar"
+                          <button
+                            onClick={() => handleEditFactura(factura)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Editar"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
                             >
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleEliminarFactura(factura)}
-                              className="text-red-600 hover:text-red-900"
-                              title="Eliminar"
-                            >
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                            </button>
-                          </>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
+                            </svg>
+                          </button>
                         )}
+
+                        {/* Marcar como pagada - solo pendiente */}
                         {factura.estado === 'pendiente' && (
                           <button
                             onClick={() => handleMarcarComoPagada(factura)}
@@ -432,6 +486,8 @@ export default function Facturas() {
                             </svg>
                           </button>
                         )}
+
+                        {/* Enviar a DGI - si no está enviada y no está anulada */}
                         {!factura.dgi_enviada && factura.estado !== 'anulada' && (
                           <button
                             onClick={() => handleEnviarDGI(factura)}
@@ -449,6 +505,52 @@ export default function Facturas() {
                                 strokeLinejoin="round"
                                 strokeWidth={2}
                                 d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                              />
+                            </svg>
+                          </button>
+                        )}
+
+                        {/* Descargar PDF - siempre visible excepto borrador */}
+                        {factura.estado !== 'borrador' && (
+                          <button
+                            onClick={() => handleDescargarPDF(factura)}
+                            className="text-orange-600 hover:text-orange-900"
+                            title="Descargar PDF"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                              />
+                            </svg>
+                          </button>
+                        )}
+
+                        {/* Eliminar - solo borrador */}
+                        {factura.estado === 'borrador' && (
+                          <button
+                            onClick={() => handleEliminarFactura(factura)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Eliminar"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                               />
                             </svg>
                           </button>
