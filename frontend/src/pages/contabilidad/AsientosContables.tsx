@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AsientoContable, MovimientoContable, PlanCuenta } from '../../types';
 import { planCuentasSupabaseService } from '../../services/supabase/planCuentas';
 import { SeedDataSupabaseService } from '../../services/supabase/seedData';
+import { asientosSupabaseService } from '../../services/supabase/asientos';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { SearchableAccountSelector } from '../../components/common/SearchableAccountSelector';
@@ -143,7 +144,7 @@ function AsientosContables() {
     return matchesSearch && matchesPeriod;
   });
 
-  const openModal = (type: 'create' | 'edit' | 'view', asiento?: AsientoContable) => {
+  const openModal = async (type: 'create' | 'edit' | 'view', asiento?: AsientoContable) => {
     setModalType(type);
     if (asiento) {
       setSelectedAsiento(asiento);
@@ -157,32 +158,50 @@ function AsientosContables() {
         });
       }
     } else {
-      resetForm();
+      await resetForm();
     }
     setShowModal(true);
   };
 
-  const resetForm = () => {
-    const nextNumber = generateNextNumber();
-    setFormData({
-      numero: nextNumber,
-      fecha: new Date().toISOString().split('T')[0],
-      descripcion: '',
-      referencia: '',
-      movimientos: [
-        { id: '1', cuentaId: '', cuenta: '', debito: 0, credito: 0, descripcion: '' },
-        { id: '2', cuentaId: '', cuenta: '', debito: 0, credito: 0, descripcion: '' }
-      ]
-    });
-    setSelectedAsiento(null);
-  };
+  const resetForm = async () => {
+    if (!empresaActual?.id) return;
 
-  const generateNextNumber = () => {
-    const maxNumber = asientos.reduce((max, asiento) => {
-      const num = parseInt(asiento.numero.replace(/\D/g, ''));
-      return num > max ? num : max;
-    }, 0);
-    return `ASI-${String(maxNumber + 1).padStart(3, '0')}`;
+    try {
+      // Obtener el siguiente número desde Supabase
+      const nextNumber = await asientosSupabaseService.getSiguienteNumero(empresaActual.id, 'ASI');
+
+      setFormData({
+        numero: nextNumber,
+        fecha: new Date().toISOString().split('T')[0],
+        descripcion: '',
+        referencia: '',
+        movimientos: [
+          { id: '1', cuentaId: '', cuenta: '', debito: 0, credito: 0, descripcion: '' },
+          { id: '2', cuentaId: '', cuenta: '', debito: 0, credito: 0, descripcion: '' }
+        ]
+      });
+      setSelectedAsiento(null);
+    } catch (error) {
+      console.error('Error obteniendo siguiente número:', error);
+      // Fallback a generación local si hay error
+      const maxNumber = asientos.reduce((max, asiento) => {
+        const num = parseInt(asiento.numero.replace(/\D/g, ''));
+        return num > max ? num : max;
+      }, 0);
+      const fallbackNumber = `ASI-${String(maxNumber + 1).padStart(6, '0')}`;
+
+      setFormData({
+        numero: fallbackNumber,
+        fecha: new Date().toISOString().split('T')[0],
+        descripcion: '',
+        referencia: '',
+        movimientos: [
+          { id: '1', cuentaId: '', cuenta: '', debito: 0, credito: 0, descripcion: '' },
+          { id: '2', cuentaId: '', cuenta: '', debito: 0, credito: 0, descripcion: '' }
+        ]
+      });
+      setSelectedAsiento(null);
+    }
   };
 
   const addMovimiento = () => {
@@ -304,7 +323,7 @@ function AsientosContables() {
       }
 
       setShowModal(false);
-      resetForm();
+      await resetForm();
     } catch (error) {
       console.error('Error guardando asiento:', error);
       showError(
