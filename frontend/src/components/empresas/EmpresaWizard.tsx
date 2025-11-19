@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronRight, ChevronLeft, Check, Building2, FileText, Receipt, Users, Briefcase, MapPin } from 'lucide-react';
-import { StepDatosBasicos } from './steps/StepDatosBasicos';
+import { StepDatosBasicos, validateStepDatosBasicos } from './steps/StepDatosBasicos';
+import { StepConfigFiscal } from './steps/StepConfigFiscal';
+import { StepConfigCFE } from './steps/StepConfigCFE';
+import { StepConfigBPS } from './steps/StepConfigBPS';
+import { StepActividades } from './steps/StepActividades';
+import { StepResumen } from './steps/StepResumen';
 import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 
@@ -27,6 +32,7 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [canProceed, setCanProceed] = useState(false);
 
   const steps: WizardStep[] = [
     {
@@ -68,10 +74,22 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   ];
 
   const handleNext = () => {
+    if (currentStep === 0 && !validateStepDatosBasicos(formData)) {
+      alert('Por favor complete todos los campos obligatorios marcados con *');
+      return;
+    }
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
   };
+
+  useEffect(() => {
+    if (currentStep === 0) {
+      setCanProceed(validateStepDatosBasicos(formData));
+    } else {
+      setCanProceed(true);
+    }
+  }, [currentStep, formData]);
 
   const handlePrevious = () => {
     if (currentStep > 0) {
@@ -237,7 +255,8 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
           {currentStep < steps.length - 1 ? (
             <button
               onClick={handleNext}
-              className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={currentStep === 0 && !canProceed}
+              className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-2" />

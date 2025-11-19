@@ -9,9 +9,22 @@ interface StepDatosBasicosProps {
   data: any;
   onChange: (data: any) => void;
   paisId?: string;
+  onValidate?: (isValid: boolean) => void;
 }
 
-export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChange, paisId }) => {
+export const validateStepDatosBasicos = (data: any): boolean => {
+  return !!(
+    data.nombre?.trim() &&
+    data.razon_social?.trim() &&
+    data.pais_nombre?.trim() &&
+    data.numero_identificacion?.trim() &&
+    data.tipo_contribuyente_id &&
+    data.fecha_inicio_actividades?.trim() &&
+    data.email?.trim()
+  );
+};
+
+export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChange, paisId, onValidate }) => {
   const { getCitiesByCountry } = useCountries();
   const [cities, setCities] = useState<string[]>([]);
   const [tiposContribuyente, setTiposContribuyente] = useState<TipoContribuyente[]>([]);
@@ -26,6 +39,12 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
       setTiposContribuyente([]);
     }
   }, [data.pais_nombre]);
+
+  useEffect(() => {
+    if (onValidate) {
+      onValidate(validateStepDatosBasicos(data));
+    }
+  }, [data, onValidate]);
 
   const loadDataForCountry = async (countryName: string, countryIso2: string) => {
     try {
