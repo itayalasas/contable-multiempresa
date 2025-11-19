@@ -99,15 +99,16 @@ export class SeedDataSupabaseService {
       // Verificar si ya existe plan de cuentas
       const { data: existingCuentas, error: checkError } = await supabase
         .from('plan_cuentas')
-        .select('id')
-        .eq('empresa_id', empresaId)
-        .limit(1);
+        .select('id, codigo, nombre')
+        .eq('empresa_id', empresaId);
 
       if (checkError) throw checkError;
 
+      // Si ya hay cuentas, solo insertar asientos de prueba
       if (existingCuentas && existingCuentas.length > 0) {
-        console.log('⚠️ Ya existen cuentas para esta empresa. No se insertarán datos duplicados.');
-        throw new Error('Ya existe un plan de cuentas para esta empresa. Elimine las cuentas existentes antes de insertar datos de prueba.');
+        console.log('⚠️ Ya existe un plan de cuentas. Insertando solo asientos de prueba...');
+        await this.insertAsientosPrueba(empresaId, paisId, existingCuentas);
+        return;
       }
 
       // Insertar cuentas por niveles para respetar la jerarquía
@@ -167,8 +168,191 @@ export class SeedDataSupabaseService {
       }
 
       console.log(`✅ Plan de cuentas inicializado exitosamente para empresa ${empresaId}`);
+
+      // Insertar asientos de prueba
+      await this.insertAsientosPrueba(empresaId, paisId, Array.from(codigoToIdMap.entries()).map(([codigo, id]) => ({ id, codigo, nombre: '' })));
     } catch (error) {
       console.error('❌ Error insertando datos de prueba:', error);
+      throw error;
+    }
+  }
+
+  private static async insertAsientosPrueba(empresaId: string, paisId: string, cuentas: Array<{ id: string; codigo: string; nombre: string }>): Promise<void> {
+    try {
+      console.log('📝 Insertando asientos de prueba...');
+
+      // Buscar cuentas necesarias para los asientos
+      const caja = cuentas.find(c => c.codigo === '1011' || c.codigo.startsWith('10'));
+      const banco = cuentas.find(c => c.codigo === '1041' || c.codigo.startsWith('104'));
+      const capital = cuentas.find(c => c.codigo === '5011' || c.codigo.startsWith('50'));
+      const ventas = cuentas.find(c => c.codigo === '7011' || c.codigo.startsWith('70'));
+      const compras = cuentas.find(c => c.codigo === '6011' || c.codigo.startsWith('60'));
+      const gastosServicios = cuentas.find(c => c.codigo === '6361' || c.codigo.startsWith('63'));
+
+      if (!caja && !banco) {
+        console.log('⚠️ No se encontraron cuentas de efectivo. No se pueden crear asientos de prueba.');
+        return;
+      }
+
+      const asientosPrueba = [];
+
+      // Asiento 1: Apertura de capital
+      if (caja && capital) {
+        asientosPrueba.push({
+          numero: 'ASI-000001',
+          fecha: new Date(new Date().getFullYear(), 0, 2).toISOString().split('T')[0],
+          descripcion: 'Asiento de apertura - Aporte de capital inicial',
+          referencia: 'APE-001',
+          estado: 'confirmado',
+          empresa_id: empresaId,
+          pais_id: paisId,
+          creado_por: 'sistema',
+          movimientos: [
+            {
+              cuenta_id: caja.id,
+              cuenta: `${caja.codigo} - ${caja.nombre}`,
+              debito: 50000,
+              credito: 0,
+              descripcion: 'Aporte inicial en efectivo'
+            },
+            {
+              cuenta_id: capital.id,
+              cuenta: `${capital.codigo} - ${capital.nombre}`,
+              debito: 0,
+              credito: 50000,
+              descripcion: 'Capital social inicial'
+            }
+          ]
+        });
+      }
+
+      // Asiento 2: Venta de mercadería
+      if (caja && ventas) {
+        asientosPrueba.push({
+          numero: 'ASI-000002',
+          fecha: new Date(new Date().getFullYear(), 0, 15).toISOString().split('T')[0],
+          descripcion: 'Venta de mercadería al contado',
+          referencia: 'FAC-001',
+          estado: 'confirmado',
+          empresa_id: empresaId,
+          pais_id: paisId,
+          creado_por: 'sistema',
+          movimientos: [
+            {
+              cuenta_id: caja.id,
+              cuenta: `${caja.codigo} - ${caja.nombre}`,
+              debito: 15000,
+              credito: 0,
+              descripcion: 'Cobro de venta'
+            },
+            {
+              cuenta_id: ventas.id,
+              cuenta: `${ventas.codigo} - ${ventas.nombre}`,
+              debito: 0,
+              credito: 15000,
+              descripcion: 'Ingreso por ventas'
+            }
+          ]
+        });
+      }
+
+      // Asiento 3: Compra de mercadería
+      if (banco && compras) {
+        asientosPrueba.push({
+          numero: 'ASI-000003',
+          fecha: new Date(new Date().getFullYear(), 0, 20).toISOString().split('T')[0],
+          descripcion: 'Compra de mercadería con transferencia bancaria',
+          referencia: 'COM-001',
+          estado: 'confirmado',
+          empresa_id: empresaId,
+          pais_id: paisId,
+          creado_por: 'sistema',
+          movimientos: [
+            {
+              cuenta_id: compras.id,
+              cuenta: `${compras.codigo} - ${compras.nombre}`,
+              debito: 8000,
+              credito: 0,
+              descripcion: 'Compra de mercadería'
+            },
+            {
+              cuenta_id: banco.id,
+              cuenta: `${banco.codigo} - ${banco.nombre}`,
+              debito: 0,
+              credito: 8000,
+              descripcion: 'Pago mediante transferencia'
+            }
+          ]
+        });
+      }
+
+      // Asiento 4: Pago de servicios
+      if (caja && gastosServicios) {
+        asientosPrueba.push({
+          numero: 'ASI-000004',
+          fecha: new Date(new Date().getFullYear(), 0, 25).toISOString().split('T')[0],
+          descripcion: 'Pago de servicios básicos',
+          referencia: 'SERV-001',
+          estado: 'confirmado',
+          empresa_id: empresaId,
+          pais_id: paisId,
+          creado_por: 'sistema',
+          movimientos: [
+            {
+              cuenta_id: gastosServicios.id,
+              cuenta: `${gastosServicios.codigo} - ${gastosServicios.nombre}`,
+              debito: 1500,
+              credito: 0,
+              descripcion: 'Pago de luz, agua, internet'
+            },
+            {
+              cuenta_id: caja.id,
+              cuenta: `${caja.codigo} - ${caja.nombre}`,
+              debito: 0,
+              credito: 1500,
+              descripcion: 'Pago en efectivo'
+            }
+          ]
+        });
+      }
+
+      // Insertar los asientos
+      for (const asiento of asientosPrueba) {
+        const movimientos = asiento.movimientos;
+        delete (asiento as any).movimientos;
+
+        // Insertar el asiento
+        const { data: asientoCreado, error: asientoError } = await supabase
+          .from('asientos_contables')
+          .insert(asiento)
+          .select()
+          .single();
+
+        if (asientoError) {
+          console.error('Error insertando asiento:', asientoError);
+          continue;
+        }
+
+        // Insertar los movimientos
+        const movimientosToInsert = movimientos.map(mov => ({
+          ...mov,
+          asiento_id: asientoCreado.id
+        }));
+
+        const { error: movError } = await supabase
+          .from('movimientos_contables')
+          .insert(movimientosToInsert);
+
+        if (movError) {
+          console.error('Error insertando movimientos:', movError);
+        } else {
+          console.log(`✅ Asiento ${asiento.numero} creado exitosamente`);
+        }
+      }
+
+      console.log(`✅ ${asientosPrueba.length} asientos de prueba insertados exitosamente`);
+    } catch (error) {
+      console.error('❌ Error insertando asientos de prueba:', error);
       throw error;
     }
   }
