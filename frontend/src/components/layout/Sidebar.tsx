@@ -15,7 +15,15 @@ import {
   FileBarChart,
   ArrowLeftRight,
   X,
-  Database
+  Database,
+  ShoppingCart,
+  ShoppingBag,
+  DollarSign,
+  Calendar,
+  Target,
+  Plug,
+  Shield,
+  TrendingUp
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,7 +44,28 @@ const menuItems = [
       { title: 'Plan de Cuentas', icon: FileText, path: '/contabilidad/plan-cuentas' },
       { title: 'Asientos Contables', icon: Receipt, path: '/contabilidad/asientos' },
       { title: 'Libro Mayor', icon: FileBarChart, path: '/contabilidad/mayor' },
-      { title: 'Balance de Comprobación', icon: BarChart3, path: '/contabilidad/balance-comprobacion' }
+      { title: 'Balance de Comprobación', icon: BarChart3, path: '/contabilidad/balance-comprobacion' },
+      { title: 'Periodos Contables', icon: Calendar, path: '/contabilidad/periodos' }
+    ]
+  },
+  {
+    title: 'Ventas',
+    icon: ShoppingCart,
+    submenu: [
+      { title: 'Clientes', icon: Users, path: '/ventas/clientes' },
+      { title: 'Facturas', icon: Receipt, path: '/ventas/facturas' },
+      { title: 'Notas de Crédito', icon: FileText, path: '/ventas/notas-credito' },
+      { title: 'Notas de Débito', icon: FileText, path: '/ventas/notas-debito' },
+      { title: 'Recibos', icon: Receipt, path: '/ventas/recibos' }
+    ]
+  },
+  {
+    title: 'Compras',
+    icon: ShoppingBag,
+    submenu: [
+      { title: 'Proveedores', icon: Users, path: '/compras/proveedores' },
+      { title: 'Facturas de Compra', icon: Receipt, path: '/compras/facturas' },
+      { title: 'Gastos', icon: DollarSign, path: '/compras/gastos' }
     ]
   },
   {
@@ -50,12 +79,22 @@ const menuItems = [
     ]
   },
   {
+    title: 'Análisis',
+    icon: TrendingUp,
+    submenu: [
+      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo' },
+      { title: 'Segmentos de Negocio', icon: PieChart, path: '/analisis/segmentos' },
+      { title: 'Presupuestos', icon: BarChart3, path: '/analisis/presupuestos' }
+    ]
+  },
+  {
     title: 'Reportes',
     icon: PieChart,
     submenu: [
       { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general' },
       { title: 'Estado de Resultados', icon: BarChart3, path: '/reportes/estado-resultados' },
-      { title: 'Flujo de Efectivo', icon: ArrowLeftRight, path: '/reportes/flujo-efectivo' }
+      { title: 'Flujo de Efectivo', icon: ArrowLeftRight, path: '/reportes/flujo-efectivo' },
+      { title: 'Por Centro de Costo', icon: Target, path: '/reportes/centros-costo' }
     ]
   },
   {
@@ -65,7 +104,11 @@ const menuItems = [
       { title: 'Empresas', icon: Building2, path: '/admin/empresas' },
       { title: 'Usuarios', icon: Users, path: '/admin/usuarios' },
       { title: 'Nomencladores', icon: Database, path: '/admin/configuracion' },
-      { title: 'Mapeo de Archivos', icon: FileText, path: '/admin/configuracion-mapeo' }
+      { title: 'Mapeo de Archivos', icon: FileText, path: '/admin/configuracion-mapeo' },
+      { title: 'Impuestos', icon: DollarSign, path: '/admin/impuestos' },
+      { title: 'Integraciones', icon: Plug, path: '/admin/integraciones' },
+      { title: 'Auditoría', icon: Shield, path: '/admin/auditoria' },
+      { title: 'Multi-moneda', icon: TrendingUp, path: '/admin/multimoneda' }
     ]
   }
 ];
