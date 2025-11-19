@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SesionProvider } from './context/SesionContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
+import { Callback } from './pages/Callback';
 import { Dashboard } from './pages/Dashboard';
 
 // Lazy load components to improve performance
@@ -111,27 +112,8 @@ const AppRoutes: React.FC = () => {
     );
   }
 
-  // En modo desarrollo, siempre mostrar como autenticado
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-            <strong className="font-bold">Modo Desarrollo: </strong>
-            <span className="block sm:inline">Autenticación deshabilitada</span>
-          </div>
-          <p className="text-gray-600 mb-4">
-            La autenticación está deshabilitada para pruebas locales.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Continuar
-          </button>
-        </div>
-      </div>
-    );
+    return <Login />;
   }
 
   return (
@@ -178,7 +160,10 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <AppRoutes />
+        <Routes>
+          <Route path="/callback" element={<Callback />} />
+          <Route path="*" element={<AppRoutes />} />
+        </Routes>
       </Router>
     </AuthProvider>
   );
