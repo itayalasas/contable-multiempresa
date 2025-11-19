@@ -35,20 +35,29 @@ interface AuthResponse {
 }
 
 export class AuthService {
-  private static readonly AUTH_URL = import.meta.env.VITE_AUTH_URL;
-  private static readonly AUTH_APP_ID = import.meta.env.VITE_AUTH_APP_ID;
-  private static readonly AUTH_API_KEY = import.meta.env.VITE_AUTH_API_KEY;
-  private static readonly AUTH_CALLBACK_URL = import.meta.env.VITE_AUTH_CALLBACK_URL;
-  private static readonly AUTH_EXCHANGE_URL = import.meta.env.VITE_AUTH_EXCHANGE_URL;
+  private static readonly AUTH_URL = import.meta.env.VITE_AUTH_URL || 'https://auth-contaempresa.netlify.app';
+  private static readonly AUTH_APP_ID = import.meta.env.VITE_AUTH_APP_ID || 'app_b9b5f22b-cda';
+  private static readonly AUTH_API_KEY = import.meta.env.VITE_AUTH_API_KEY || 'ak_production_f3307c60cd281c8e8ff629d7ab3059e5';
+  private static readonly AUTH_CALLBACK_URL = import.meta.env.VITE_AUTH_CALLBACK_URL || window.location.origin + '/callback';
+  private static readonly AUTH_EXCHANGE_URL = import.meta.env.VITE_AUTH_EXCHANGE_URL || 'https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code';
 
   static getLoginUrl(): string {
+    console.log('🔐 Construyendo URL de login...');
+    console.log('AUTH_URL:', this.AUTH_URL);
+    console.log('AUTH_APP_ID:', this.AUTH_APP_ID);
+    console.log('AUTH_API_KEY:', this.AUTH_API_KEY);
+    console.log('AUTH_CALLBACK_URL:', this.AUTH_CALLBACK_URL);
+
     const params = new URLSearchParams({
       app_id: this.AUTH_APP_ID,
       redirect_uri: this.AUTH_CALLBACK_URL,
       api_key: this.AUTH_API_KEY,
     });
 
-    return `${this.AUTH_URL}/login?${params.toString()}`;
+    const loginUrl = `${this.AUTH_URL}/login?${params.toString()}`;
+    console.log('✅ URL de login:', loginUrl);
+
+    return loginUrl;
   }
 
   static redirectToLogin(): void {
