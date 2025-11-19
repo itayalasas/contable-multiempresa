@@ -326,6 +326,73 @@ function construirPayloadDGI(
   };
 }
 
+interface DGICreateResponse {
+  id: number;
+  serie: string;
+  numero: string;
+  hash: string;
+}
+
+interface DGIDetailResponse {
+  id: number;
+  tipo_comprobante: number;
+  serie: string;
+  numero: number;
+  sucursal: number;
+  numero_interno: string;
+  moneda: string;
+  tasa_cambio: string;
+  montos_brutos: number;
+  numero_orden: string;
+  lugar_entrega: string;
+  items: any[];
+  total: string;
+  estado: string;
+  fecha_creacion: string;
+  fecha_emision: string;
+  fecha_vencimiento: string | null;
+  adenda: string;
+  cae: {
+    numero: string;
+    serie: string;
+    inicio: number;
+    fin: number;
+    fecha_expiracion: string;
+  };
+}
+
+async function obtenerDetalleCFE(cfeId: number): Promise<DGIDetailResponse> {
+  const apiUrl = import.meta.env.VITE_DGI_API_DETAIL_URL;
+  const integrationKey = import.meta.env.VITE_DGI_INTEGRATION_KEY;
+
+  if (!apiUrl || !integrationKey) {
+    throw new Error('Configuración de API DGI incompleta en variables de entorno');
+  }
+
+  const url = `${apiUrl}?id=${cfeId}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-Integration-Key': integrationKey,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+    throw new Error(errorData.error || `Error HTTP ${response.status} al obtener detalle CFE`);
+  }
+
+  const responseData = await response.json();
+
+  if (Array.isArray(responseData) && responseData.length > 0) {
+    return responseData[0];
+  }
+
+  return responseData;
+}
+
 export async function enviarFacturaDGI(facturaId: string) {
   const factura = await obtenerFacturaPorId(facturaId);
 
@@ -336,10 +403,11 @@ export async function enviarFacturaDGI(facturaId: string) {
   const configCFE = await obtenerConfigCFE(factura.empresa_id);
   const payload = construirPayloadDGI(factura, configCFE);
 
-  const urlWebservice = configCFE.url_webservice || import.meta.env.VITE_DGI_WEBSERVICE_URL;
+  const apiCreateUrl = import.meta.env.VITE_DGI_API_CREATE_URL;
+  const integrationKey = import.meta.env.VITE_DGI_INTEGRATION_KEY;
 
-  if (!urlWebservice) {
-    console.warn('No hay URL de webservice configurada. Usando modo simulación.');
+  if (!apiCreateUrl || !integrationKey) {
+    console.warn('No hay configuración de API DGI. Usando modo simulación.');
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const cae = `CAE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -359,30 +427,53 @@ export async function enviarFacturaDGI(facturaId: string) {
   }
 
   try {
-    const response = await fetch(urlWebservice, {
+    const createResponse = await fetch(apiCreateUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Integration-Key': integrationKey,
       },
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
-      throw new Error(errorData.error || `Error HTTP ${response.status}`);
+    if (!createResponse.ok) {
+      const errorData = await createResponse.json().catch(() => ({ error: 'Error desconocido' }));
+      throw new Error(errorData.error || `Error HTTP ${createResponse.status} al crear CFE`);
     }
 
-    const responseData = await response.json();
+    const createData: DGICreateResponse = await createResponse.json();
+
+    console.log('CFE creado exitosamente:', createData);
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const detalleData = await obtenerDetalleCFE(createData.id);
+
+    console.log('Detalle CFE obtenido:', detalleData);
+
+    const fechaVencimientoCAE = detalleData.cae?.fecha_expiracion
+      ? new Date(detalleData.cae.fecha_expiracion).toISOString().split('T')[0]
+      : null;
 
     return actualizarFactura(facturaId, {
       dgi_enviada: true,
-      dgi_cae: responseData.cae || responseData.numero_autorizacion || `CAE-${Date.now()}`,
+      dgi_cae: detalleData.cae?.numero || createData.id.toString(),
       dgi_fecha_envio: new Date().toISOString(),
+      dgi_id: createData.id,
+      dgi_serie: createData.serie,
+      dgi_numero: parseInt(createData.numero),
+      dgi_hash: createData.hash,
+      dgi_cae_numero: detalleData.cae?.numero,
+      dgi_cae_serie: detalleData.cae?.serie,
+      dgi_cae_vencimiento: fechaVencimientoCAE,
+      dgi_detalle_completo: detalleData as any,
       dgi_response: {
         success: true,
-        ...responseData,
+        create_response: createData,
+        detail_response: detalleData,
         payload_enviado: payload,
+        fecha: new Date().toISOString(),
       },
     });
   } catch (error: any) {
