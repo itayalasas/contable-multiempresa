@@ -1,0 +1,240 @@
+import { supabase } from '../../config/supabase';
+import type { AsientoContable, MovimientoContable } from '../../types';
+
+export const asientosSupabaseService = {
+  async getAsientosByEmpresa(empresaId: string, limit?: number): Promise<AsientoContable[]> {
+    let query = supabase
+      .from('asientos_contables')
+      .select(`
+        *,
+        movimientos_contables (*)
+      `)
+      .eq('empresa_id', empresaId)
+      .order('fecha', { ascending: false })
+      .order('numero', { ascending: false });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return data.map(asiento => ({
+      id: asiento.id,
+      numero: asiento.numero,
+      fecha: asiento.fecha,
+      descripcion: asiento.descripcion,
+      referencia: asiento.referencia,
+      estado: asiento.estado as 'borrador' | 'confirmado' | 'anulado',
+      movimientos: asiento.movimientos_contables.map((mov: any) => ({
+        id: mov.id,
+        cuentaId: mov.cuenta_id,
+        cuenta: mov.cuenta,
+        debito: mov.debito,
+        credito: mov.credito,
+        descripcion: mov.descripcion,
+        terceroId: mov.tercero_id,
+        tercero: mov.tercero,
+        documentoReferencia: mov.documento_referencia,
+        centroCosto: mov.centro_costo,
+      })),
+      empresaId: asiento.empresa_id,
+      paisId: asiento.pais_id,
+      creadoPor: asiento.creado_por,
+      fechaCreacion: asiento.fecha_creacion,
+      fechaModificacion: asiento.fecha_modificacion,
+      documentoSoporte: asiento.documento_soporte,
+      centroCosto: asiento.centro_costo,
+      proyecto: asiento.proyecto,
+    }));
+  },
+
+  async getAsientoById(asientoId: string): Promise<AsientoContable | null> {
+    const { data, error } = await supabase
+      .from('asientos_contables')
+      .select(`
+        *,
+        movimientos_contables (*)
+      `)
+      .eq('id', asientoId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      numero: data.numero,
+      fecha: data.fecha,
+      descripcion: data.descripcion,
+      referencia: data.referencia,
+      estado: data.estado as 'borrador' | 'confirmado' | 'anulado',
+      movimientos: data.movimientos_contables.map((mov: any) => ({
+        id: mov.id,
+        cuentaId: mov.cuenta_id,
+        cuenta: mov.cuenta,
+        debito: mov.debito,
+        credito: mov.credito,
+        descripcion: mov.descripcion,
+        terceroId: mov.tercero_id,
+        tercero: mov.tercero,
+        documentoReferencia: mov.documento_referencia,
+        centroCosto: mov.centro_costo,
+      })),
+      empresaId: data.empresa_id,
+      paisId: data.pais_id,
+      creadoPor: data.creado_por,
+      fechaCreacion: data.fecha_creacion,
+      fechaModificacion: data.fecha_modificacion,
+      documentoSoporte: data.documento_soporte,
+      centroCosto: data.centro_costo,
+      proyecto: data.proyecto,
+    };
+  },
+
+  async createAsiento(asiento: Omit<AsientoContable, 'id' | 'fechaCreacion'>): Promise<AsientoContable> {
+    const { data: asientoData, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert({
+        numero: asiento.numero,
+        fecha: asiento.fecha,
+        descripcion: asiento.descripcion,
+        referencia: asiento.referencia,
+        estado: asiento.estado,
+        empresa_id: asiento.empresaId,
+        pais_id: asiento.paisId,
+        creado_por: asiento.creadoPor,
+        documento_soporte: asiento.documentoSoporte,
+        centro_costo: asiento.centroCosto,
+        proyecto: asiento.proyecto,
+      })
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientos = asiento.movimientos.map(mov => ({
+      asiento_id: asientoData.id,
+      cuenta_id: mov.cuentaId,
+      cuenta: mov.cuenta,
+      debito: mov.debito || 0,
+      credito: mov.credito || 0,
+      descripcion: mov.descripcion,
+      tercero_id: mov.terceroId,
+      tercero: mov.tercero,
+      documento_referencia: mov.documentoReferencia,
+      centro_costo: mov.centroCosto,
+    }));
+
+    const { data: movimientosData, error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientos)
+      .select();
+
+    if (movimientosError) throw movimientosError;
+
+    return {
+      id: asientoData.id,
+      numero: asientoData.numero,
+      fecha: asientoData.fecha,
+      descripcion: asientoData.descripcion,
+      referencia: asientoData.referencia,
+      estado: asientoData.estado as 'borrador' | 'confirmado' | 'anulado',
+      movimientos: movimientosData.map(mov => ({
+        id: mov.id,
+        cuentaId: mov.cuenta_id,
+        cuenta: mov.cuenta,
+        debito: mov.debito,
+        credito: mov.credito,
+        descripcion: mov.descripcion,
+        terceroId: mov.tercero_id,
+        tercero: mov.tercero,
+        documentoReferencia: mov.documento_referencia,
+        centroCosto: mov.centro_costo,
+      })),
+      empresaId: asientoData.empresa_id,
+      paisId: asientoData.pais_id,
+      creadoPor: asientoData.creado_por,
+      fechaCreacion: asientoData.fecha_creacion,
+      fechaModificacion: asientoData.fecha_modificacion,
+      documentoSoporte: asientoData.documento_soporte,
+      centroCosto: asientoData.centro_costo,
+      proyecto: asientoData.proyecto,
+    };
+  },
+
+  async updateAsiento(asientoId: string, updates: Partial<AsientoContable>): Promise<void> {
+    const updateData: any = { fecha_modificacion: new Date().toISOString() };
+
+    if (updates.fecha) updateData.fecha = updates.fecha;
+    if (updates.descripcion) updateData.descripcion = updates.descripcion;
+    if (updates.referencia !== undefined) updateData.referencia = updates.referencia;
+    if (updates.estado) updateData.estado = updates.estado;
+    if (updates.documentoSoporte) updateData.documento_soporte = updates.documentoSoporte;
+    if (updates.centroCosto !== undefined) updateData.centro_costo = updates.centroCosto;
+    if (updates.proyecto !== undefined) updateData.proyecto = updates.proyecto;
+
+    const { error } = await supabase
+      .from('asientos_contables')
+      .update(updateData)
+      .eq('id', asientoId);
+
+    if (error) throw error;
+  },
+
+  async deleteAsiento(asientoId: string): Promise<void> {
+    const { error } = await supabase
+      .from('asientos_contables')
+      .delete()
+      .eq('id', asientoId);
+
+    if (error) throw error;
+  },
+
+  async confirmarAsiento(asientoId: string): Promise<void> {
+    const { error } = await supabase
+      .from('asientos_contables')
+      .update({
+        estado: 'confirmado',
+        fecha_modificacion: new Date().toISOString()
+      })
+      .eq('id', asientoId);
+
+    if (error) throw error;
+  },
+
+  async anularAsiento(asientoId: string): Promise<void> {
+    const { error } = await supabase
+      .from('asientos_contables')
+      .update({
+        estado: 'anulado',
+        fecha_modificacion: new Date().toISOString()
+      })
+      .eq('id', asientoId);
+
+    if (error) throw error;
+  },
+
+  async getSiguienteNumero(empresaId: string, prefijo: string): Promise<string> {
+    const { data, error } = await supabase
+      .from('asientos_contables')
+      .select('numero')
+      .eq('empresa_id', empresaId)
+      .like('numero', `${prefijo}%`)
+      .order('numero', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      return `${prefijo}-000001`;
+    }
+
+    const ultimoNumero = parseInt(data.numero.split('-')[1]);
+    const siguienteNumero = (ultimoNumero + 1).toString().padStart(6, '0');
+    return `${prefijo}-${siguienteNumero}`;
+  },
+};
