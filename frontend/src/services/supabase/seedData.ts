@@ -110,37 +110,60 @@ export class SeedDataSupabaseService {
         throw new Error('Ya existe un plan de cuentas para esta empresa. Elimine las cuentas existentes antes de insertar datos de prueba.');
       }
 
-      // Preparar datos para inserción usando el pais_id de la empresa
-      const cuentasToInsert = planCuentasBase.map(cuenta => ({
-        codigo: cuenta.codigo,
-        nombre: cuenta.nombre,
-        tipo: cuenta.tipo,
-        nivel: cuenta.nivel,
-        cuenta_padre: cuenta.cuentaPadre,
-        descripcion: cuenta.descripcion,
-        saldo: cuenta.saldo || 0,
-        activa: cuenta.activa,
-        pais_id: paisId,
-        empresa_id: empresaId,
-        configuracion: cuenta.configuracion
-      }));
+      // Insertar cuentas por niveles para respetar la jerarquía
+      // y crear mapeo de códigos a IDs
+      const codigoToIdMap = new Map<string, string>();
 
-      console.log(`Insertando ${cuentasToInsert.length} cuentas...`);
+      // Obtener el máximo nivel
+      const maxNivel = Math.max(...planCuentasBase.map(c => c.nivel));
 
-      // Insertar en lotes de 50 para evitar límites de Supabase
-      const batchSize = 50;
-      for (let i = 0; i < cuentasToInsert.length; i += batchSize) {
-        const batch = cuentasToInsert.slice(i, i + batchSize);
-        const { error: insertError } = await supabase
+      console.log(`Insertando ${planCuentasBase.length} cuentas en ${maxNivel} niveles...`);
+
+      // Insertar por niveles
+      for (let nivel = 1; nivel <= maxNivel; nivel++) {
+        const cuentasNivel = planCuentasBase.filter(c => c.nivel === nivel);
+
+        if (cuentasNivel.length === 0) continue;
+
+        console.log(`📊 Insertando ${cuentasNivel.length} cuentas de nivel ${nivel}...`);
+
+        const cuentasToInsert = cuentasNivel.map(cuenta => {
+          const cuentaPadreId = cuenta.cuentaPadre ? codigoToIdMap.get(cuenta.cuentaPadre) : null;
+
+          return {
+            codigo: cuenta.codigo,
+            nombre: cuenta.nombre,
+            tipo: cuenta.tipo,
+            nivel: cuenta.nivel,
+            cuenta_padre: cuentaPadreId,
+            descripcion: cuenta.descripcion,
+            saldo: cuenta.saldo || 0,
+            activa: cuenta.activa,
+            pais_id: paisId,
+            empresa_id: empresaId,
+            configuracion: cuenta.configuracion
+          };
+        });
+
+        // Insertar cuentas del nivel actual
+        const { data: insertedCuentas, error: insertError } = await supabase
           .from('plan_cuentas')
-          .insert(batch);
+          .insert(cuentasToInsert)
+          .select('id, codigo');
 
         if (insertError) {
-          console.error('Error insertando lote:', insertError);
+          console.error(`Error insertando cuentas de nivel ${nivel}:`, insertError);
           throw insertError;
         }
 
-        console.log(`✅ Insertado lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(cuentasToInsert.length / batchSize)}`);
+        // Actualizar mapeo de códigos a IDs
+        if (insertedCuentas) {
+          insertedCuentas.forEach(cuenta => {
+            codigoToIdMap.set(cuenta.codigo, cuenta.id);
+          });
+        }
+
+        console.log(`✅ Insertadas ${cuentasNivel.length} cuentas de nivel ${nivel}`);
       }
 
       console.log(`✅ Plan de cuentas inicializado exitosamente para empresa ${empresaId}`);
