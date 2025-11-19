@@ -44,8 +44,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const authResponse = await AuthService.exchangeCodeForToken(code);
             AuthService.saveSession(authResponse.data);
 
-            window.history.replaceState({}, document.title, window.location.pathname);
-
             await syncUserWithDatabase(authResponse.data.user);
 
             console.log('✅ Autenticación exitosa');

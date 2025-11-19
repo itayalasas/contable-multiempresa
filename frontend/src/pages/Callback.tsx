@@ -18,11 +18,11 @@ export const Callback: React.FC = () => {
 
         if (isAuthenticated) {
           setProcessingStatus('Autenticación exitosa! Redirigiendo...');
-          console.log('✅ Autenticación exitosa, redirigiendo a dashboard');
+          console.log('✅ Autenticación exitosa, redirigiendo al inicio');
 
           // Pequeño delay para que el usuario vea el mensaje de éxito
           setTimeout(() => {
-            navigate('/dashboard', { replace: true });
+            navigate('/', { replace: true });
           }, 500);
         } else if (!isLoading && !isAuthenticated) {
           console.log('❌ Error en autenticación, redirigiendo a login');

@@ -148,7 +148,7 @@ const AppRoutes: React.FC = () => {
             {/* Rutas para el manual de usuario */}
             <Route path="/manuales/*" element={<ManualRouter />} />
             
-            <Route path="*" element={<Navigate to="/\" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </React.Suspense>
       </Layout>
