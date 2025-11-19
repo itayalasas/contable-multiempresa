@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DashboardStats } from '../services/firebase/dashboard';
-import { dashboardService } from '../services/firebase/dashboard';
+import { DashboardStats } from '../services/supabase/dashboard';
+import { dashboardSupabaseService } from '../services/supabase/dashboard';
 
 export const useDashboard = (empresaId: string | undefined) => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -20,7 +20,7 @@ export const useDashboard = (empresaId: string | undefined) => {
       setError(null);
       console.log('🔄 Cargando estadísticas del dashboard...');
       
-      const dashboardStats = await dashboardService.getDashboardStats(empresaId);
+      const dashboardStats = await dashboardSupabaseService.getDashboardStats(empresaId);
       setStats(dashboardStats);
       
       console.log('✅ Estadísticas del dashboard cargadas exitosamente');

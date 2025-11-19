@@ -5,3 +5,4 @@ export * from './asientos';
 export * from './cuentasPorCobrar';
 export * from './cuentasPorPagar';
 export * from './tesoreria';
+export * from './dashboard';
