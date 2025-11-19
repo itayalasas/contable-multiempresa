@@ -30,6 +30,7 @@ import { useSesion } from '../../context/SesionContext';
 import { useModals } from '../../hooks/useModals';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
+import { EmpresaWizard } from '../../components/empresas/EmpresaWizard';
 
 export const GestionEmpresas: React.FC = () => {
   const { usuario, tienePermiso, formatearMoneda } = useSesion();
@@ -46,6 +47,7 @@ export const GestionEmpresas: React.FC = () => {
   
   // Estados de modal
   const [showModal, setShowModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [modalType, setModalType] = useState<'create' | 'edit' | 'view' | 'users'>('create');
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [usuariosEmpresa, setUsuariosEmpresa] = useState<Usuario[]>([]);
@@ -202,6 +204,13 @@ export const GestionEmpresas: React.FC = () => {
 
   const openModal = (type: 'create' | 'edit' | 'view' | 'users', empresa?: Empresa) => {
     setModalType(type);
+
+    // Si es crear nueva empresa, abrir el wizard
+    if (type === 'create') {
+      setShowWizard(true);
+      return;
+    }
+
     if (empresa) {
       setSelectedEmpresa(empresa);
       if (type === 'edit') {
@@ -223,6 +232,12 @@ export const GestionEmpresas: React.FC = () => {
       resetForm();
     }
     setShowModal(true);
+  };
+
+  const handleWizardComplete = async (empresaId: string) => {
+    showSuccess('Empresa creada', 'La empresa ha sido creada exitosamente con toda su configuración.');
+    setShowWizard(false);
+    await cargarDatos();
   };
 
   const cargarUsuariosEmpresa = async (empresaId: string) => {
@@ -915,6 +930,14 @@ export const GestionEmpresas: React.FC = () => {
         message={notificationModal.message}
         type={notificationModal.type}
         autoClose={notificationModal.autoClose}
+      />
+
+      {/* Wizard de Nueva Empresa */}
+      <EmpresaWizard
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        onComplete={handleWizardComplete}
+        paisId={selectedPais}
       />
     </div>
   );
