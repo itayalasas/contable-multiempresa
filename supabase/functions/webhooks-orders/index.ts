@@ -183,7 +183,18 @@ async function handleOrderPaid(
   eventoId: string
 ) {
   try {
-    // 1. Buscar o crear cliente
+    // 1. Obtener país de la empresa
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', payload.empresa_id)
+      .single();
+
+    if (!empresa) {
+      return { success: false, error: 'Empresa no encontrada' };
+    }
+
+    // 2. Buscar o crear cliente
     let clienteId;
     const { data: clienteExistente } = await supabase
       .from('clientes')
@@ -200,16 +211,13 @@ async function handleOrderPaid(
         .from('clientes')
         .insert({
           empresa_id: payload.empresa_id,
-          nombre: payload.customer.nombre,
+          pais_id: empresa.pais_id,
+          razon_social: payload.customer.nombre,
           numero_documento: payload.customer.documento,
           email: payload.customer.email,
           telefono: payload.customer.telefono,
           direccion: payload.customer.direccion,
           activo: true,
-          metadata: {
-            crm_customer_id: payload.crm_customer_id,
-            origen: 'webhook',
-          },
         })
         .select()
         .single();
@@ -220,7 +228,7 @@ async function handleOrderPaid(
       clienteId = nuevoCliente.id;
     }
 
-    // 2. Obtener siguiente número de factura
+    // 3. Obtener siguiente número de factura
     const { data: ultimaFactura } = await supabase
       .from('facturas_venta')
       .select('numero_factura')
@@ -233,11 +241,11 @@ async function handleOrderPaid(
       ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
       : '00000001';
 
-    // 3. Calcular montos
-    const subtotal = payload.amounts.total / (1 + 0.22); // Asumiendo IVA 22%
+    // 4. Calcular montos
+    const subtotal = payload.amounts.total / (1 + 0.22);
     const totalIva = payload.amounts.tax;
 
-    // 4. Crear factura
+    // 5. Crear factura
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -268,7 +276,7 @@ async function handleOrderPaid(
       return { success: false, error: `Error creando factura: ${facturaError.message}` };
     }
 
-    // 5. Crear item de factura
+    // 6. Crear item de factura
     const { error: itemError } = await supabase
       .from('facturas_venta_items')
       .insert({

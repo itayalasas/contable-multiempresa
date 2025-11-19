@@ -3,31 +3,27 @@ import { supabase } from '../../config/supabase';
 export interface Cliente {
   id: string;
   empresa_id: string;
-  tipo_persona: 'fisica' | 'juridica';
-  nombre_completo?: string;
-  razon_social?: string;
+  pais_id: string;
+  tipo_documento_id?: string;
+  numero_documento: string;
+  razon_social: string;
   nombre_comercial?: string;
-  documento_tipo: string;
-  documento_numero: string;
   email?: string;
   telefono?: string;
   direccion?: string;
   ciudad?: string;
   departamento?: string;
   codigo_postal?: string;
-  pais_codigo: string;
-  condicion_pago: string;
-  dias_credito: number;
+  tipo_cliente?: string;
+  condicion_iva?: string;
   limite_credito?: number;
-  descuento_default?: number;
-  lista_precio_id?: string;
-  cuenta_contable_id?: string;
-  notas?: string;
+  dias_credito?: number;
+  descuento_predeterminado?: number;
+  observaciones?: string;
   activo: boolean;
-  external_id?: string;
-  metadata?: Record<string, any>;
-  created_at?: string;
-  updated_at?: string;
+  fecha_creacion?: string;
+  fecha_modificacion?: string;
+  creado_por?: string;
 }
 
 export async function obtenerClientes(empresaId: string): Promise<Cliente[]> {
@@ -35,7 +31,7 @@ export async function obtenerClientes(empresaId: string): Promise<Cliente[]> {
     .from('clientes')
     .select('*')
     .eq('empresa_id', empresaId)
-    .order('created_at', { ascending: false });
+    .order('fecha_creacion', { ascending: false });
 
   if (error) throw error;
   return data || [];
@@ -52,7 +48,7 @@ export async function obtenerClientePorId(id: string): Promise<Cliente | null> {
   return data;
 }
 
-export async function crearCliente(cliente: Omit<Cliente, 'id' | 'created_at' | 'updated_at'>): Promise<Cliente> {
+export async function crearCliente(cliente: Omit<Cliente, 'id' | 'fecha_creacion' | 'fecha_modificacion'>): Promise<Cliente> {
   const { data, error } = await supabase
     .from('clientes')
     .insert([cliente])
@@ -89,8 +85,8 @@ export async function buscarClientes(empresaId: string, termino: string): Promis
     .from('clientes')
     .select('*')
     .eq('empresa_id', empresaId)
-    .or(`nombre_completo.ilike.%${termino}%,razon_social.ilike.%${termino}%,documento_numero.ilike.%${termino}%`)
-    .order('created_at', { ascending: false })
+    .or(`nombre_completo.ilike.%${termino}%,razon_social.ilike.%${termino}%,numero_documento.ilike.%${termino}%`)
+    .order('fecha_creacion', { ascending: false })
     .limit(10);
 
   if (error) throw error;
@@ -103,7 +99,7 @@ export async function obtenerClientesActivos(empresaId: string): Promise<Cliente
     .select('*')
     .eq('empresa_id', empresaId)
     .eq('activo', true)
-    .order('nombre_completo', { ascending: true });
+    .order('razon_social', { ascending: true });
 
   if (error) throw error;
   return data || [];

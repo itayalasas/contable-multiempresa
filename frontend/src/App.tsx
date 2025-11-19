@@ -71,6 +71,14 @@ const Clientes = React.lazy(() =>
   import('./pages/ventas/Clientes')
 )
 
+const Facturas = React.lazy(() =>
+  import('./pages/ventas/Facturas')
+)
+
+const NotasCredito = React.lazy(() =>
+  import('./pages/ventas/NotasCredito')
+)
+
 const Proveedores = React.lazy(() =>
   import('./pages/compras/Proveedores')
 )
@@ -147,8 +155,8 @@ const AppRoutes: React.FC = () => {
 
             {/* Ventas */}
             <Route path="/ventas/clientes" element={<Clientes />} />
-            <Route path="/ventas/facturas" element={<div className="p-6"><h1 className="text-2xl font-bold">Facturas de Venta</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
-            <Route path="/ventas/notas-credito" element={<div className="p-6"><h1 className="text-2xl font-bold">Notas de Crédito</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/ventas/facturas" element={<Facturas />} />
+            <Route path="/ventas/notas-credito" element={<NotasCredito />} />
             <Route path="/ventas/notas-debito" element={<div className="p-6"><h1 className="text-2xl font-bold">Notas de Débito</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
             <Route path="/ventas/recibos" element={<div className="p-6"><h1 className="text-2xl font-bold">Recibos</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
 

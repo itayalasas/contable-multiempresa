@@ -30,7 +30,7 @@ export interface FacturaVenta {
   created_by?: string;
   updated_by?: string;
   cliente?: {
-    nombre: string;
+    razon_social: string;
     numero_documento: string;
     email?: string;
   };
@@ -80,7 +80,7 @@ export async function obtenerFacturas(empresaId: string) {
     .from('facturas_venta')
     .select(`
       *,
-      cliente:clientes(nombre, numero_documento, email)
+      cliente:clientes(razon_social, numero_documento, email)
     `)
     .eq('empresa_id', empresaId)
     .order('created_at', { ascending: false });
@@ -94,7 +94,7 @@ export async function obtenerFacturaPorId(facturaId: string) {
     .from('facturas_venta')
     .select(`
       *,
-      cliente:clientes(nombre, numero_documento, email, telefono, direccion)
+      cliente:clientes(razon_social, numero_documento, email, telefono, direccion)
     `)
     .eq('id', facturaId)
     .single();

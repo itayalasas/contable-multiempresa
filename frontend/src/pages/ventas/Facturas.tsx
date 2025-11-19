@@ -140,7 +140,7 @@ export default function Facturas() {
       filtroEstado === 'todos' || factura.estado === filtroEstado;
     const cumpleBusqueda =
       factura.numero_factura.toLowerCase().includes(busqueda.toLowerCase()) ||
-      factura.cliente?.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      factura.cliente?.razon_social.toLowerCase().includes(busqueda.toLowerCase()) ||
       factura.cliente?.numero_documento.toLowerCase().includes(busqueda.toLowerCase());
     return cumpleFiltroEstado && cumpleBusqueda;
   });
@@ -324,7 +324,7 @@ export default function Facturas() {
                       <div className="text-xs text-gray-500">{factura.tipo_documento}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{factura.cliente?.nombre}</div>
+                      <div className="text-sm text-gray-900">{factura.cliente?.razon_social}</div>
                       <div className="text-xs text-gray-500">
                         {factura.cliente?.numero_documento}
                       </div>

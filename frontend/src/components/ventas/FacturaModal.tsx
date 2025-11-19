@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useSesion } from '../../context/SesionContext';
 import { crearFactura, type CrearFacturaInput, type FacturaVenta } from '../../services/supabase/facturas';
 import { obtenerClientes, type Cliente } from '../../services/supabase/clientes';
-import SearchableClientSelector from '../finanzas/SearchableClientSelector';
 
 interface FacturaModalProps {
   factura: FacturaVenta | null;
@@ -185,12 +184,19 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Cliente *
               </label>
-              <SearchableClientSelector
-                clientes={clientes}
-                selectedClienteId={clienteId}
-                onSelect={(id) => setClienteId(id)}
-                placeholder="Seleccione un cliente"
-              />
+              <select
+                value={clienteId}
+                onChange={(e) => setClienteId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              >
+                <option value="">Seleccione un cliente</option>
+                {clientes.map((cliente) => (
+                  <option key={cliente.id} value={cliente.id}>
+                    {cliente.razon_social} - {cliente.numero_documento}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
