@@ -1,12 +1,12 @@
-import { 
-  collection, 
-  doc, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  query,
+  where,
+  orderBy,
   limit,
   CollectionReference,
-  DocumentReference 
+  DocumentReference
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Usuario, Empresa, CuentaContable, AsientoContable } from '../../types';
@@ -17,9 +17,9 @@ type EmpresaDoc = Empresa;
 type CuentaContableDoc = CuentaContable;
 type AsientoContableDoc = AsientoContable;
 
-// Referencias a colecciones principales
-export const usuariosRef = collection(db, 'usuarios') as CollectionReference<UsuarioDoc>;
-const empresasRef = collection(db, 'empresas') as CollectionReference<EmpresaDoc>;
+// Referencias a colecciones principales (lazy loaded para evitar errores cuando db es null)
+export const usuariosRef = (db ? collection(db, 'usuarios') : null) as CollectionReference<UsuarioDoc>;
+const empresasRef = (db ? collection(db, 'empresas') : null) as CollectionReference<EmpresaDoc>;
 
 // Funciones para obtener referencias de documentos
 export const getUsuarioRef = (userId: string): DocumentReference<UsuarioDoc> => 
@@ -30,10 +30,10 @@ const getEmpresaRef = (empresaId: string): DocumentReference<EmpresaDoc> =>
 
 // Referencias a subcolecciones por empresa
 const getCuentasRef = (empresaId: string): CollectionReference<CuentaContableDoc> =>
-  collection(db, `empresas/${empresaId}/cuentas`) as CollectionReference<CuentaContableDoc>;
+  (db ? collection(db, `empresas/${empresaId}/cuentas`) : null) as CollectionReference<CuentaContableDoc>;
 
 const getAsientosRef = (empresaId: string): CollectionReference<AsientoContableDoc> =>
-  collection(db, `empresas/${empresaId}/asientos`) as CollectionReference<AsientoContableDoc>;
+  (db ? collection(db, `empresas/${empresaId}/asientos`) : null) as CollectionReference<AsientoContableDoc>;
 
 // Queries comunes
 const getEmpresasByUsuario = (userId: string) =>
@@ -64,7 +64,7 @@ interface TenantData {
 }
 
 const getTenantsRef = (): CollectionReference<TenantData> =>
-  collection(db, 'tenants') as CollectionReference<TenantData>;
+  (db ? collection(db, 'tenants') : null) as CollectionReference<TenantData>;
 
 const getTenantBySubdominio = (subdominio: string) =>
   query(getTenantsRef(), where('subdominio', '==', subdominio), limit(1));
