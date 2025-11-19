@@ -1,11 +1,10 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SesionProvider } from './context/SesionContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
-import { FirebaseAuthService } from './config/firebaseAuth';
 
 // Lazy load components to improve performance
 const PlanCuentas = React.lazy(() =>
@@ -75,14 +74,6 @@ const ManualRouter = React.lazy(() =>
 const AppRoutes: React.FC = () => {
   const { usuario, isLoading, isAuthenticated, error } = useAuth();
 
-  // Inicializar autenticación de Firebase al cargar la app
-  useEffect(() => {
-    console.log('🔄 Inicializando autenticación de Firebase...');
-    FirebaseAuthService.initialize().catch(error => {
-      console.error('❌ Error inicializando autenticación de Firebase:', error);
-    });
-  }, []);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -93,7 +84,7 @@ const AppRoutes: React.FC = () => {
             🔓 Modo desarrollo - Autenticación deshabilitada
           </p>
           <p className="mt-1 text-xs text-blue-600">
-            🔥 Configurando Firebase...
+            🗄️ Conectando con Supabase...
           </p>
         </div>
       </div>
