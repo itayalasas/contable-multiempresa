@@ -10,18 +10,26 @@ La integración con el sistema de facturación electrónica se realiza en **DOS 
 ## 📡 Variables de Entorno Configuradas
 
 ```env
-VITE_DGI_API_CREATE_URL=https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b
+# API para CREAR CFE (POST)
+VITE_DGI_API_CREATE_URL=https://api.flowbridge.site/functions/v1/api-gateway/1a062194-437a-4d61-8cb3-fe7d00f90234
+VITE_DGI_API_CREATE_KEY=pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3
+
+# API para OBTENER DETALLE CFE (GET)
 VITE_DGI_API_DETAIL_URL=https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b
-VITE_DGI_INTEGRATION_KEY=pub_90e731b2639b030baad40d14f7622afb10dfb10b1b05933d7b67fc920f3fb734
+VITE_DGI_API_DETAIL_KEY=pub_90e731b2639b030baad40d14f7622afb10dfb10b1b05933d7b67fc920f3fb734
 ```
+
+**IMPORTANTE**: Son dos APIs diferentes con keys diferentes:
+- **Create API**: Para emitir el CFE (API 1a062194)
+- **Detail API**: Para obtener la información completa con CAE (API e9bebebc)
 
 ## 🔄 Paso 1: Crear CFE
 
 ### Request
 ```http
-POST https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b
+POST https://api.flowbridge.site/functions/v1/api-gateway/1a062194-437a-4d61-8cb3-fe7d00f90234
 Content-Type: application/json
-X-Integration-Key: pub_90e731b2639b030baad40d14f7622afb10dfb10b1b05933d7b67fc920f3fb734
+X-Integration-Key: pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3
 ```
 
 ### Body (Generado Automáticamente)
@@ -55,20 +63,24 @@ X-Integration-Key: pub_90e731b2639b030baad40d14f7622afb10dfb10b1b05933d7b67fc920
 ### Response
 ```json
 {
-  "id": 334467,
+  "id": 334535,
   "serie": "MT",
-  "numero": "389526",
-  "hash": "4oT4Sr8kb+Ze33GWG3QOvo6ZRqc="
+  "numero": "390122",
+  "hash": "spLQZ24lzeJHOqehFXRbCXJmFmc="
 }
 ```
+
+**Este ID (334535) se usa para consultar el detalle en el Paso 2**
 
 ## 🔍 Paso 2: Obtener Detalle CFE
 
 ### Request
 ```http
-GET https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b?id=334467
+GET https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b?id=334535
 X-Integration-Key: pub_90e731b2639b030baad40d14f7622afb10dfb10b1b05933d7b67fc920f3fb734
 ```
+
+**Nota**: Se usa la API diferente (e9bebebc) con su propia key
 
 ### Response (Completo con CAE)
 ```json

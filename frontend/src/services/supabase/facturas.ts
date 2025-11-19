@@ -363,10 +363,10 @@ interface DGIDetailResponse {
 
 async function obtenerDetalleCFE(cfeId: number): Promise<DGIDetailResponse> {
   const apiUrl = import.meta.env.VITE_DGI_API_DETAIL_URL;
-  const integrationKey = import.meta.env.VITE_DGI_INTEGRATION_KEY;
+  const detailKey = import.meta.env.VITE_DGI_API_DETAIL_KEY;
 
-  if (!apiUrl || !integrationKey) {
-    throw new Error('Configuración de API DGI incompleta en variables de entorno');
+  if (!apiUrl || !detailKey) {
+    throw new Error('Configuración de API DGI detalle incompleta en variables de entorno');
   }
 
   const url = `${apiUrl}?id=${cfeId}`;
@@ -374,7 +374,7 @@ async function obtenerDetalleCFE(cfeId: number): Promise<DGIDetailResponse> {
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'X-Integration-Key': integrationKey,
+      'X-Integration-Key': detailKey,
       'Accept': 'application/json',
     },
   });
@@ -404,9 +404,9 @@ export async function enviarFacturaDGI(facturaId: string) {
   const payload = construirPayloadDGI(factura, configCFE);
 
   const apiCreateUrl = import.meta.env.VITE_DGI_API_CREATE_URL;
-  const integrationKey = import.meta.env.VITE_DGI_INTEGRATION_KEY;
+  const createKey = import.meta.env.VITE_DGI_API_CREATE_KEY;
 
-  if (!apiCreateUrl || !integrationKey) {
+  if (!apiCreateUrl || !createKey) {
     console.warn('No hay configuración de API DGI. Usando modo simulación.');
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -427,12 +427,14 @@ export async function enviarFacturaDGI(facturaId: string) {
   }
 
   try {
+    console.log('Enviando CFE a DGI:', payload);
+
     const createResponse = await fetch(apiCreateUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Integration-Key': integrationKey,
+        'X-Integration-Key': createKey,
       },
       body: JSON.stringify(payload),
     });
