@@ -97,12 +97,13 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
     }
   };
 
-  const { user } = useAuth();
+  const { usuario } = useAuth();
 
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
       console.log('Guardando empresa:', formData);
+      console.log('Usuario actual:', usuario);
 
       // Convertir fecha de dd/mm/aaaa a yyyy-mm-dd
       let fechaInicioISO = null;
@@ -147,7 +148,7 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
           direccion: formData.ciudad || null,
           moneda_principal: 'UYU',
           activa: true,
-          usuarios_asignados: user?.uid ? [user.uid] : [],
+          usuarios_asignados: usuario?.id ? [usuario.id] : [],
           configuracion_contable: configuracionContable
         })
         .select()
