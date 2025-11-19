@@ -1,11 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PlanCuenta } from '../types';
-import { 
-  obtenerPlanCuentas, 
-  crearCuenta, 
-  actualizarCuenta, 
-  eliminarCuenta 
-} from '../services/firebase/planCuentas';
+import { planCuentasSupabaseService } from '../services/supabase/planCuentas';
 
 export const usePlanCuentas = (empresaId: string | undefined) => {
   const [cuentas, setCuentas] = useState<PlanCuenta[]>([]);
@@ -15,11 +10,11 @@ export const usePlanCuentas = (empresaId: string | undefined) => {
   // Cargar cuentas inicialmente
   const cargarCuentas = useCallback(async () => {
     if (!empresaId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      const cuentasData = await obtenerPlanCuentas(empresaId);
+      const cuentasData = await planCuentasSupabaseService.getCuentasByEmpresa(empresaId);
       setCuentas(cuentasData);
     } catch (err) {
       console.error('Error al cargar cuentas:', err);
@@ -52,17 +47,20 @@ export const usePlanCuentas = (empresaId: string | undefined) => {
     setCuentas(prev => [...prev, cuentaOptimista]);
 
     try {
-      // 2. Crear en Firebase
-      const realId = await crearCuenta(empresaId, nuevaCuenta);
-      
-      // 3. Actualizar con el ID real
-      setCuentas(prev => prev.map(cuenta => 
-        cuenta.id === tempId 
-          ? { ...cuenta, id: realId }
+      // 2. Crear en Supabase
+      const cuentaCreada = await planCuentasSupabaseService.createCuenta({
+        ...nuevaCuenta,
+        empresaId
+      });
+
+      // 3. Actualizar con los datos reales
+      setCuentas(prev => prev.map(cuenta =>
+        cuenta.id === tempId
+          ? cuentaCreada
           : cuenta
       ));
 
-      return realId;
+      return cuentaCreada.id;
     } catch (error) {
       // 4. Revertir si hay error
       setCuentas(prev => prev.filter(cuenta => cuenta.id !== tempId));
@@ -86,11 +84,11 @@ export const usePlanCuentas = (empresaId: string | undefined) => {
     ));
 
     try {
-      // 2. Actualizar en Firebase
-      await actualizarCuenta(empresaId, cuentaId, datos);
+      // 2. Actualizar en Supabase
+      await planCuentasSupabaseService.updateCuenta(cuentaId, datos);
     } catch (error) {
       // 3. Revertir si hay error
-      setCuentas(prev => prev.map(cuenta => 
+      setCuentas(prev => prev.map(cuenta =>
         cuenta.id === cuentaId ? cuentaAnterior : cuenta
       ));
       throw error;
@@ -109,8 +107,8 @@ export const usePlanCuentas = (empresaId: string | undefined) => {
     setCuentas(prev => prev.filter(cuenta => cuenta.id !== cuentaId));
 
     try {
-      // 2. Eliminar en Firebase
-      await eliminarCuenta(empresaId, cuentaId);
+      // 2. Eliminar en Supabase (soft delete)
+      await planCuentasSupabaseService.deleteCuenta(cuentaId);
     } catch (error) {
       // 3. Revertir si hay error - restaurar la cuenta
       setCuentas(prev => [...prev, cuentaEliminada].sort((a, b) => a.codigo.localeCompare(b.codigo)));

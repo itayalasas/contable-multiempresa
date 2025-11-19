@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  TipoDocumentoIdentidad, 
+import {
+  TipoDocumentoIdentidad,
   TipoDocumentoFactura,
   TipoImpuesto,
   FormaPago,
@@ -8,7 +8,7 @@ import {
   TipoMoneda,
   Banco
 } from '../types/nomencladores';
-import { NomencladoresService } from '../services/firebase/nomencladores';
+import { nomencladoresSupabaseService } from '../services/supabase/nomencladores';
 
 export const useNomencladores = (paisId: string | undefined) => {
   const [tiposDocumentoIdentidad, setTiposDocumentoIdentidad] = useState<TipoDocumentoIdentidad[]>([]);
@@ -29,37 +29,36 @@ export const useNomencladores = (paisId: string | undefined) => {
       setLoading(true);
       setError(null);
       
-      console.log('🔄 Cargando nomencladores para país:', paisId);
+      console.log('🔄 Cargando nomencladores desde Supabase para país:', paisId);
 
-      // Los nomencladores se cargan desde Supabase, usar datos mock temporalmente
-      // TODO: Migrar a servicio de Supabase
-      const tiposDocIdentidad = NomencladoresService.getMockTiposDocumentoIdentidad(paisId);
-      const tiposDocFactura = NomencladoresService.getMockTiposDocumentoFactura(paisId);
-      const tiposImp = NomencladoresService.getMockTiposImpuesto(paisId);
-      const formasDePago = NomencladoresService.getMockFormasPago(paisId);
-      const tiposMovTesoreria = NomencladoresService.getMockTiposMovimientoTesoreria(paisId);
-      const tiposMon = NomencladoresService.getMockTiposMoneda(paisId);
-      const bancosData = NomencladoresService.getMockBancos(paisId);
-      
-      // Eliminar duplicados por ID
-      const uniqueTiposDocIdentidad = removeDuplicatesById(tiposDocIdentidad);
-      const uniqueTiposDocFactura = removeDuplicatesById(tiposDocFactura);
-      const uniqueTiposImp = removeDuplicatesById(tiposImp);
-      const uniqueFormasDePago = removeDuplicatesById(formasDePago);
-      const uniqueTiposMovTesoreria = removeDuplicatesById(tiposMovTesoreria);
-      const uniqueTiposMon = removeDuplicatesById(tiposMon);
-      const uniqueBancos = removeDuplicatesById(bancosData);
-      
-      console.log(`✅ Datos cargados y filtrados: ${uniqueTiposDocIdentidad.length} tipos de documento, ${uniqueTiposDocFactura.length} tipos de factura`);
-      console.log(`✅ Datos de tesorería: ${uniqueTiposMovTesoreria.length} tipos de movimiento, ${uniqueTiposMon.length} monedas, ${uniqueBancos.length} bancos`);
-      
-      setTiposDocumentoIdentidad(uniqueTiposDocIdentidad);
-      setTiposDocumentoFactura(uniqueTiposDocFactura);
-      setTiposImpuesto(uniqueTiposImp);
-      setFormasPago(uniqueFormasDePago);
-      setTiposMovimientoTesoreria(uniqueTiposMovTesoreria);
-      setTiposMoneda(uniqueTiposMon);
-      setBancos(uniqueBancos);
+      const [
+        tiposDocIdentidad,
+        tiposDocFactura,
+        tiposImp,
+        formasDePago,
+        tiposMovTesoreria,
+        tiposMon,
+        bancosData
+      ] = await Promise.all([
+        nomencladoresSupabaseService.getTiposDocumentoIdentidad(paisId),
+        nomencladoresSupabaseService.getTiposDocumentoFactura(paisId),
+        nomencladoresSupabaseService.getTiposImpuesto(paisId),
+        nomencladoresSupabaseService.getFormasPago(paisId),
+        nomencladoresSupabaseService.getTiposMovimiento(paisId),
+        nomencladoresSupabaseService.getTiposMoneda(paisId),
+        nomencladoresSupabaseService.getBancos(paisId)
+      ]);
+
+      console.log(`✅ Datos cargados desde Supabase: ${tiposDocIdentidad.length} tipos de documento, ${tiposDocFactura.length} tipos de factura`);
+      console.log(`✅ Datos de tesorería: ${tiposMovTesoreria.length} tipos de movimiento, ${tiposMon.length} monedas, ${bancosData.length} bancos`);
+
+      setTiposDocumentoIdentidad(tiposDocIdentidad);
+      setTiposDocumentoFactura(tiposDocFactura);
+      setTiposImpuesto(tiposImp);
+      setFormasPago(formasDePago);
+      setTiposMovimientoTesoreria(tiposMovTesoreria);
+      setTiposMoneda(tiposMon);
+      setBancos(bancosData);
     } catch (err) {
       console.error('❌ Error al cargar nomencladores:', err);
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -67,17 +66,6 @@ export const useNomencladores = (paisId: string | undefined) => {
       setLoading(false);
     }
   }, [paisId]);
-
-  // Función para eliminar duplicados por ID
-  const removeDuplicatesById = <T extends { id: string }>(items: T[]): T[] => {
-    const uniqueMap = new Map<string, T>();
-    items.forEach(item => {
-      if (!uniqueMap.has(item.id)) {
-        uniqueMap.set(item.id, item);
-      }
-    });
-    return Array.from(uniqueMap.values());
-  };
 
   // Cargar datos cuando cambie el país
   useEffect(() => {
