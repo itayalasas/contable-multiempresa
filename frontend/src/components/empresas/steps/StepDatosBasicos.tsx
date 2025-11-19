@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { nomencladoresUruguayService, TipoContribuyente, DepartamentoUY, LocalidadUY } from '../../../services/supabase/nomencladoresUruguay';
-import { paisesSupabaseService } from '../../../services/supabase/paises';
+import { nomencladoresUruguayService, TipoContribuyente } from '../../../services/supabase/nomencladoresUruguay';
+import { countriesApi, Country } from '../../../services/api/countriesApi';
+import { SearchableSelect } from '../../common/SearchableSelect';
 
 interface StepDatosBasicosProps {
   data: any;
@@ -9,53 +10,92 @@ interface StepDatosBasicosProps {
 }
 
 export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChange, paisId }) => {
-  const [paises, setPaises] = useState<any[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
   const [tiposContribuyente, setTiposContribuyente] = useState<TipoContribuyente[]>([]);
-  const [departamentos, setDepartamentos] = useState<DepartamentoUY[]>([]);
-  const [localidades, setLocalidades] = useState<LocalidadUY[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingTiposContribuyente, setLoadingTiposContribuyente] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, [paisId]);
+    loadCountries();
+  }, []);
 
   useEffect(() => {
-    if (data.departamento_id) {
-      loadLocalidades(data.departamento_id);
+    if (data.pais_iso2) {
+      loadCities(data.pais_iso2);
+      loadTiposContribuyente(data.pais_iso2);
+    } else {
+      setCities([]);
+      setTiposContribuyente([]);
     }
-  }, [data.departamento_id]);
+  }, [data.pais_iso2]);
 
-  const loadData = async () => {
+  const loadCountries = async () => {
     try {
       setLoading(true);
-      const [paisesData, tiposData, deptosData] = await Promise.all([
-        paisesSupabaseService.getPaisesActivos(),
-        paisId ? nomencladoresUruguayService.getTiposContribuyente(paisId) : Promise.resolve([]),
-        nomencladoresUruguayService.getDepartamentos()
-      ]);
-
-      setPaises(paisesData);
-      setTiposContribuyente(tiposData);
-      setDepartamentos(deptosData);
+      const countriesData = await countriesApi.getCountriesAndCities();
+      setCountries(countriesData);
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('Error cargando países:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadLocalidades = async (departamentoId: string) => {
+  const loadCities = async (countryIso2: string) => {
     try {
-      const localidadesData = await nomencladoresUruguayService.getLocalidades(departamentoId);
-      setLocalidades(localidadesData);
+      setLoadingCities(true);
+      const citiesData = await countriesApi.getCitiesByCountry(countryIso2);
+      setCities(citiesData);
     } catch (error) {
-      console.error('Error cargando localidades:', error);
+      console.error('Error cargando ciudades:', error);
+    } finally {
+      setLoadingCities(false);
+    }
+  };
+
+  const loadTiposContribuyente = async (countryIso2: string) => {
+    try {
+      setLoadingTiposContribuyente(true);
+      const tipos = await nomencladoresUruguayService.getTiposContribuyente(countryIso2);
+      setTiposContribuyente(tipos);
+    } catch (error) {
+      console.error('Error cargando tipos de contribuyente:', error);
+      setTiposContribuyente([]);
+    } finally {
+      setLoadingTiposContribuyente(false);
     }
   };
 
   const handleChange = (field: string, value: any) => {
     onChange({ ...data, [field]: value });
   };
+
+  const handleCountryChange = (countryName: string) => {
+    const country = countries.find(c => c.country === countryName);
+    if (country) {
+      handleChange('pais_nombre', country.country);
+      handleChange('pais_iso2', country.iso2);
+      handleChange('pais_iso3', country.iso3);
+      handleChange('ciudad', '');
+    }
+  };
+
+  const countryOptions = countries.map(country => ({
+    value: country.country,
+    label: country.country,
+  }));
+
+  const cityOptions = cities.map(city => ({
+    value: city,
+    label: city,
+  }));
+
+  const tipoContribuyenteOptions = tiposContribuyente.map(tipo => ({
+    value: tipo.id,
+    label: tipo.nombre,
+  }));
 
   if (loading) {
     return (
@@ -114,25 +154,16 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
             />
           </div>
 
-          {/* País */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              País <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={data.pais_id || ''}
-              onChange={(e) => handleChange('pais_id', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            >
-              <option value="">Seleccionar país...</option>
-              {paises.map((pais) => (
-                <option key={pais.id} value={pais.id}>
-                  {pais.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* País - Searchable Select */}
+          <SearchableSelect
+            label="País"
+            required
+            options={countryOptions}
+            value={data.pais_nombre || ''}
+            onChange={handleCountryChange}
+            placeholder="Buscar país..."
+            loading={loading}
+          />
 
           {/* Número de Identificación (RUT) */}
           <div>
@@ -149,25 +180,17 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
             />
           </div>
 
-          {/* Tipo de Contribuyente */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tipo de Contribuyente <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={data.tipo_contribuyente_id || ''}
-              onChange={(e) => handleChange('tipo_contribuyente_id', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            >
-              <option value="">Seleccionar tipo...</option>
-              {tiposContribuyente.map((tipo) => (
-                <option key={tipo.id} value={tipo.id}>
-                  {tipo.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Tipo de Contribuyente - Searchable Select */}
+          <SearchableSelect
+            label="Tipo de Contribuyente"
+            required
+            options={tipoContribuyenteOptions}
+            value={data.tipo_contribuyente_id || ''}
+            onChange={(value) => handleChange('tipo_contribuyente_id', value)}
+            placeholder="Buscar tipo..."
+            loading={loadingTiposContribuyente}
+            disabled={!data.pais_iso2}
+          />
 
           {/* Fecha de Inicio de Actividades */}
           <div>
@@ -250,7 +273,7 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
               value={data.domicilio_fiscal || ''}
               onChange={(e) => handleChange('domicilio_fiscal', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Dirección fiscal declarada en DGI"
+              placeholder="Dirección fiscal declarada"
               required
             />
           </div>
@@ -269,49 +292,16 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Departamento */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Departamento
-              </label>
-              <select
-                value={data.departamento_id || ''}
-                onChange={(e) => {
-                  handleChange('departamento_id', e.target.value);
-                  handleChange('localidad_id', ''); // Reset localidad
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Seleccionar departamento...</option>
-                {departamentos.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Localidad */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Localidad
-              </label>
-              <select
-                value={data.localidad_id || ''}
-                onChange={(e) => handleChange('localidad_id', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={!data.departamento_id}
-              >
-                <option value="">Seleccionar localidad...</option>
-                {localidades.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {/* Ciudad - Searchable Select */}
+          <SearchableSelect
+            label="Ciudad"
+            options={cityOptions}
+            value={data.ciudad || ''}
+            onChange={(value) => handleChange('ciudad', value)}
+            placeholder="Buscar ciudad..."
+            loading={loadingCities}
+            disabled={!data.pais_iso2}
+          />
         </div>
       </div>
 
@@ -336,7 +326,7 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
           {/* CI */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cédula de Identidad
+              Cédula de Identidad / Documento
             </label>
             <input
               type="text"
