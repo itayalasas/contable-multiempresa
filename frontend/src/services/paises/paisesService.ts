@@ -1,34 +1,17 @@
 import { Pais, ConfiguracionTributaria } from '../../types';
-import { collection, addDoc, getDocs, query, where, doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { FirebaseAuthService } from '../../config/firebaseAuth';
+import { paisesSupabaseService } from '../supabase/paises';
 
 export class PaisesService {
-  // Obtener todos los países activos (versión expandida)
+  // Obtener todos los países activos
   static async getPaisesActivos(): Promise<Pais[]> {
     try {
-      // Intentar obtener países desde Firebase
-      const isAuth = await FirebaseAuthService.ensureAuthenticated();
-      if (isAuth) {
-        console.log('🔍 Obteniendo países desde Firebase');
-        
-        const paisesRef = collection(db, 'paises');
-        const q = query(paisesRef, where('activo', '==', true));
-        const snapshot = await getDocs(q);
-        
-        if (!snapshot.empty) {
-          const paises = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            fechaCreacion: doc.data().fechaCreacion?.toDate() || new Date()
-          })) as Pais[];
-          
-          console.log(`✅ Se encontraron ${paises.length} países en Firebase`);
-          return paises;
-        }
-      }
-      
-      // Si no hay países en Firebase o no se pudo autenticar, devolver datos mock
+      console.log('🔍 Obteniendo países desde Supabase');
+      const paises = await paisesSupabaseService.getPaisesActivos();
+      console.log(`✅ Se encontraron ${paises.length} países en Supabase`);
+      return paises;
+    } catch (error) {
+      console.error('❌ Error obteniendo países:', error);
+      // Si hay error, devolver datos mock
       console.log('⚠️ Usando datos mock de países');
       
       // Mock de países con configuración completa para toda Latinoamérica
@@ -327,49 +310,24 @@ export class PaisesService {
           fechaCreacion: new Date()
         }
       ];
-      
+
       return paisesMock;
-    } catch (error) {
-      console.error('Error obteniendo países:', error);
-      return [];
     }
   }
 
   // Obtener país por ID (versión mock)
   static async getPais(paisId: string): Promise<Pais | null> {
     try {
-      // Intentar obtener país desde Firebase
-      const isAuth = await FirebaseAuthService.ensureAuthenticated();
-      if (isAuth) {
-        console.log(`🔍 Buscando país ${paisId} en Firebase`);
-        
-        const paisRef = doc(db, 'paises', paisId);
-        const paisDoc = await getDoc(paisRef);
-        
-        if (paisDoc.exists()) {
-          const paisData = paisDoc.data();
-          console.log(`✅ País ${paisId} encontrado en Firebase`);
-          
-          return {
-            id: paisDoc.id,
-            ...paisData,
-            fechaCreacion: paisData.fechaCreacion?.toDate() || new Date()
-          } as Pais;
-        }
-      }
-      
-      // Si no se encuentra en Firebase, buscar en datos mock
-      console.log(`⚠️ Buscando país ${paisId} en datos mock`);
-      const paises = await this.getPaisesActivos();
-      const pais = paises.find(p => p.id === paisId);
-      
+      console.log(`🔍 Buscando país ${paisId} en Supabase`);
+      const pais = await paisesSupabaseService.getPaisById(paisId);
+
       if (pais) {
-        console.log(`✅ País ${paisId} encontrado en datos mock`);
+        console.log(`✅ País ${paisId} encontrado en Supabase`);
       } else {
         console.log(`❌ País ${paisId} no encontrado`);
       }
-      
-      return pais || null;
+
+      return pais;
     } catch (error) {
       console.error('Error obteniendo país:', error);
       return null;
