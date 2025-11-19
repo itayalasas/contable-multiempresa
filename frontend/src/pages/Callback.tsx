@@ -1,10 +1,50 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Building2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const Callback: React.FC = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading, error } = useAuth();
+  const [processingStatus, setProcessingStatus] = useState('Verificando credenciales...');
+
   useEffect(() => {
     console.log('Callback page - procesando autenticación...');
-  }, []);
+
+    const checkAuthAndRedirect = async () => {
+      try {
+        // Esperar un momento para que AuthContext procese la autenticación
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        if (isAuthenticated) {
+          setProcessingStatus('Autenticación exitosa! Redirigiendo...');
+          console.log('✅ Autenticación exitosa, redirigiendo a dashboard');
+
+          // Pequeño delay para que el usuario vea el mensaje de éxito
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 500);
+        } else if (!isLoading && !isAuthenticated) {
+          console.log('❌ Error en autenticación, redirigiendo a login');
+          setProcessingStatus('Error en autenticación, redirigiendo...');
+
+          setTimeout(() => {
+            navigate('/login', { replace: true });
+          }, 1500);
+        }
+      } catch (err) {
+        console.error('Error en callback:', err);
+        setProcessingStatus('Error procesando autenticación...');
+        setTimeout(() => {
+          navigate('/login', { replace: true });
+        }, 1500);
+      }
+    };
+
+    if (!isLoading) {
+      checkAuthAndRedirect();
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -27,7 +67,7 @@ export const Callback: React.FC = () => {
 
           <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-blue-800">
-              🔐 Verificando credenciales
+              {error ? `❌ ${error}` : `🔐 ${processingStatus}`}
             </p>
           </div>
         </div>
