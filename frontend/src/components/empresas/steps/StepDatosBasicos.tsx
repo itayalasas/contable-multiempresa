@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { nomencladoresUruguayService, TipoContribuyente } from '../../../services/supabase/nomencladoresUruguay';
+import { paisesSupabaseService } from '../../../services/supabase/paises';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { CountrySelector } from '../../common/CountrySelector';
 import { useCountries } from '../../../hooks/useCountries';
@@ -18,36 +19,51 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
   const [loadingTiposContribuyente, setLoadingTiposContribuyente] = useState(false);
 
   useEffect(() => {
-    if (data.pais_iso2) {
-      loadCities(data.pais_iso2);
-      loadTiposContribuyente(data.pais_iso2);
+    if (data.pais_nombre) {
+      loadDataForCountry(data.pais_nombre, data.pais_iso2);
     } else {
       setCities([]);
       setTiposContribuyente([]);
     }
-  }, [data.pais_iso2]);
+  }, [data.pais_nombre]);
 
-  const loadCities = async (countryIso2: string) => {
+  const loadDataForCountry = async (countryName: string, countryIso2: string) => {
     try {
       setLoadingCities(true);
+      setLoadingTiposContribuyente(true);
+
+      console.log('🌍 Cargando datos para:', countryName, '(', countryIso2, ')');
+
+      // 1. Cargar ciudades desde API externa
       const citiesData = await getCitiesByCountry(countryIso2);
       setCities(citiesData);
-    } catch (error) {
-      console.error('Error cargando ciudades:', error);
-    } finally {
-      setLoadingCities(false);
-    }
-  };
+      console.log('✅ Ciudades cargadas:', citiesData.length);
 
-  const loadTiposContribuyente = async (countryIso2: string) => {
-    try {
-      setLoadingTiposContribuyente(true);
-      const tipos = await nomencladoresUruguayService.getTiposContribuyente(countryIso2);
-      setTiposContribuyente(tipos);
+      // 2. Buscar país en Supabase por nombre
+      const paisSupabase = await paisesSupabaseService.getPaisByNombre(countryName);
+
+      if (paisSupabase) {
+        console.log('✅ País encontrado en Supabase:', paisSupabase.id);
+
+        // Actualizar el pais_id en el formulario
+        onChange({ ...data, pais_id: paisSupabase.id });
+
+        // 3. Cargar tipos de contribuyente usando el pais_id de Supabase
+        const tipos = await nomencladoresUruguayService.getTiposContribuyente(paisSupabase.id);
+        setTiposContribuyente(tipos);
+        console.log('✅ Tipos de contribuyente cargados:', tipos.length);
+      } else {
+        console.warn('⚠️ País no encontrado en Supabase:', countryName);
+        console.log('💡 Cargando todos los tipos de contribuyente...');
+        const tipos = await nomencladoresUruguayService.getTiposContribuyente();
+        setTiposContribuyente(tipos);
+        console.log('✅ Tipos de contribuyente cargados (todos):', tipos.length);
+      }
     } catch (error) {
-      console.error('Error cargando tipos de contribuyente:', error);
+      console.error('❌ Error cargando datos del país:', error);
       setTiposContribuyente([]);
     } finally {
+      setLoadingCities(false);
       setLoadingTiposContribuyente(false);
     }
   };
@@ -56,12 +72,14 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
     onChange({ ...data, [field]: value });
   };
 
-  const handleCountryChange = (countryData: { name: string; iso2: string; iso3: string }) => {
+  const handleCountryChange = async (countryData: { name: string; iso2: string; iso3: string }) => {
+    // Actualizar datos básicos del país
     onChange({
       ...data,
       pais_nombre: countryData.name,
       pais_iso2: countryData.iso2,
       pais_iso3: countryData.iso3,
+      pais_id: undefined, // Se actualizará en loadDataForCountry
       ciudad: '',
       tipo_contribuyente_id: ''
     });
