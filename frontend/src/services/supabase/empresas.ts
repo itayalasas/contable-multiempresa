@@ -145,4 +145,40 @@ export const empresasSupabaseService = {
 
     if (error) throw error;
   },
+
+  // Alias para compatibilidad
+  async getEmpresa(empresaId: string): Promise<Empresa | null> {
+    return this.getEmpresaById(empresaId);
+  },
+
+  async getEmpresasByPais(paisId: string): Promise<Empresa[]> {
+    const { data, error } = await supabase
+      .from('empresas')
+      .select('*')
+      .eq('pais_id', paisId)
+      .eq('activa', true)
+      .order('nombre');
+
+    if (error) throw error;
+
+    return data.map(empresa => ({
+      ...empresa,
+      fechaCreacion: new Date(empresa.fecha_creacion),
+      fechaActualizacion: empresa.fecha_actualizacion ? new Date(empresa.fecha_actualizacion) : undefined,
+      configuracionContable: {
+        ...empresa.configuracion_contable,
+        fechaInicioEjercicio: new Date(empresa.configuracion_contable.fecha_inicio_ejercicio),
+        fechaFinEjercicio: new Date(empresa.configuracion_contable.fecha_fin_ejercicio),
+      },
+    }));
+  },
+
+  async crearEmpresa(empresa: Omit<Empresa, 'id' | 'fechaCreacion'>): Promise<string> {
+    const result = await this.createEmpresa(empresa);
+    return result.id;
+  },
+
+  async actualizarEmpresa(empresaId: string, updates: Partial<Empresa>): Promise<void> {
+    return this.updateEmpresa(empresaId, updates);
+  },
 };

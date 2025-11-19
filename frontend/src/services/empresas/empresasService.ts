@@ -1,26 +1,16 @@
 import { Empresa, Usuario, ConfiguracionContable } from '../../types';
-import { empresasFirebaseService } from '../firebase/empresas';
-import { SeedDataEmpresasService } from '../firebase/seedDataEmpresas';
+import { empresasSupabaseService } from '../supabase/empresas';
 
 export class EmpresasService {
-  // Obtener empresas por usuario (cargando desde Firebase)
+  // Obtener empresas por usuario (cargando desde Supabase)
   static async getEmpresasByUsuario(usuarioId: string): Promise<Empresa[]> {
     try {
       console.log('🔄 Cargando empresas para usuario:', usuarioId);
-      
-      // Verificar si existen empresas en Firebase
-      const existenEmpresas = await SeedDataEmpresasService.existenEmpresas();
-      
-      // Si no existen empresas, insertar datos de prueba
-      if (!existenEmpresas) {
-        console.log('⚠️ No existen empresas en la base de datos, insertando datos de prueba...');
-        await SeedDataEmpresasService.insertEmpresasPrueba();
-      }
-      
-      // Obtener TODAS las empresas desde Firebase sin filtrar por usuario
-      const empresas = await empresasFirebaseService.getEmpresasByUsuario(usuarioId);
-      console.log('✅ Empresas cargadas desde Firebase:', empresas.length);
-      
+
+      // Obtener empresas desde Supabase
+      const empresas = await empresasSupabaseService.getEmpresasByUsuario(usuarioId);
+      console.log('✅ Empresas cargadas desde Supabase:', empresas.length);
+
       return empresas;
     } catch (error) {
       console.error('❌ Error obteniendo empresas:', error);
@@ -28,20 +18,12 @@ export class EmpresasService {
     }
   }
   
-  // Obtener empresas por país (desde Firebase)
+  // Obtener empresas por país (desde Supabase)
   static async getEmpresasByPais(paisId: string): Promise<Empresa[]> {
     try {
       console.log('🔄 Cargando empresas por país:', paisId);
-      
-      if (!paisId) {
-        // Obtener todas las empresas si no se especifica país
-        const empresas = await empresasFirebaseService.getEmpresas();
-        console.log('✅ Todas las empresas cargadas:', empresas.length);
-        return empresas;
-      }
-      
-      // Obtener empresas filtradas por país
-      const empresas = await empresasFirebaseService.getEmpresasByPais(paisId);
+
+      const empresas = await empresasSupabaseService.getEmpresasByPais(paisId);
       console.log(`✅ Empresas filtradas para ${paisId}:`, empresas.length);
       return empresas;
     } catch (error) {
@@ -49,123 +31,123 @@ export class EmpresasService {
       throw error;
     }
   }
-  
-  // Obtener empresa por ID (desde Firebase)
+
+  // Obtener empresa por ID (desde Supabase)
   static async getEmpresa(empresaId: string): Promise<Empresa | null> {
     try {
       console.log('🔄 Buscando empresa por ID:', empresaId);
-      
-      const empresa = await empresasFirebaseService.getEmpresa(empresaId);
-      
+
+      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
+
       if (empresa) {
         console.log('✅ Empresa encontrada:', empresa.nombre);
       } else {
         console.log('⚠️ Empresa no encontrada');
       }
-      
+
       return empresa;
     } catch (error) {
       console.error('❌ Error obteniendo empresa:', error);
       throw error;
     }
   }
-  
-  // Crear nueva empresa (en Firebase)
+
+  // Crear nueva empresa (en Supabase)
   static async crearEmpresa(empresa: Omit<Empresa, 'id'>, usuarioCreadorId: string): Promise<string> {
     try {
-      console.log('🔄 Creando empresa en Firebase:', empresa.nombre);
-      
+      console.log('🔄 Creando empresa en Supabase:', empresa.nombre);
+
       // Asegurarse de que el usuario creador esté en la lista de usuarios asignados
       if (!empresa.usuariosAsignados.includes(usuarioCreadorId)) {
         empresa.usuariosAsignados.push(usuarioCreadorId);
       }
-      
-      const empresaId = await empresasFirebaseService.crearEmpresa(empresa);
+
+      const empresaId = await empresasSupabaseService.crearEmpresa(empresa);
       console.log('✅ Empresa creada con ID:', empresaId);
-      
+
       return empresaId;
     } catch (error) {
       console.error('❌ Error creando empresa:', error);
       throw error;
     }
   }
-  
-  // Actualizar empresa (en Firebase)
+
+  // Actualizar empresa (en Supabase)
   static async actualizarEmpresa(empresaId: string, datos: Partial<Empresa>): Promise<void> {
     try {
-      console.log('🔄 Actualizando empresa en Firebase:', empresaId);
-      
-      await empresasFirebaseService.actualizarEmpresa(empresaId, datos);
+      console.log('🔄 Actualizando empresa en Supabase:', empresaId);
+
+      await empresasSupabaseService.actualizarEmpresa(empresaId, datos);
       console.log('✅ Empresa actualizada exitosamente');
     } catch (error) {
       console.error('❌ Error actualizando empresa:', error);
       throw error;
     }
   }
-  
-  // Asignar usuario a empresa (en Firebase)
+
+  // Asignar usuario a empresa (en Supabase)
   static async asignarUsuario(empresaId: string, usuarioId: string): Promise<void> {
     try {
       console.log('🔄 Asignando usuario a empresa:', { empresaId, usuarioId });
-      
+
       // Obtener empresa actual
-      const empresa = await empresasFirebaseService.getEmpresa(empresaId);
+      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
       if (!empresa) {
         throw new Error('Empresa no encontrada');
       }
-      
+
       // Verificar si el usuario ya está asignado
       if (empresa.usuariosAsignados.includes(usuarioId)) {
         console.log('⚠️ El usuario ya está asignado a esta empresa');
         return;
       }
-      
+
       // Actualizar lista de usuarios asignados
       const usuariosAsignados = [...empresa.usuariosAsignados, usuarioId];
-      await empresasFirebaseService.actualizarEmpresa(empresaId, { usuariosAsignados });
-      
+      await empresasSupabaseService.actualizarEmpresa(empresaId, { usuariosAsignados });
+
       console.log('✅ Usuario asignado exitosamente');
     } catch (error) {
       console.error('❌ Error asignando usuario:', error);
       throw error;
     }
   }
-  
-  // Desasignar usuario de empresa (en Firebase)
+
+  // Desasignar usuario de empresa (en Supabase)
   static async desasignarUsuario(empresaId: string, usuarioId: string): Promise<void> {
     try {
       console.log('🔄 Desasignando usuario de empresa:', { empresaId, usuarioId });
-      
+
       // Obtener empresa actual
-      const empresa = await empresasFirebaseService.getEmpresa(empresaId);
+      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
       if (!empresa) {
         throw new Error('Empresa no encontrada');
       }
-      
+
       // Verificar si el usuario está asignado
       if (!empresa.usuariosAsignados.includes(usuarioId)) {
         console.log('⚠️ El usuario no está asignado a esta empresa');
         return;
       }
-      
+
       // Actualizar lista de usuarios asignados
       const usuariosAsignados = empresa.usuariosAsignados.filter(id => id !== usuarioId);
-      await empresasFirebaseService.actualizarEmpresa(empresaId, { usuariosAsignados });
-      
+      await empresasSupabaseService.actualizarEmpresa(empresaId, { usuariosAsignados });
+
       console.log('✅ Usuario desasignado exitosamente');
     } catch (error) {
       console.error('❌ Error desasignando usuario:', error);
       throw error;
     }
   }
-  
-  // Verificar acceso de usuario a empresa (en Firebase)
+
+  // Verificar acceso de usuario a empresa (en Supabase)
   static async verificarAccesoUsuario(empresaId: string, usuarioId: string): Promise<boolean> {
     try {
       // Obtener empresa
-      const empresa = await empresasFirebaseService.getEmpresa(empresaId);
+      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
       const tieneAcceso = empresa?.usuariosAsignados.includes(usuarioId) || false;
-      
+
       console.log(`🔍 Verificando acceso usuario ${usuarioId} a empresa ${empresaId}:`, tieneAcceso);
       return tieneAcceso;
     } catch (error) {
