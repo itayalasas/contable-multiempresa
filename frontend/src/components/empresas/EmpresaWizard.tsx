@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronRight, ChevronLeft, Check, Building2, FileText, Receipt, Users, Briefcase, MapPin } from 'lucide-react';
 import { StepDatosBasicos } from './steps/StepDatosBasicos';
+import { supabase } from '../../config/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 interface WizardStep {
   id: number;
@@ -77,21 +79,73 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
     }
   };
 
+  const { user } = useAuth();
+
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
-      // Aquí se implementará la lógica de guardado completo
       console.log('Guardando empresa:', formData);
 
-      // Llamar al servicio para crear la empresa
-      // const empresaId = await crearEmpresaCompleta(formData);
+      // Convertir fecha de dd/mm/aaaa a yyyy-mm-dd
+      let fechaInicioISO = null;
+      if (formData.fecha_inicio_actividades) {
+        const [dia, mes, anio] = formData.fecha_inicio_actividades.split('/');
+        if (dia && mes && anio) {
+          fechaInicioISO = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+        }
+      }
 
-      // Por ahora simulamos
-      setTimeout(() => {
-        onComplete('nueva-empresa-id');
-      }, 1000);
-    } catch (error) {
+      // Preparar configuración contable básica
+      const configuracionContable = {
+        ejercicio_fiscal: new Date().getFullYear(),
+        fecha_inicio_ejercicio: `${new Date().getFullYear()}-01-01`,
+        fecha_fin_ejercicio: `${new Date().getFullYear()}-12-31`,
+        metodo_costeo: 'promedio',
+        tipo_inventario: 'perpetuo',
+        maneja_inventario: false,
+        decimales_moneda: 2,
+        decimales_cantidades: 2,
+        numeracion_automatica: true,
+        prefijo_asientos: 'ASI',
+        longitud_numeracion: 6,
+        regimen_tributario: 'general',
+        configuracion_impuestos: []
+      };
+
+      // Insertar empresa en Supabase
+      const { data: nuevaEmpresa, error } = await supabase
+        .from('empresas')
+        .insert({
+          nombre: formData.nombre,
+          razon_social: formData.razon_social,
+          nombre_fantasia: formData.nombre_fantasia || null,
+          numero_identificacion: formData.numero_identificacion,
+          pais_id: formData.pais_id,
+          tipo_contribuyente_id: formData.tipo_contribuyente_id || null,
+          fecha_inicio_actividades: fechaInicioISO,
+          estado_tributario: formData.estado_tributario || 'activa',
+          email: formData.email,
+          telefono: formData.telefono || null,
+          direccion: formData.ciudad || null,
+          moneda_principal: 'UYU',
+          activa: true,
+          usuarios_asignados: user?.uid ? [user.uid] : [],
+          configuracion_contable: configuracionContable
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error al crear empresa:', error);
+        alert('Error al crear la empresa: ' + error.message);
+        return;
+      }
+
+      console.log('Empresa creada exitosamente:', nuevaEmpresa);
+      onComplete(nuevaEmpresa.id);
+    } catch (error: any) {
       console.error('Error guardando empresa:', error);
+      alert('Error al guardar: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
