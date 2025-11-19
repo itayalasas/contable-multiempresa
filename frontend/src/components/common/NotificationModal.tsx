@@ -108,16 +108,16 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
           {/* Progress bar for auto-close */}
           {autoClose && (
             <div className="mt-4">
-              <div className="w-full bg-white bg-opacity-50 rounded-full h-1">
-                <div 
-                  className={`h-1 rounded-full transition-all ease-linear ${
+              <div className="w-full bg-white bg-opacity-50 rounded-full h-1 overflow-hidden">
+                <div
+                  className={`h-1 rounded-full ${
                     type === 'success' ? 'bg-green-500' :
                     type === 'error' ? 'bg-red-500' :
                     type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                   }`}
                   style={{
                     width: '100%',
-                    animation: `shrink ${autoCloseDelay}ms linear`
+                    animation: `progress-shrink ${autoCloseDelay}ms linear forwards`
                   }}
                 ></div>
               </div>
@@ -139,13 +139,6 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
           </button>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes shrink {
-          from { width: 100%; }
-          to { width: 0%; }
-        }
-      `}</style>
     </div>
   );
 };
