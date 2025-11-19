@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AsientoContable } from '../types';
-import { asientosService } from '../services/firebase/asientos';
+import { asientosSupabaseService } from '../services/supabase/asientos';
 
 export const useAsientosContables = (empresaId: string | undefined) => {
   const [asientos, setAsientos] = useState<AsientoContable[]>([]);
@@ -14,7 +14,7 @@ export const useAsientosContables = (empresaId: string | undefined) => {
     try {
       setLoading(true);
       setError(null);
-      const asientosData = await asientosService.getAsientos(empresaId);
+      const asientosData = await asientosSupabaseService.getAsientosByEmpresa(empresaId);
       setAsientos(asientosData);
     } catch (err) {
       console.error('Error al cargar asientos:', err);
@@ -44,8 +44,9 @@ export const useAsientosContables = (empresaId: string | undefined) => {
     setAsientos(prev => [asientoOptimista, ...prev]);
 
     try {
-      // 2. Crear en Firebase
-      const realId = await asientosService.createAsiento(empresaId, nuevoAsiento);
+      // 2. Crear en Supabase
+      const asientoCreado = await asientosSupabaseService.createAsiento(nuevoAsiento);
+      const realId = asientoCreado.id;
       
       // 3. Actualizar con el ID real
       setAsientos(prev => prev.map(asiento => 
@@ -78,8 +79,8 @@ export const useAsientosContables = (empresaId: string | undefined) => {
     ));
 
     try {
-      // 2. Actualizar en Firebase
-      await asientosService.updateAsiento(empresaId, asientoId, datos);
+      // 2. Actualizar en Supabase
+      await asientosSupabaseService.updateAsiento(asientoId, datos);
     } catch (error) {
       // 3. Revertir si hay error
       setAsientos(prev => prev.map(asiento => 
@@ -101,8 +102,8 @@ export const useAsientosContables = (empresaId: string | undefined) => {
     setAsientos(prev => prev.filter(asiento => asiento.id !== asientoId));
 
     try {
-      // 2. Eliminar en Firebase
-      await asientosService.deleteAsiento(empresaId, asientoId);
+      // 2. Eliminar en Supabase
+      await asientosSupabaseService.deleteAsiento(asientoId);
     } catch (error) {
       // 3. Revertir si hay error - restaurar el asiento en su posición original
       setAsientos(prev => {

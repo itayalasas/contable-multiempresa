@@ -22,8 +22,8 @@ import { Link } from 'react-router-dom';
 import { useSesion } from '../../context/SesionContext';
 import { useAuth } from '../../context/AuthContext';
 import { AsientoContable, MovimientoContable, PlanCuenta } from '../../types';
-import { obtenerPlanCuentas } from '../../services/firebase/planCuentas';
-import { SeedDataService } from '../../services/firebase/seedData';
+import { planCuentasSupabaseService } from '../../services/supabase/planCuentas';
+import { SeedDataSupabaseService } from '../../services/supabase/seedData';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { SearchableAccountSelector } from '../../components/common/SearchableAccountSelector';
@@ -86,14 +86,14 @@ function AsientosContables() {
 
   const loadCuentas = async () => {
     if (!empresaActual?.id) return;
-    
+
     try {
       setCuentasLoading(true);
-      console.log('🔄 Cargando cuentas desde Firebase para empresa:', empresaActual.id);
-      
-      const cuentasData = await obtenerPlanCuentas(empresaActual.id);
+      console.log('🔄 Cargando cuentas desde Supabase para empresa:', empresaActual.id);
+
+      const cuentasData = await planCuentasSupabaseService.getCuentasByEmpresa(empresaActual.id);
       console.log('✅ Cuentas cargadas exitosamente:', cuentasData.length, 'cuentas');
-      
+
       setCuentas(cuentasData);
       
       if (cuentasData.length === 0) {
@@ -115,10 +115,10 @@ function AsientosContables() {
 
   const handleInsertTestData = async () => {
     if (!empresaActual?.id) return;
-    
+
     try {
       setInsertingTestData(true);
-      await SeedDataService.insertTestData(empresaActual.id);
+      await SeedDataSupabaseService.insertTestData(empresaActual.id);
       await recargarAsientos(); // Solo recargar asientos, no toda la data
       showSuccess(
         'Datos de prueba insertados',
@@ -273,19 +273,18 @@ function AsientosContables() {
     try {
       setSavingForm(true);
       
-      const asientoData: Omit<AsientoContable, 'id'> = {
+      const asientoData: Omit<AsientoContable, 'id' | 'fechaCreacion'> = {
         numero: formData.numero,
         fecha: formData.fecha,
         descripcion: formData.descripcion,
         referencia: formData.referencia,
         estado: 'confirmado',
-        movimientos: formData.movimientos.filter(m => 
+        movimientos: formData.movimientos.filter(m =>
           m.cuentaId && ((m.debito || 0) > 0 || (m.credito || 0) > 0)
         ),
         empresaId: empresaActual.id,
-        paisId: 'peru',
-        creadoPor: usuario?.id || 'sistema',
-        fechaCreacion: new Date().toISOString()
+        paisId: empresaActual.paisId,
+        creadoPor: usuario?.id || 'sistema'
       };
 
       if (modalType === 'create') {
