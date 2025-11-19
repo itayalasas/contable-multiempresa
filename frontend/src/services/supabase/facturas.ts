@@ -240,24 +240,165 @@ export async function marcarFacturaComoPagada(facturaId: string) {
   return actualizarFactura(facturaId, { estado: 'pagada' });
 }
 
+interface ConfigCFE {
+  codigo_sucursal: string;
+  rut_emisor: string;
+  url_webservice?: string;
+}
+
+interface DGIPayload {
+  tipo_comprobante: number;
+  numero_interno: string;
+  forma_pago: number;
+  fecha_emision: string;
+  sucursal: number;
+  moneda: string;
+  montos_brutos: number;
+  numero_orden: string;
+  lugar_entrega: string;
+  cliente: string;
+  items: Array<{
+    codigo: string;
+    cantidad: number;
+    concepto: string;
+    precio: number;
+    indicador_facturacion: number;
+    descuento_tipo: string;
+    descuento_cantidad: number;
+  }>;
+  adenda: string;
+}
+
+async function obtenerConfigCFE(empresaId: string): Promise<ConfigCFE> {
+  const { data, error } = await supabase
+    .from('empresas_config_cfe')
+    .select('codigo_sucursal, rut_emisor, url_webservice')
+    .eq('empresa_id', empresaId)
+    .maybeSingle();
+
+  if (error) throw new Error('Error obteniendo configuración CFE: ' + error.message);
+  if (!data) throw new Error('No se encontró configuración CFE para esta empresa');
+  if (!data.codigo_sucursal) throw new Error('La empresa no tiene código de sucursal configurado');
+
+  return data as ConfigCFE;
+}
+
+function construirPayloadDGI(
+  factura: FacturaVenta,
+  configCFE: ConfigCFE
+): DGIPayload {
+  const tiposDocumento: Record<string, number> = {
+    'e-ticket': 101,
+    'e-factura': 111,
+    'e-nota-credito': 112,
+    'e-nota-debito': 113,
+  };
+
+  const formasPago: Record<string, number> = {
+    'contado': 1,
+    'credito': 2,
+  };
+
+  const fechaEmision = new Date(factura.fecha_emision);
+  const fechaFormateada = `${fechaEmision.getDate().toString().padStart(2, '0')}/${(fechaEmision.getMonth() + 1).toString().padStart(2, '0')}/${fechaEmision.getFullYear()}`;
+
+  return {
+    tipo_comprobante: tiposDocumento[factura.tipo_documento] || 101,
+    numero_interno: factura.id,
+    forma_pago: formasPago[factura.estado === 'pagada' ? 'contado' : 'credito'] || 1,
+    fecha_emision: fechaFormateada,
+    sucursal: parseInt(configCFE.codigo_sucursal),
+    moneda: factura.moneda || 'UYU',
+    montos_brutos: 1,
+    numero_orden: factura.numero_factura,
+    lugar_entrega: factura.metadata?.lugar_entrega || 'Retiro en tienda',
+    cliente: factura.cliente?.razon_social || '-',
+    items: (factura.items || []).map((item) => ({
+      codigo: item.metadata?.codigo || '',
+      cantidad: parseFloat(item.cantidad.toString()),
+      concepto: item.descripcion,
+      precio: parseFloat(item.precio_unitario.toString()),
+      indicador_facturacion: 3,
+      descuento_tipo: item.descuento_porcentaje > 0 ? 'porcentaje' : '',
+      descuento_cantidad: parseFloat(item.descuento_porcentaje.toString()),
+    })),
+    adenda: factura.metadata?.adenda || factura.observaciones || `Factura ${factura.numero_factura}`,
+  };
+}
+
 export async function enviarFacturaDGI(facturaId: string) {
   const factura = await obtenerFacturaPorId(facturaId);
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  if (factura.dgi_enviada) {
+    throw new Error('Esta factura ya fue enviada a DGI');
+  }
 
-  const cae = `CAE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const configCFE = await obtenerConfigCFE(factura.empresa_id);
+  const payload = construirPayloadDGI(factura, configCFE);
 
-  return actualizarFactura(facturaId, {
-    dgi_enviada: true,
-    dgi_cae: cae,
-    dgi_fecha_envio: new Date().toISOString(),
-    dgi_response: {
-      success: true,
-      cae,
-      fecha: new Date().toISOString(),
-      message: 'Factura aprobada por DGI (simulado)',
-    },
-  });
+  const urlWebservice = configCFE.url_webservice || import.meta.env.VITE_DGI_WEBSERVICE_URL;
+
+  if (!urlWebservice) {
+    console.warn('No hay URL de webservice configurada. Usando modo simulación.');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const cae = `CAE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    return actualizarFactura(facturaId, {
+      dgi_enviada: true,
+      dgi_cae: cae,
+      dgi_fecha_envio: new Date().toISOString(),
+      dgi_response: {
+        success: true,
+        cae,
+        fecha: new Date().toISOString(),
+        message: 'Factura aprobada por DGI (simulado)',
+        payload_enviado: payload,
+      },
+    });
+  }
+
+  try {
+    const response = await fetch(urlWebservice, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+      throw new Error(errorData.error || `Error HTTP ${response.status}`);
+    }
+
+    const responseData = await response.json();
+
+    return actualizarFactura(facturaId, {
+      dgi_enviada: true,
+      dgi_cae: responseData.cae || responseData.numero_autorizacion || `CAE-${Date.now()}`,
+      dgi_fecha_envio: new Date().toISOString(),
+      dgi_response: {
+        success: true,
+        ...responseData,
+        payload_enviado: payload,
+      },
+    });
+  } catch (error: any) {
+    const errorMessage = error.message || 'Error al enviar factura a DGI';
+
+    await actualizarFactura(facturaId, {
+      dgi_response: {
+        success: false,
+        error: errorMessage,
+        fecha: new Date().toISOString(),
+        payload_enviado: payload,
+      },
+    });
+
+    throw new Error(errorMessage);
+  }
 }
 
 export async function obtenerEstadisticasFacturas(empresaId: string) {
