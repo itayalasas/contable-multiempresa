@@ -157,7 +157,7 @@ export async function crearFactura(input: CrearFacturaInput) {
       tipo_documento: input.tipo_documento || 'e-ticket',
       fecha_emision: input.fecha_emision || new Date().toISOString().split('T')[0],
       fecha_vencimiento: input.fecha_vencimiento,
-      estado: 'borrador',
+      estado: 'pendiente',
       subtotal: subtotal.toFixed(2),
       total_iva: totalIva.toFixed(2),
       total: total.toFixed(2),

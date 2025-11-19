@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSesion } from '../../context/SesionContext';
-import { crearFactura, type CrearFacturaInput, type FacturaVenta } from '../../services/supabase/facturas';
+import { crearFactura, enviarFacturaDGI, type CrearFacturaInput, type FacturaVenta } from '../../services/supabase/facturas';
 import { obtenerClientes, type Cliente } from '../../services/supabase/clientes';
 
 interface FacturaModalProps {
@@ -145,7 +145,18 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
         })),
       };
 
-      await crearFactura(input);
+      const nuevaFactura = await crearFactura(input);
+
+      try {
+        console.log('Enviando factura automáticamente a DGI...');
+        await enviarFacturaDGI(nuevaFactura.id);
+        console.log('Factura enviada a DGI exitosamente');
+        alert('Factura creada y enviada a DGI exitosamente');
+      } catch (errorDGI: any) {
+        console.error('Error enviando a DGI:', errorDGI);
+        alert(`Factura creada, pero hubo un error al enviar a DGI: ${errorDGI.message}`);
+      }
+
       onSuccess();
     } catch (error: any) {
       alert(`Error: ${error.message}`);
