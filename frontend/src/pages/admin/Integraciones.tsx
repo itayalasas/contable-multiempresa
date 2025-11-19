@@ -13,6 +13,28 @@ interface Integracion {
 
 export default function Integraciones() {
   const { empresaActual } = useSesion();
+  const [showSecret, setShowSecret] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
+
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhooks-orders`;
+  const webhookSecret = 'default-secret-change-in-production';
+
+  const copyToClipboard = async (text: string, type: 'url' | 'secret') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === 'url') {
+        setCopiedUrl(true);
+        setTimeout(() => setCopiedUrl(false), 2000);
+      } else {
+        setCopiedSecret(true);
+        setTimeout(() => setCopiedSecret(false), 2000);
+      }
+    } catch (err) {
+      console.error('Error al copiar:', err);
+    }
+  };
+
   const [integraciones] = useState<Integracion[]>([
     {
       id: '1',
@@ -163,17 +185,42 @@ export default function Integraciones() {
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              ID de Empresa
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={empresaActual?.id || ''}
+                readOnly
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 text-sm font-mono"
+              />
+              <button
+                onClick={() => empresaActual && copyToClipboard(empresaActual.id, 'url')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                {copiedUrl ? '✓ Copiado' : 'Copiar'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Usa este UUID como <code className="bg-gray-100 px-1 py-0.5 rounded">empresa_id</code> en tus llamadas al webhook
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               URL del Webhook
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
-                value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhooks-orders`}
+                value={webhookUrl}
                 readOnly
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 text-sm"
               />
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                Copiar
+              <button
+                onClick={() => copyToClipboard(webhookUrl, 'url')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                {copiedUrl ? '✓ Copiado' : 'Copiar'}
               </button>
             </div>
           </div>
@@ -183,17 +230,25 @@ export default function Integraciones() {
             </label>
             <div className="flex gap-2">
               <input
-                type="password"
-                value="****-****-****-****"
+                type={showSecret ? 'text' : 'password'}
+                value={showSecret ? webhookSecret : '****-****-****-****'}
                 readOnly
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 text-sm"
               />
-              <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                Ver
+              <button
+                onClick={() => setShowSecret(!showSecret)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                {showSecret ? 'Ocultar' : 'Ver'}
               </button>
-              <button className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm">
-                Regenerar
-              </button>
+              {showSecret && (
+                <button
+                  onClick={() => copyToClipboard(webhookSecret, 'secret')}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  {copiedSecret ? '✓ Copiado' : 'Copiar'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -203,6 +258,43 @@ export default function Integraciones() {
             se usa para autenticar las solicitudes de sistemas externos.
           </p>
         </div>
+
+        {empresaActual && (
+          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Ejemplo de Prueba (cURL)</h3>
+            <pre className="text-xs bg-gray-900 text-green-400 p-3 rounded overflow-x-auto">
+{`curl -X POST ${webhookUrl} \\
+  -H "Content-Type: application/json" \\
+  -H "X-Webhook-Secret: ${webhookSecret}" \\
+  -d '{
+  "event": "order.paid",
+  "order_id": "ORD-12345",
+  "empresa_id": "${empresaActual.id}",
+  "customer": {
+    "nombre": "Juan Pérez",
+    "documento": "12345678-9",
+    "email": "juan@email.com"
+  },
+  "service": {
+    "tipo": "veterinaria",
+    "descripcion": "Consulta veterinaria"
+  },
+  "amounts": {
+    "total": 1000,
+    "tax": 180
+  },
+  "payment": {
+    "method": "mercadopago",
+    "transaction_id": "MP-98765",
+    "paid_at": "${new Date().toISOString()}"
+  }
+}'`}
+            </pre>
+            <p className="text-xs text-gray-600 mt-2">
+              Copia y pega este comando en tu terminal para probar el webhook
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
