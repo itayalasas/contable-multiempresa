@@ -15,7 +15,15 @@ export interface CountriesApiResponse {
 
 export const countriesApi = {
   async getCountriesAndCities(): Promise<Country[]> {
+    console.log('🌍 API URL:', API_URL);
+    console.log('🔑 API Key exists:', !!API_KEY);
+
+    if (!API_URL || !API_KEY) {
+      throw new Error('Faltan configuraciones de API. Verifica VITE_COUNTRIES_API_URL y VITE_COUNTRIES_API_KEY en .env');
+    }
+
     try {
+      console.log('📡 Haciendo petición a la API de países...');
       const response = await fetch(API_URL, {
         method: 'GET',
         headers: {
@@ -24,14 +32,19 @@ export const countriesApi = {
         },
       });
 
+      console.log('📥 Respuesta recibida:', response.status);
+
       if (!response.ok) {
-        throw new Error(`Error fetching countries: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Error en respuesta:', errorText);
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
       const result: CountriesApiResponse = await response.json();
+      console.log('✅ Datos procesados:', result.data?.length || 0, 'países');
       return result.data || [];
     } catch (error) {
-      console.error('Error fetching countries and cities:', error);
+      console.error('❌ Error completo:', error);
       throw error;
     }
   },

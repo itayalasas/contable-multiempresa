@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { nomencladoresUruguayService, TipoContribuyente } from '../../../services/supabase/nomencladoresUruguay';
-import { countriesApi, Country } from '../../../services/api/countriesApi';
 import { SearchableSelect } from '../../common/SearchableSelect';
+import { CountrySelector } from '../../common/CountrySelector';
+import { useCountries } from '../../../hooks/useCountries';
 
 interface StepDatosBasicosProps {
   data: any;
@@ -10,16 +11,11 @@ interface StepDatosBasicosProps {
 }
 
 export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChange, paisId }) => {
-  const [countries, setCountries] = useState<Country[]>([]);
+  const { getCitiesByCountry } = useCountries();
   const [cities, setCities] = useState<string[]>([]);
   const [tiposContribuyente, setTiposContribuyente] = useState<TipoContribuyente[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingTiposContribuyente, setLoadingTiposContribuyente] = useState(false);
-
-  useEffect(() => {
-    loadCountries();
-  }, []);
 
   useEffect(() => {
     if (data.pais_iso2) {
@@ -31,22 +27,10 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
     }
   }, [data.pais_iso2]);
 
-  const loadCountries = async () => {
-    try {
-      setLoading(true);
-      const countriesData = await countriesApi.getCountriesAndCities();
-      setCountries(countriesData);
-    } catch (error) {
-      console.error('Error cargando países:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadCities = async (countryIso2: string) => {
     try {
       setLoadingCities(true);
-      const citiesData = await countriesApi.getCitiesByCountry(countryIso2);
+      const citiesData = await getCitiesByCountry(countryIso2);
       setCities(citiesData);
     } catch (error) {
       console.error('Error cargando ciudades:', error);
@@ -72,20 +56,16 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
     onChange({ ...data, [field]: value });
   };
 
-  const handleCountryChange = (countryName: string) => {
-    const country = countries.find(c => c.country === countryName);
-    if (country) {
-      handleChange('pais_nombre', country.country);
-      handleChange('pais_iso2', country.iso2);
-      handleChange('pais_iso3', country.iso3);
-      handleChange('ciudad', '');
-    }
+  const handleCountryChange = (countryData: { name: string; iso2: string; iso3: string }) => {
+    onChange({
+      ...data,
+      pais_nombre: countryData.name,
+      pais_iso2: countryData.iso2,
+      pais_iso3: countryData.iso3,
+      ciudad: '',
+      tipo_contribuyente_id: ''
+    });
   };
-
-  const countryOptions = countries.map(country => ({
-    value: country.country,
-    label: country.country,
-  }));
 
   const cityOptions = cities.map(city => ({
     value: city,
@@ -97,13 +77,6 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
     label: tipo.nombre,
   }));
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -154,15 +127,11 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
             />
           </div>
 
-          {/* País - Searchable Select */}
-          <SearchableSelect
-            label="País"
-            required
-            options={countryOptions}
+          {/* País - CountrySelector */}
+          <CountrySelector
             value={data.pais_nombre || ''}
             onChange={handleCountryChange}
-            placeholder="Buscar país..."
-            loading={loading}
+            required
           />
 
           {/* Número de Identificación (RUT) */}
