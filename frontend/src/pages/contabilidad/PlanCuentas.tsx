@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Filter, ChevronDown, ChevronRight, Database, Download, FileText, Building2, TrendingUp, Loader2 } from 'lucide-react';
 import { useSesion } from '../../context/SesionContext';
 import { PlanCuenta } from '../../types';
-import { SeedDataService } from '../../services/firebase/seedData';
+import { SeedDataSupabaseService } from '../../services/supabase/seedData';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
@@ -163,17 +163,17 @@ function PlanCuentas() {
 
   const handleInsertTestData = async () => {
     if (!empresaActual?.id) return;
-    
+
     try {
       setInsertingTestData(true);
-      await SeedDataService.insertTestData(empresaActual.id);
-      
+      await SeedDataSupabaseService.insertTestData(empresaActual.id);
+
       // Recargar datos después de insertar datos de prueba
       await recargarCuentas();
-      
+
       showSuccess(
         'Datos de prueba insertados',
-        'El plan de cuentas base y los asientos de ejemplo han sido creados exitosamente.'
+        'El plan de cuentas base ha sido creado exitosamente con 48 cuentas contables.'
       );
     } catch (error) {
       console.error('Error insertando datos de prueba:', error);
