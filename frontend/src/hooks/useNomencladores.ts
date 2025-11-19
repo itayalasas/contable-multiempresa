@@ -30,28 +30,16 @@ export const useNomencladores = (paisId: string | undefined) => {
       setError(null);
       
       console.log('🔄 Cargando nomencladores para país:', paisId);
-      
-      // Inicializar nomencladores si no existen
-      await NomencladoresService.inicializarNomencladores(paisId);
-      
-      // Cargar todos los nomencladores en paralelo
-      const [
-        tiposDocIdentidad,
-        tiposDocFactura,
-        tiposImp,
-        formasDePago,
-        tiposMovTesoreria,
-        tiposMon,
-        bancosData
-      ] = await Promise.all([
-        NomencladoresService.getTiposDocumentoIdentidad(paisId),
-        NomencladoresService.getTiposDocumentoFactura(paisId),
-        NomencladoresService.getTiposImpuesto(paisId),
-        NomencladoresService.getFormasPago(paisId),
-        NomencladoresService.getTiposMovimientoTesoreria(paisId),
-        NomencladoresService.getTiposMoneda(paisId),
-        NomencladoresService.getBancos(paisId)
-      ]);
+
+      // Los nomencladores se cargan desde Supabase, usar datos mock temporalmente
+      // TODO: Migrar a servicio de Supabase
+      const tiposDocIdentidad = NomencladoresService.getMockTiposDocumentoIdentidad(paisId);
+      const tiposDocFactura = NomencladoresService.getMockTiposDocumentoFactura(paisId);
+      const tiposImp = NomencladoresService.getMockTiposImpuesto(paisId);
+      const formasDePago = NomencladoresService.getMockFormasPago(paisId);
+      const tiposMovTesoreria = NomencladoresService.getMockTiposMovimientoTesoreria(paisId);
+      const tiposMon = NomencladoresService.getMockTiposMoneda(paisId);
+      const bancosData = NomencladoresService.getMockBancos(paisId);
       
       // Eliminar duplicados por ID
       const uniqueTiposDocIdentidad = removeDuplicatesById(tiposDocIdentidad);
