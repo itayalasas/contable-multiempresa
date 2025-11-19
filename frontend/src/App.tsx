@@ -67,6 +67,14 @@ const ConfiguracionMapeoArchivos = React.lazy(() =>
     .then(mod => ({ default: mod.ConfiguracionMapeoArchivos }))
 )
 
+const Clientes = React.lazy(() =>
+  import('./pages/ventas/Clientes')
+)
+
+const Proveedores = React.lazy(() =>
+  import('./pages/compras/Proveedores')
+)
+
 const ManualRouter = React.lazy(() =>
   import('./manuales/ManualRouter')
     .then(mod => ({ default: mod.ManualRouter }))
@@ -129,25 +137,57 @@ const AppRoutes: React.FC = () => {
         }>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+
+            {/* Contabilidad */}
             <Route path="/contabilidad/plan-cuentas" element={<PlanCuentas />} />
             <Route path="/contabilidad/asientos" element={<AsientosContables />} />
             <Route path="/contabilidad/mayor" element={<LibroMayor />} />
             <Route path="/contabilidad/balance-comprobacion" element={<BalanceComprobacion />} />
+            <Route path="/contabilidad/periodos" element={<div className="p-6"><h1 className="text-2xl font-bold">Periodos Contables</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+
+            {/* Ventas */}
+            <Route path="/ventas/clientes" element={<Clientes />} />
+            <Route path="/ventas/facturas" element={<div className="p-6"><h1 className="text-2xl font-bold">Facturas de Venta</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/ventas/notas-credito" element={<div className="p-6"><h1 className="text-2xl font-bold">Notas de Crédito</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/ventas/notas-debito" element={<div className="p-6"><h1 className="text-2xl font-bold">Notas de Débito</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/ventas/recibos" element={<div className="p-6"><h1 className="text-2xl font-bold">Recibos</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+
+            {/* Compras */}
+            <Route path="/compras/proveedores" element={<Proveedores />} />
+            <Route path="/compras/facturas" element={<div className="p-6"><h1 className="text-2xl font-bold">Facturas de Compra</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/compras/notas-credito" element={<div className="p-6"><h1 className="text-2xl font-bold">Notas de Crédito (Compras)</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/compras/ordenes" element={<div className="p-6"><h1 className="text-2xl font-bold">Órdenes de Compra</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+
+            {/* Finanzas */}
             <Route path="/finanzas/cuentas-cobrar" element={<CuentasPorCobrar />} />
             <Route path="/finanzas/cuentas-pagar" element={<CuentasPorPagar />} />
             <Route path="/finanzas/tesoreria" element={<Tesoreria />} />
             <Route path="/finanzas/conciliacion" element={<ConciliacionBancaria />} />
+
+            {/* Análisis */}
+            <Route path="/analisis/centros-costo" element={<div className="p-6"><h1 className="text-2xl font-bold">Centros de Costo</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/analisis/segmentos" element={<div className="p-6"><h1 className="text-2xl font-bold">Segmentos de Negocio</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/analisis/presupuestos" element={<div className="p-6"><h1 className="text-2xl font-bold">Presupuestos</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+
+            {/* Reportes */}
             <Route path="/reportes/balance-general" element={<div className="p-6"><h1 className="text-2xl font-bold">Balance General</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
             <Route path="/reportes/estado-resultados" element={<div className="p-6"><h1 className="text-2xl font-bold">Estado de Resultados</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
             <Route path="/reportes/flujo-efectivo" element={<div className="p-6"><h1 className="text-2xl font-bold">Flujo de Efectivo</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/reportes/centros-costo" element={<div className="p-6"><h1 className="text-2xl font-bold">Reportes por Centro de Costo</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+
+            {/* Administración */}
             <Route path="/admin/empresas" element={<GestionEmpresas />} />
             <Route path="/admin/usuarios" element={<GestionUsuarios />} />
             <Route path="/admin/configuracion" element={<GestionNomencladores />} />
             <Route path="/admin/configuracion-mapeo" element={<ConfiguracionMapeoArchivos />} />
-            
+            <Route path="/admin/impuestos" element={<div className="p-6"><h1 className="text-2xl font-bold">Gestión de Impuestos</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/admin/integraciones" element={<div className="p-6"><h1 className="text-2xl font-bold">Integraciones</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/admin/auditoria" element={<div className="p-6"><h1 className="text-2xl font-bold">Auditoría</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+            <Route path="/admin/multimoneda" element={<div className="p-6"><h1 className="text-2xl font-bold">Multi-moneda</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
+
             {/* Rutas para el manual de usuario */}
             <Route path="/manuales/*" element={<ManualRouter />} />
-            
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </React.Suspense>
