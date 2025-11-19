@@ -49,31 +49,24 @@ const menuItems = [
     ]
   },
   {
-    title: 'Facturación',
-    icon: Receipt,
+    title: 'Ventas',
+    icon: ShoppingCart,
     submenu: [
-      { title: 'Facturas Emitidas', icon: Receipt, path: '/facturacion/emitidas' },
-      { title: 'Notas de Crédito', icon: FileText, path: '/facturacion/notas-credito' },
-      { title: 'Envío a DGI', icon: FileText, path: '/facturacion/envio-dgi' }
+      { title: 'Clientes', icon: Users, path: '/ventas/clientes' },
+      { title: 'Facturas', icon: Receipt, path: '/ventas/facturas' },
+      { title: 'Notas de Crédito', icon: FileText, path: '/ventas/notas-credito' },
+      { title: 'Notas de Débito', icon: FileText, path: '/ventas/notas-debito' },
+      { title: 'Recibos', icon: Receipt, path: '/ventas/recibos' }
     ]
   },
   {
-    title: 'Aliados',
-    icon: Users,
-    submenu: [
-      { title: 'Gestión de Aliados', icon: Users, path: '/aliados/gestion' },
-      { title: 'Liquidaciones', icon: Receipt, path: '/aliados/liquidaciones' },
-      { title: 'Pagos a Aliados', icon: DollarSign, path: '/aliados/pagos' },
-      { title: 'Comisiones', icon: BarChart3, path: '/aliados/comisiones' }
-    ]
-  },
-  {
-    title: 'Gastos',
+    title: 'Compras',
     icon: ShoppingBag,
     submenu: [
-      { title: 'Proveedores', icon: Users, path: '/gastos/proveedores' },
-      { title: 'Facturas de Gastos', icon: Receipt, path: '/gastos/facturas' },
-      { title: 'Pagos Realizados', icon: DollarSign, path: '/gastos/pagos' }
+      { title: 'Proveedores', icon: Users, path: '/compras/proveedores' },
+      { title: 'Facturas de Compra', icon: Receipt, path: '/compras/facturas' },
+      { title: 'Notas de Crédito', icon: FileText, path: '/compras/notas-credito' },
+      { title: 'Órdenes de Compra', icon: FileBarChart, path: '/compras/ordenes' }
     ]
   },
   {
