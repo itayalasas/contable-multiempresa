@@ -94,7 +94,7 @@ function PlanCuentas() {
         // Creación optimista - se agrega inmediatamente a la UI
         await crearCuenta({
           ...formData,
-          paisId: 'peru' // Por defecto Perú
+          paisId: empresaActual.paisId
         });
         showSuccess(
           'Cuenta creada',

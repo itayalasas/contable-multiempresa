@@ -81,6 +81,21 @@ export class SeedDataSupabaseService {
     try {
       console.log(`Insertando datos de prueba para empresa ${empresaId}...`);
 
+      // Obtener el país de la empresa
+      const { data: empresa, error: empresaError } = await supabase
+        .from('empresas')
+        .select('pais_id')
+        .eq('id', empresaId)
+        .single();
+
+      if (empresaError) throw empresaError;
+      if (!empresa || !empresa.pais_id) {
+        throw new Error('No se pudo obtener el país de la empresa');
+      }
+
+      const paisId = empresa.pais_id;
+      console.log(`País de la empresa: ${paisId}`);
+
       // Verificar si ya existe plan de cuentas
       const { data: existingCuentas, error: checkError } = await supabase
         .from('plan_cuentas')
@@ -95,7 +110,7 @@ export class SeedDataSupabaseService {
         throw new Error('Ya existe un plan de cuentas para esta empresa. Elimine las cuentas existentes antes de insertar datos de prueba.');
       }
 
-      // Preparar datos para inserción
+      // Preparar datos para inserción usando el pais_id de la empresa
       const cuentasToInsert = planCuentasBase.map(cuenta => ({
         codigo: cuenta.codigo,
         nombre: cuenta.nombre,
@@ -105,7 +120,7 @@ export class SeedDataSupabaseService {
         descripcion: cuenta.descripcion,
         saldo: cuenta.saldo || 0,
         activa: cuenta.activa,
-        pais_id: cuenta.paisId,
+        pais_id: paisId,
         empresa_id: empresaId,
         configuracion: cuenta.configuracion
       }));
