@@ -157,7 +157,7 @@ export async function crearFactura(input: CrearFacturaInput) {
       tipo_documento: input.tipo_documento || 'e-ticket',
       fecha_emision: input.fecha_emision || new Date().toISOString().split('T')[0],
       fecha_vencimiento: input.fecha_vencimiento,
-      estado: 'pendiente',
+      estado: 'borrador',
       subtotal: subtotal.toFixed(2),
       total_iva: totalIva.toFixed(2),
       total: total.toFixed(2),
@@ -477,6 +477,7 @@ export async function enviarFacturaDGI(facturaId: string) {
       dgi_cae_serie: detalleData.cae?.serie,
       dgi_cae_vencimiento: fechaVencimientoCAE,
       dgi_detalle_completo: detalleData as any,
+      estado: 'pendiente',
       dgi_response: {
         success: true,
         create_response: createData,

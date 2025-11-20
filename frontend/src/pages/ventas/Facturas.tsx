@@ -8,6 +8,7 @@ import {
   obtenerEstadisticasFacturas,
   type FacturaVenta,
 } from '../../services/supabase/facturas';
+import { supabase } from '../../config/supabase';
 import FacturaModal from '../../components/ventas/FacturaModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
@@ -38,6 +39,28 @@ export default function Facturas() {
     if (empresaActual) {
       cargarFacturas();
       cargarEstadisticas();
+
+      const channel = supabase
+        .channel('facturas-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'facturas_venta',
+            filter: `empresa_id=eq.${empresaActual.id}`,
+          },
+          (payload) => {
+            console.log('📡 Cambio en tiempo real detectado:', payload);
+            cargarFacturas();
+            cargarEstadisticas();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [empresaActual]);
 
@@ -487,15 +510,15 @@ TOTAL: $${parseFloat(facturaCompleta.total).toLocaleString()} ${facturaCompleta.
                           </button>
                         )}
 
-                        {/* Enviar a DGI - si no está enviada y no está anulada */}
+                        {/* Enviar a DGI - botón visible si no está enviada */}
                         {!factura.dgi_enviada && factura.estado !== 'anulada' && (
                           <button
                             onClick={() => handleEnviarDGI(factura)}
-                            className="text-purple-600 hover:text-purple-900"
+                            className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
                             title="Enviar a DGI"
                           >
                             <svg
-                              className="w-5 h-5"
+                              className="w-4 h-4"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -507,6 +530,7 @@ TOTAL: $${parseFloat(facturaCompleta.total).toLocaleString()} ${facturaCompleta.
                                 d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
                               />
                             </svg>
+                            <span>Enviar DGI</span>
                           </button>
                         )}
 
