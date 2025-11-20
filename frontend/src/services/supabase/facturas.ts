@@ -214,13 +214,25 @@ export async function crearFactura(input: CrearFacturaInput) {
       .from('clientes')
       .select('razon_social')
       .eq('id', input.cliente_id)
+      .maybeSingle();
+
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', input.empresa_id)
       .single();
+
+    if (!empresa?.pais_id) {
+      console.warn('⚠️ [crearFactura] No se encontró pais_id de la empresa, no se puede crear asiento');
+      return factura;
+    }
 
     const { generarAsientoFacturaVenta } = await import('./asientosAutomaticos');
 
     await generarAsientoFacturaVenta(
       factura.id,
       input.empresa_id,
+      empresa.pais_id,
       cliente?.razon_social || 'Cliente',
       siguienteNumero,
       subtotal,
@@ -233,6 +245,7 @@ export async function crearFactura(input: CrearFacturaInput) {
     console.log('✅ [crearFactura] Asiento contable generado exitosamente');
   } catch (asientoError: any) {
     console.error('⚠️ [crearFactura] Error al generar asiento contable:', asientoError);
+    console.error('⚠️ [crearFactura] Detalle del error:', asientoError.message);
   }
 
   return factura;
@@ -276,11 +289,23 @@ export async function marcarFacturaComoPagada(
   try {
     console.log('🔄 [marcarFacturaComoPagada] Generando asiento de pago...');
 
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', factura.empresa_id)
+      .single();
+
+    if (!empresa?.pais_id) {
+      console.warn('⚠️ [marcarFacturaComoPagada] No se encontró pais_id de la empresa');
+      return resultado;
+    }
+
     const { generarAsientoPagoFacturaVenta } = await import('./asientosAutomaticos');
 
     await generarAsientoPagoFacturaVenta(
       facturaId,
       factura.empresa_id,
+      empresa.pais_id,
       factura.numero_factura,
       parseFloat(factura.total),
       new Date().toISOString().split('T')[0],
@@ -291,6 +316,7 @@ export async function marcarFacturaComoPagada(
     console.log('✅ [marcarFacturaComoPagada] Asiento de pago generado');
   } catch (asientoError: any) {
     console.error('⚠️ [marcarFacturaComoPagada] Error al generar asiento de pago:', asientoError);
+    console.error('⚠️ [marcarFacturaComoPagada] Detalle del error:', asientoError.message);
   }
 
   return resultado;

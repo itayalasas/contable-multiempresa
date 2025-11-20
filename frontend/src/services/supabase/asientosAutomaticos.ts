@@ -13,6 +13,7 @@ interface MovimientoAsiento {
 export async function generarAsientoFacturaVenta(
   facturaId: string,
   empresaId: string,
+  paisId: string,
   clienteNombre: string,
   numeroFactura: string,
   subtotal: number,
@@ -55,20 +56,18 @@ export async function generarAsientoFacturaVenta(
 
     const asientoData = {
       empresa_id: empresaId,
+      pais_id: paisId,
       numero: numeroAsiento,
       fecha: fechaEmision,
       descripcion: `Factura de Venta ${numeroFactura} - ${clienteNombre}`,
       referencia: `FACT-${numeroFactura}`,
-      tipo_asiento: 'automatico',
       estado: 'confirmado',
-      moneda: 'UYU',
-      tipo_cambio: 1.0,
-      total_debe: total,
-      total_haber: total,
-      generado_por: 'sistema_facturacion',
-      origen_documento_tipo: 'factura_venta',
-      origen_documento_id: facturaId,
       creado_por: usuarioId,
+      documento_soporte: {
+        tipo: 'factura_venta',
+        id: facturaId,
+        numero: numeroFactura,
+      },
     };
 
     console.log('📝 [AsientosAutomaticos] Creando asiento:', asientoData);
@@ -165,6 +164,7 @@ async function obtenerCuentaId(empresaId: string, codigo: string): Promise<strin
 export async function generarAsientoPagoFacturaVenta(
   facturaId: string,
   empresaId: string,
+  paisId: string,
   numeroFactura: string,
   montoPago: number,
   fechaPago: string,
@@ -199,20 +199,19 @@ export async function generarAsientoPagoFacturaVenta(
 
     const asientoData = {
       empresa_id: empresaId,
+      pais_id: paisId,
       numero: numeroAsiento,
       fecha: fechaPago,
       descripcion: `Cobro Factura ${numeroFactura}`,
       referencia: `COBRO-${numeroFactura}`,
-      tipo_asiento: 'automatico',
       estado: 'confirmado',
-      moneda: 'UYU',
-      tipo_cambio: 1.0,
-      total_debe: montoPago,
-      total_haber: montoPago,
-      generado_por: 'sistema_cobros',
-      origen_documento_tipo: 'pago_factura',
-      origen_documento_id: facturaId,
       creado_por: usuarioId,
+      documento_soporte: {
+        tipo: 'pago_factura',
+        id: facturaId,
+        numero: numeroFactura,
+        tipo_pago: tipoPago,
+      },
     };
 
     const { data: asiento, error: asientoError } = await supabase
