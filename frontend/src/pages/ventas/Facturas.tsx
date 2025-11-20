@@ -6,10 +6,12 @@ import {
   marcarFacturaComoPagada,
   enviarFacturaDGI,
   obtenerEstadisticasFacturas,
+  obtenerFacturaPorId,
   type FacturaVenta,
 } from '../../services/supabase/facturas';
 import { supabase } from '../../config/supabase';
 import FacturaModal from '../../components/ventas/FacturaModal';
+import { FacturaDetalleModal } from '../../components/ventas/FacturaDetalleModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 
@@ -19,6 +21,8 @@ export default function Facturas() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [facturaEdit, setFacturaEdit] = useState<FacturaVenta | null>(null);
+  const [showDetalleModal, setShowDetalleModal] = useState(false);
+  const [facturaDetalle, setFacturaDetalle] = useState<FacturaVenta | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -133,24 +137,33 @@ export default function Facturas() {
     });
   };
 
-  const handleEnviarDGI = (factura: FacturaVenta) => {
-    console.log('📤 Iniciando envío a DGI de factura:', factura.numero_factura, factura.id);
+  const handleEnviarDGI = async (factura: FacturaVenta) => {
+    console.log('📤 [handleEnviarDGI] Iniciando proceso para factura:', factura.numero_factura, factura.id);
 
     setConfirmModal({
       show: true,
       title: 'Enviar a DGI',
-      message: `¿Desea enviar la factura ${factura.numero_factura} a DGI?`,
+      message: `¿Desea enviar la factura ${factura.numero_factura} al sistema de facturación electrónica de DGI?`,
       onConfirm: async () => {
+        console.log('✅ [handleEnviarDGI] Usuario confirmó, cerrando modal...');
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+
         try {
-          console.log('✅ Usuario confirmó envío, llamando a enviarFacturaDGI...');
-          await enviarFacturaDGI(factura.id);
-          console.log('✅ Factura enviada exitosamente');
+          console.log('🚀 [handleEnviarDGI] Llamando a enviarFacturaDGI...');
+          const resultado = await enviarFacturaDGI(factura.id);
+          console.log('✅ [handleEnviarDGI] Factura enviada exitosamente:', resultado);
+
           mostrarNotificacion('success', 'Éxito', 'Factura enviada a DGI correctamente');
-          cargarFacturas();
-          cargarEstadisticas();
+
+          console.log('🔄 [handleEnviarDGI] Recargando facturas...');
+          await cargarFacturas();
+          await cargarEstadisticas();
+          console.log('✅ [handleEnviarDGI] Proceso completado');
         } catch (error: any) {
-          console.error('❌ Error al enviar a DGI:', error);
-          mostrarNotificacion('error', 'Error al Enviar', error.message || 'Error desconocido');
+          console.error('❌ [handleEnviarDGI] Error completo:', error);
+          console.error('❌ [handleEnviarDGI] Error message:', error.message);
+          console.error('❌ [handleEnviarDGI] Error stack:', error.stack);
+          mostrarNotificacion('error', 'Error al Enviar', error.message || 'Error desconocido al enviar a DGI');
         }
       },
     });
@@ -159,49 +172,10 @@ export default function Facturas() {
   const handleVerDetalles = async (factura: FacturaVenta) => {
     try {
       console.log('👁️ Cargando detalles de factura:', factura.id);
-      const { obtenerFacturaPorId } = await import('../../services/supabase/facturas');
       const facturaCompleta = await obtenerFacturaPorId(factura.id);
-
-      console.log('✅ Factura completa:', facturaCompleta);
-
-      const itemsDetalle = facturaCompleta.items?.map((item: any, i: number) =>
-        `${i + 1}. ${item.descripcion}\n   Cantidad: ${item.cantidad} x $${parseFloat(item.precio_unitario).toFixed(2)} = $${parseFloat(item.subtotal || 0).toFixed(2)}\n   IVA (${(item.tasa_iva * 100).toFixed(0)}%): $${parseFloat(item.monto_iva || 0).toFixed(2)}\n   Total: $${parseFloat(item.total || 0).toFixed(2)}`
-      ).join('\n\n') || 'Sin items';
-
-      const detalles = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        FACTURA ${facturaCompleta.numero_factura}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 INFORMACIÓN GENERAL
-   Tipo: ${facturaCompleta.tipo_documento || 'e-ticket'}
-   Fecha: ${new Date(facturaCompleta.fecha_emision).toLocaleDateString()}
-   Estado: ${getEstadoLabel(facturaCompleta.estado).toUpperCase()}
-
-👤 CLIENTE
-   ${facturaCompleta.cliente?.razon_social || 'Cliente no encontrado'}
-   Doc: ${facturaCompleta.cliente?.numero_documento || 'N/A'}
-   ${facturaCompleta.cliente?.email ? '✉️ ' + facturaCompleta.cliente.email : ''}
-   ${facturaCompleta.cliente?.telefono ? '📞 ' + facturaCompleta.cliente.telefono : ''}
-
-📦 DGI - COMPROBANTE FISCAL
-   ${facturaCompleta.dgi_enviada
-     ? `✅ ENVIADO\n   CAE: ${facturaCompleta.dgi_cae_numero || 'N/A'}\n   Serie: ${facturaCompleta.dgi_serie || 'N/A'}\n   Número: ${facturaCompleta.dgi_numero || 'N/A'}\n   Vencimiento CAE: ${facturaCompleta.dgi_cae_vencimiento ? new Date(facturaCompleta.dgi_cae_vencimiento).toLocaleDateString() : 'N/A'}`
-     : '⏳ PENDIENTE DE ENVÍO'}
-
-🛒 ITEMS
-${itemsDetalle}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 TOTALES
-   Subtotal:  $${parseFloat(facturaCompleta.subtotal).toFixed(2)}
-   IVA:       $${parseFloat(facturaCompleta.total_iva).toFixed(2)}
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   TOTAL:     $${parseFloat(facturaCompleta.total).toFixed(2)} ${facturaCompleta.moneda}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      `.trim();
-
-      mostrarNotificacion('info', `Factura ${facturaCompleta.numero_factura}`, detalles);
+      console.log('✅ Factura completa cargada:', facturaCompleta);
+      setFacturaDetalle(facturaCompleta);
+      setShowDetalleModal(true);
     } catch (error: any) {
       console.error('❌ Error al cargar detalles:', error);
       mostrarNotificacion('error', 'Error', `No se pudo cargar los detalles: ${error.message}`);
@@ -881,13 +855,14 @@ ${itemsDetalle}
 
       {confirmModal.show && (
         <ConfirmModal
+          isOpen={confirmModal.show}
           title={confirmModal.title}
           message={confirmModal.message}
           onConfirm={() => {
+            console.log('🔘 [ConfirmModal] Botón confirmar presionado');
             confirmModal.onConfirm();
-            setConfirmModal({ ...confirmModal, show: false });
           }}
-          onCancel={() => setConfirmModal({ ...confirmModal, show: false })}
+          onClose={() => setConfirmModal({ ...confirmModal, show: false })}
         />
       )}
 
@@ -900,6 +875,16 @@ ${itemsDetalle}
           autoClose={notification.type === 'info' ? false : true}
           autoCloseDelay={notification.type === 'info' ? 0 : 3000}
           onClose={() => setNotification({ ...notification, show: false })}
+        />
+      )}
+
+      {showDetalleModal && facturaDetalle && (
+        <FacturaDetalleModal
+          factura={facturaDetalle}
+          onClose={() => {
+            setShowDetalleModal(false);
+            setFacturaDetalle(null);
+          }}
         />
       )}
     </div>
