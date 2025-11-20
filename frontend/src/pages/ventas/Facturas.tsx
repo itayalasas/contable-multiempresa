@@ -152,47 +152,315 @@ export default function Facturas() {
 
   const handleVerDetalles = async (factura: FacturaVenta) => {
     try {
-      const facturaCompleta = await import('../../services/supabase/facturas').then(m =>
-        m.obtenerFacturaPorId(factura.id)
-      );
+      console.log('👁️ Cargando detalles de factura:', factura.id);
+      const { obtenerFacturaPorId } = await import('../../services/supabase/facturas');
+      const facturaCompleta = await obtenerFacturaPorId(factura.id);
+
+      console.log('✅ Factura completa:', facturaCompleta);
+
+      const itemsDetalle = facturaCompleta.items?.map((item: any, i: number) =>
+        `${i + 1}. ${item.descripcion}\n   Cantidad: ${item.cantidad} x $${parseFloat(item.precio_unitario).toFixed(2)} = $${parseFloat(item.subtotal || 0).toFixed(2)}\n   IVA (${(item.tasa_iva * 100).toFixed(0)}%): $${parseFloat(item.monto_iva || 0).toFixed(2)}\n   Total: $${parseFloat(item.total || 0).toFixed(2)}`
+      ).join('\n\n') || 'Sin items';
 
       const detalles = `
-Factura: ${facturaCompleta.serie}-${facturaCompleta.numero_factura}
-Cliente: ${facturaCompleta.cliente?.razon_social}
-Documento: ${facturaCompleta.cliente?.numero_documento}
-Email: ${facturaCompleta.cliente?.email || 'N/A'}
-Teléfono: ${facturaCompleta.cliente?.telefono || 'N/A'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        FACTURA ${facturaCompleta.numero_factura}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Fecha Emisión: ${new Date(facturaCompleta.fecha_emision).toLocaleDateString()}
-Estado: ${getEstadoLabel(facturaCompleta.estado)}
-DGI: ${facturaCompleta.dgi_enviada ? `Enviada (CAE: ${facturaCompleta.dgi_cae})` : 'Pendiente'}
+📋 INFORMACIÓN GENERAL
+   Tipo: ${facturaCompleta.tipo_documento || 'e-ticket'}
+   Fecha: ${new Date(facturaCompleta.fecha_emision).toLocaleDateString()}
+   Estado: ${getEstadoLabel(facturaCompleta.estado).toUpperCase()}
 
-Items:
-${facturaCompleta.items?.map((item, i) =>
-  `${i + 1}. ${item.descripcion}
-   Cantidad: ${item.cantidad} x $${parseFloat(item.precio_unitario).toFixed(2)}
-   Subtotal: $${parseFloat(item.subtotal).toFixed(2)}
-   IVA (${(item.tasa_iva * 100).toFixed(0)}%): $${parseFloat(item.monto_iva).toFixed(2)}
-   Total: $${parseFloat(item.total).toFixed(2)}`
-).join('\n\n')}
+👤 CLIENTE
+   ${facturaCompleta.cliente?.razon_social || 'Cliente no encontrado'}
+   Doc: ${facturaCompleta.cliente?.numero_documento || 'N/A'}
+   ${facturaCompleta.cliente?.email ? '✉️ ' + facturaCompleta.cliente.email : ''}
+   ${facturaCompleta.cliente?.telefono ? '📞 ' + facturaCompleta.cliente.telefono : ''}
 
-Subtotal: $${parseFloat(facturaCompleta.subtotal).toLocaleString()}
-IVA: $${parseFloat(facturaCompleta.total_iva).toLocaleString()}
-TOTAL: $${parseFloat(facturaCompleta.total).toLocaleString()} ${facturaCompleta.moneda}
+📦 DGI - COMPROBANTE FISCAL
+   ${facturaCompleta.dgi_enviada
+     ? `✅ ENVIADO\n   CAE: ${facturaCompleta.dgi_cae_numero || 'N/A'}\n   Serie: ${facturaCompleta.dgi_serie || 'N/A'}\n   Número: ${facturaCompleta.dgi_numero || 'N/A'}\n   Vencimiento CAE: ${facturaCompleta.dgi_cae_vencimiento ? new Date(facturaCompleta.dgi_cae_vencimiento).toLocaleDateString() : 'N/A'}`
+     : '⏳ PENDIENTE DE ENVÍO'}
+
+🛒 ITEMS
+${itemsDetalle}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 TOTALES
+   Subtotal:  $${parseFloat(facturaCompleta.subtotal).toFixed(2)}
+   IVA:       $${parseFloat(facturaCompleta.total_iva).toFixed(2)}
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TOTAL:     $${parseFloat(facturaCompleta.total).toFixed(2)} ${facturaCompleta.moneda}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       `.trim();
 
-      mostrarNotificacion('info', 'Detalles de la Factura', detalles);
+      mostrarNotificacion('info', `Factura ${facturaCompleta.numero_factura}`, detalles);
     } catch (error: any) {
-      mostrarNotificacion('error', 'Error', error.message);
+      console.error('❌ Error al cargar detalles:', error);
+      mostrarNotificacion('error', 'Error', `No se pudo cargar los detalles: ${error.message}`);
     }
   };
 
-  const handleDescargarPDF = (factura: FacturaVenta) => {
-    mostrarNotificacion(
-      'info',
-      'Generar PDF',
-      `La generación de PDF para la factura ${factura.numero_factura} estará disponible próximamente.`
-    );
+  const handleDescargarPDF = async (factura: FacturaVenta) => {
+    try {
+      console.log('📄 Generando PDF de factura:', factura.id);
+      const { obtenerFacturaPorId } = await import('../../services/supabase/facturas');
+      const facturaCompleta = await obtenerFacturaPorId(factura.id);
+
+      console.log('✅ Datos para PDF:', facturaCompleta);
+
+      const itemsHTML = facturaCompleta.items?.map((item: any, i: number) => `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${i + 1}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.descripcion}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.cantidad}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${parseFloat(item.precio_unitario).toFixed(2)}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${parseFloat(item.subtotal || 0).toFixed(2)}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${(item.tasa_iva * 100).toFixed(0)}%</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${parseFloat(item.monto_iva || 0).toFixed(2)}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">$${parseFloat(item.total || 0).toFixed(2)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="8" style="text-align: center; padding: 20px;">Sin items</td></tr>';
+
+      const pdfHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Factura ${facturaCompleta.numero_factura}</title>
+  <style>
+    @media print {
+      body { margin: 0; }
+      .no-print { display: none; }
+    }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      color: #333;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #2563eb;
+    }
+    .company-info {
+      flex: 1;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2563eb;
+      margin-bottom: 5px;
+    }
+    .invoice-info {
+      text-align: right;
+    }
+    .invoice-number {
+      font-size: 28px;
+      font-weight: bold;
+      color: #2563eb;
+    }
+    .section {
+      margin: 20px 0;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #2563eb;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .info-box {
+      padding: 15px;
+      background: #f3f4f6;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th {
+      background: #2563eb;
+      color: white;
+      padding: 12px 8px;
+      text-align: left;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #ddd;
+      font-size: 14px;
+    }
+    .totals {
+      margin-top: 30px;
+      float: right;
+      width: 300px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #ddd;
+    }
+    .total-row.final {
+      font-size: 20px;
+      font-weight: bold;
+      color: #2563eb;
+      border-top: 3px solid #2563eb;
+      border-bottom: 3px solid #2563eb;
+      padding: 15px 0;
+      margin-top: 10px;
+    }
+    .dgi-box {
+      margin-top: 40px;
+      padding: 20px;
+      background: ${facturaCompleta.dgi_enviada ? '#d1fae5' : '#fef3c7'};
+      border: 2px solid ${facturaCompleta.dgi_enviada ? '#10b981' : '#f59e0b'};
+      border-radius: 8px;
+      clear: both;
+    }
+    .dgi-title {
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: ${facturaCompleta.dgi_enviada ? '#065f46' : '#92400e'};
+    }
+    .print-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 20px 0;
+    }
+    .print-btn:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+
+  <div class="header">
+    <div class="company-info">
+      <div class="company-name">${empresaActual?.razon_social || 'Empresa'}</div>
+      <div>RUT: ${empresaActual?.numero_identificacion || 'N/A'}</div>
+      <div>${empresaActual?.direccion || ''}</div>
+      <div>${empresaActual?.email || ''}</div>
+    </div>
+    <div class="invoice-info">
+      <div class="invoice-number">${facturaCompleta.numero_factura}</div>
+      <div style="font-size: 14px; color: #666; margin-top: 5px;">${facturaCompleta.tipo_documento || 'e-ticket'}</div>
+      <div style="margin-top: 10px;">
+        <div><strong>Fecha:</strong> ${new Date(facturaCompleta.fecha_emision).toLocaleDateString()}</div>
+        <div><strong>Estado:</strong> ${getEstadoLabel(facturaCompleta.estado).toUpperCase()}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="section-title">Cliente</div>
+      <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${facturaCompleta.cliente?.razon_social || 'Cliente'}</div>
+      <div>${facturaCompleta.cliente?.tipo_documento || 'RUT'}: ${facturaCompleta.cliente?.numero_documento || 'N/A'}</div>
+      ${facturaCompleta.cliente?.direccion ? `<div>${facturaCompleta.cliente.direccion}</div>` : ''}
+      ${facturaCompleta.cliente?.email ? `<div>✉️ ${facturaCompleta.cliente.email}</div>` : ''}
+      ${facturaCompleta.cliente?.telefono ? `<div>📞 ${facturaCompleta.cliente.telefono}</div>` : ''}
+    </div>
+
+    ${facturaCompleta.dgi_enviada ? `
+    <div class="info-box" style="background: #d1fae5;">
+      <div class="section-title" style="color: #065f46;">✅ Comprobante Fiscal</div>
+      <div><strong>CAE:</strong> ${facturaCompleta.dgi_cae_numero || 'N/A'}</div>
+      <div><strong>Serie:</strong> ${facturaCompleta.dgi_serie || 'N/A'}</div>
+      <div><strong>Número:</strong> ${facturaCompleta.dgi_numero || 'N/A'}</div>
+      <div><strong>Vencimiento CAE:</strong> ${facturaCompleta.dgi_cae_vencimiento ? new Date(facturaCompleta.dgi_cae_vencimiento).toLocaleDateString() : 'N/A'}</div>
+    </div>
+    ` : `
+    <div class="info-box" style="background: #fef3c7;">
+      <div class="section-title" style="color: #92400e;">⏳ Pendiente de Envío a DGI</div>
+      <div>Esta factura aún no ha sido enviada al sistema de facturación electrónica de DGI.</div>
+    </div>
+    `}
+  </div>
+
+  <div class="section">
+    <div class="section-title">Detalle de Items</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 40px;">#</th>
+          <th>Descripción</th>
+          <th style="width: 80px; text-align: center;">Cant.</th>
+          <th style="width: 100px; text-align: right;">P. Unit.</th>
+          <th style="width: 100px; text-align: right;">Subtotal</th>
+          <th style="width: 60px; text-align: right;">IVA %</th>
+          <th style="width: 100px; text-align: right;">IVA</th>
+          <th style="width: 120px; text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsHTML}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="totals">
+    <div class="total-row">
+      <span>Subtotal:</span>
+      <span>$${parseFloat(facturaCompleta.subtotal).toFixed(2)}</span>
+    </div>
+    <div class="total-row">
+      <span>IVA:</span>
+      <span>$${parseFloat(facturaCompleta.total_iva).toFixed(2)}</span>
+    </div>
+    <div class="total-row final">
+      <span>TOTAL:</span>
+      <span>$${parseFloat(facturaCompleta.total).toFixed(2)} ${facturaCompleta.moneda}</span>
+    </div>
+  </div>
+
+  ${facturaCompleta.observaciones ? `
+  <div style="clear: both; margin-top: 40px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
+    <div class="section-title">Observaciones</div>
+    <div>${facturaCompleta.observaciones}</div>
+  </div>
+  ` : ''}
+
+  <div style="clear: both; margin-top: 60px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #666; font-size: 12px;">
+    <p>Documento generado el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}</p>
+    <p>Sistema ContaEmpresa - Gestión Contable Integral</p>
+  </div>
+</body>
+</html>
+      `;
+
+      const ventana = window.open('', '_blank', 'width=800,height=600');
+      if (ventana) {
+        ventana.document.write(pdfHTML);
+        ventana.document.close();
+        console.log('✅ PDF abierto en nueva ventana');
+        mostrarNotificacion('success', 'PDF Generado', 'Usa el botón "Imprimir" o Ctrl+P para guardar como PDF');
+      } else {
+        throw new Error('No se pudo abrir la ventana. Verifica que no estén bloqueadas las ventanas emergentes.');
+      }
+    } catch (error: any) {
+      console.error('❌ Error al generar PDF:', error);
+      mostrarNotificacion('error', 'Error', `No se pudo generar el PDF: ${error.message}`);
+    }
   };
 
   const mostrarNotificacion = (

@@ -82,7 +82,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all border-2 ${config.borderColor}`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden transform transition-all border-2 ${config.borderColor}`}>
         {/* Content */}
         <div className={`p-6 rounded-2xl ${config.bgColor}`}>
           <div className="flex items-start space-x-4">
@@ -93,9 +93,9 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
               <h3 className={`text-lg font-semibold ${config.titleColor} mb-2`}>
                 {title}
               </h3>
-              <p className={`${config.messageColor} text-sm leading-relaxed`}>
+              <pre className={`${config.messageColor} text-xs leading-relaxed whitespace-pre-wrap font-mono max-h-96 overflow-y-auto`}>
                 {message}
-              </p>
+              </pre>
             </div>
             <button
               onClick={onClose}
