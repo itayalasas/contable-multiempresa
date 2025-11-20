@@ -207,6 +207,34 @@ export async function crearFactura(input: CrearFacturaInput) {
     throw itemsError;
   }
 
+  try {
+    console.log('🔄 [crearFactura] Generando asiento contable automático...');
+
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('razon_social')
+      .eq('id', input.cliente_id)
+      .single();
+
+    const { generarAsientoFacturaVenta } = await import('./asientosAutomaticos');
+
+    await generarAsientoFacturaVenta(
+      factura.id,
+      input.empresa_id,
+      cliente?.razon_social || 'Cliente',
+      siguienteNumero,
+      subtotal,
+      totalIva,
+      total,
+      factura.fecha_emision,
+      factura.creado_por || 'sistema'
+    );
+
+    console.log('✅ [crearFactura] Asiento contable generado exitosamente');
+  } catch (asientoError: any) {
+    console.error('⚠️ [crearFactura] Error al generar asiento contable:', asientoError);
+  }
+
   return factura;
 }
 
@@ -236,8 +264,36 @@ export async function eliminarFactura(facturaId: string) {
   if (error) throw error;
 }
 
-export async function marcarFacturaComoPagada(facturaId: string) {
-  return actualizarFactura(facturaId, { estado: 'pagada' });
+export async function marcarFacturaComoPagada(
+  facturaId: string,
+  tipoPago: string = 'EFECTIVO',
+  usuarioId?: string
+) {
+  const factura = await obtenerFacturaPorId(facturaId);
+
+  const resultado = await actualizarFactura(facturaId, { estado: 'pagada' });
+
+  try {
+    console.log('🔄 [marcarFacturaComoPagada] Generando asiento de pago...');
+
+    const { generarAsientoPagoFacturaVenta } = await import('./asientosAutomaticos');
+
+    await generarAsientoPagoFacturaVenta(
+      facturaId,
+      factura.empresa_id,
+      factura.numero_factura,
+      parseFloat(factura.total),
+      new Date().toISOString().split('T')[0],
+      tipoPago,
+      usuarioId || factura.creado_por || 'sistema'
+    );
+
+    console.log('✅ [marcarFacturaComoPagada] Asiento de pago generado');
+  } catch (asientoError: any) {
+    console.error('⚠️ [marcarFacturaComoPagada] Error al generar asiento de pago:', asientoError);
+  }
+
+  return resultado;
 }
 
 interface ConfigCFE {
@@ -486,7 +542,6 @@ export async function enviarFacturaDGI(facturaId: string) {
       dgi_cae_serie: detalleData.cae?.serie,
       dgi_cae_vencimiento: fechaVencimientoCAE,
       dgi_detalle_completo: detalleData as any,
-      estado: 'pendiente',
       dgi_response: {
         success: true,
         create_response: createData,

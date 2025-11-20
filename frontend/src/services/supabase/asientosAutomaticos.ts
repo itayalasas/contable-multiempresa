@@ -1,0 +1,283 @@
+import { supabase } from '../../config/supabase';
+
+interface MovimientoAsiento {
+  numero_linea: number;
+  cuenta_id: string;
+  cuenta_codigo: string;
+  cuenta_nombre: string;
+  debe: number;
+  haber: number;
+  descripcion: string;
+}
+
+export async function generarAsientoFacturaVenta(
+  facturaId: string,
+  empresaId: string,
+  clienteNombre: string,
+  numeroFactura: string,
+  subtotal: number,
+  totalIva: number,
+  total: number,
+  fechaEmision: string,
+  usuarioId: string
+) {
+  try {
+    console.log('🔄 [AsientosAutomaticos] Generando asiento para factura:', numeroFactura);
+
+    const numeroAsiento = await generarNumeroAsiento(empresaId);
+
+    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '1212'),
+        cuenta_codigo: '1212',
+        cuenta_nombre: 'Cuentas por Cobrar - Comerciales',
+        debe: total,
+        haber: 0,
+        descripcion: `Factura ${numeroFactura} - ${clienteNombre}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '7011'),
+        cuenta_codigo: '7011',
+        cuenta_nombre: 'Ventas',
+        debe: 0,
+        haber: subtotal,
+        descripcion: `Factura ${numeroFactura} - ${clienteNombre}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '2113'),
+        cuenta_codigo: '2113',
+        cuenta_nombre: 'IVA por Pagar',
+        debe: 0,
+        haber: totalIva,
+        descripcion: `IVA Factura ${numeroFactura}`,
+      },
+    ];
+
+    const asientoData = {
+      empresa_id: empresaId,
+      numero: numeroAsiento,
+      fecha: fechaEmision,
+      descripcion: `Factura de Venta ${numeroFactura} - ${clienteNombre}`,
+      referencia: `FACT-${numeroFactura}`,
+      tipo_asiento: 'automatico',
+      estado: 'confirmado',
+      moneda: 'UYU',
+      tipo_cambio: 1.0,
+      total_debe: total,
+      total_haber: total,
+      generado_por: 'sistema_facturacion',
+      origen_documento_tipo: 'factura_venta',
+      origen_documento_id: facturaId,
+      creado_por: usuarioId,
+    };
+
+    console.log('📝 [AsientosAutomaticos] Creando asiento:', asientoData);
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert(asientoData)
+      .select()
+      .single();
+
+    if (asientoError) {
+      console.error('❌ [AsientosAutomaticos] Error creando asiento:', asientoError);
+      throw asientoError;
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento creado:', asiento.id);
+
+    const movimientosConLinea = movimientos.map((mov, index) => ({
+      ...mov,
+      asiento_id: asiento.id,
+      numero_linea: index + 1,
+    }));
+
+    console.log('📝 [AsientosAutomaticos] Insertando movimientos:', movimientosConLinea.length);
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientosConLinea);
+
+    if (movimientosError) {
+      console.error('❌ [AsientosAutomaticos] Error insertando movimientos:', movimientosError);
+
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movimientosError;
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento contable generado exitosamente:', numeroAsiento);
+    return asiento.id;
+  } catch (error: any) {
+    console.error('❌ [AsientosAutomaticos] Error generando asiento automático:', error);
+    throw new Error('Error generando asiento contable: ' + error.message);
+  }
+}
+
+async function generarNumeroAsiento(empresaId: string): Promise<string> {
+  try {
+    const { data: ultimoAsiento } = await supabase
+      .from('asientos_contables')
+      .select('numero')
+      .eq('empresa_id', empresaId)
+      .order('numero', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!ultimoAsiento) {
+      return 'ASI-00001';
+    }
+
+    const match = ultimoAsiento.numero.match(/ASI-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      const nextNumero = num + 1;
+      return `ASI-${String(nextNumero).padStart(5, '0')}`;
+    }
+
+    return `ASI-${Date.now().toString().slice(-5)}`;
+  } catch (error) {
+    console.error('Error generando número de asiento:', error);
+    return `ASI-${Date.now().toString().slice(-5)}`;
+  }
+}
+
+async function obtenerCuentaId(empresaId: string, codigo: string): Promise<string> {
+  try {
+    const { data: cuenta, error } = await supabase
+      .from('plan_cuentas')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('codigo', codigo)
+      .maybeSingle();
+
+    if (error || !cuenta) {
+      console.warn(`⚠️ No se encontró cuenta ${codigo}, usando valor por defecto`);
+      return codigo;
+    }
+
+    return cuenta.id;
+  } catch (error) {
+    console.warn(`⚠️ Error buscando cuenta ${codigo}:`, error);
+    return codigo;
+  }
+}
+
+export async function generarAsientoPagoFacturaVenta(
+  facturaId: string,
+  empresaId: string,
+  numeroFactura: string,
+  montoPago: number,
+  fechaPago: string,
+  tipoPago: string,
+  usuarioId: string
+) {
+  try {
+    console.log('🔄 [AsientosAutomaticos] Generando asiento de pago para factura:', numeroFactura);
+
+    const numeroAsiento = await generarNumeroAsiento(empresaId);
+
+    const cuentaCobro = obtenerCuentaSegunTipoPago(tipoPago);
+
+    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, cuentaCobro),
+        cuenta_codigo: cuentaCobro,
+        cuenta_nombre: obtenerNombreCuentaPago(tipoPago),
+        debe: montoPago,
+        haber: 0,
+        descripcion: `Cobro factura ${numeroFactura}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '1212'),
+        cuenta_codigo: '1212',
+        cuenta_nombre: 'Cuentas por Cobrar - Comerciales',
+        debe: 0,
+        haber: montoPago,
+        descripcion: `Cobro factura ${numeroFactura}`,
+      },
+    ];
+
+    const asientoData = {
+      empresa_id: empresaId,
+      numero: numeroAsiento,
+      fecha: fechaPago,
+      descripcion: `Cobro Factura ${numeroFactura}`,
+      referencia: `COBRO-${numeroFactura}`,
+      tipo_asiento: 'automatico',
+      estado: 'confirmado',
+      moneda: 'UYU',
+      tipo_cambio: 1.0,
+      total_debe: montoPago,
+      total_haber: montoPago,
+      generado_por: 'sistema_cobros',
+      origen_documento_tipo: 'pago_factura',
+      origen_documento_id: facturaId,
+      creado_por: usuarioId,
+    };
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert(asientoData)
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientosConLinea = movimientos.map((mov, index) => ({
+      ...mov,
+      asiento_id: asiento.id,
+      numero_linea: index + 1,
+    }));
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientosConLinea);
+
+    if (movimientosError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movimientosError;
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento de pago generado exitosamente:', numeroAsiento);
+    return asiento.id;
+  } catch (error: any) {
+    console.error('❌ [AsientosAutomaticos] Error generando asiento de pago:', error);
+    throw new Error('Error generando asiento de pago: ' + error.message);
+  }
+}
+
+function obtenerCuentaSegunTipoPago(tipoPago: string): string {
+  switch (tipoPago.toUpperCase()) {
+    case 'EFECTIVO':
+      return '1011';
+    case 'TRANSFERENCIA':
+    case 'TRANSFERENCIA BANCARIA':
+      return '1041';
+    case 'CHEQUE':
+      return '1041';
+    case 'TARJETA':
+    case 'TARJETA DE CREDITO':
+    case 'TARJETA DE DEBITO':
+      return '1042';
+    default:
+      return '1011';
+  }
+}
+
+function obtenerNombreCuentaPago(tipoPago: string): string {
+  switch (tipoPago.toUpperCase()) {
+    case 'EFECTIVO':
+      return 'Caja';
+    case 'TRANSFERENCIA':
+    case 'TRANSFERENCIA BANCARIA':
+      return 'Bancos';
+    case 'CHEQUE':
+      return 'Bancos';
+    case 'TARJETA':
+    case 'TARJETA DE CREDITO':
+    case 'TARJETA DE DEBITO':
+      return 'Tarjetas';
+    default:
+      return 'Caja';
+  }
+}
