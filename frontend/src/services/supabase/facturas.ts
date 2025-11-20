@@ -394,14 +394,23 @@ async function obtenerDetalleCFE(cfeId: number): Promise<DGIDetailResponse> {
 }
 
 export async function enviarFacturaDGI(facturaId: string) {
+  console.log('🚀 [enviarFacturaDGI] Iniciando envío de factura:', facturaId);
+
+  console.log('📥 [enviarFacturaDGI] Obteniendo factura completa...');
   const factura = await obtenerFacturaPorId(facturaId);
+  console.log('✅ [enviarFacturaDGI] Factura obtenida:', factura.numero_factura);
 
   if (factura.dgi_enviada) {
     throw new Error('Esta factura ya fue enviada a DGI');
   }
 
+  console.log('⚙️ [enviarFacturaDGI] Obteniendo configuración CFE...');
   const configCFE = await obtenerConfigCFE(factura.empresa_id);
+  console.log('✅ [enviarFacturaDGI] Configuración CFE obtenida:', configCFE);
+
+  console.log('📦 [enviarFacturaDGI] Construyendo payload DGI...');
   const payload = construirPayloadDGI(factura, configCFE);
+  console.log('✅ [enviarFacturaDGI] Payload construido');
 
   const apiCreateUrl = import.meta.env.VITE_DGI_API_CREATE_URL;
   const createKey = import.meta.env.VITE_DGI_API_CREATE_KEY;

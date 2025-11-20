@@ -134,17 +134,23 @@ export default function Facturas() {
   };
 
   const handleEnviarDGI = (factura: FacturaVenta) => {
+    console.log('📤 Iniciando envío a DGI de factura:', factura.numero_factura, factura.id);
+
     setConfirmModal({
       show: true,
       title: 'Enviar a DGI',
       message: `¿Desea enviar la factura ${factura.numero_factura} a DGI?`,
       onConfirm: async () => {
         try {
+          console.log('✅ Usuario confirmó envío, llamando a enviarFacturaDGI...');
           await enviarFacturaDGI(factura.id);
+          console.log('✅ Factura enviada exitosamente');
           mostrarNotificacion('success', 'Éxito', 'Factura enviada a DGI correctamente');
           cargarFacturas();
+          cargarEstadisticas();
         } catch (error: any) {
-          mostrarNotificacion('error', 'Error', error.message);
+          console.error('❌ Error al enviar a DGI:', error);
+          mostrarNotificacion('error', 'Error al Enviar', error.message || 'Error desconocido');
         }
       },
     });
@@ -887,9 +893,12 @@ ${itemsDetalle}
 
       {notification.show && (
         <NotificationModal
+          isOpen={notification.show}
           type={notification.type}
           title={notification.title}
           message={notification.message}
+          autoClose={notification.type === 'info' ? false : true}
+          autoCloseDelay={notification.type === 'info' ? 0 : 3000}
           onClose={() => setNotification({ ...notification, show: false })}
         />
       )}
