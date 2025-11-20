@@ -406,8 +406,15 @@ export async function enviarFacturaDGI(facturaId: string) {
   const apiCreateUrl = import.meta.env.VITE_DGI_API_CREATE_URL;
   const createKey = import.meta.env.VITE_DGI_API_CREATE_KEY;
 
+  console.log('🔍 DEBUG - Variables de entorno:');
+  console.log('apiCreateUrl:', apiCreateUrl);
+  console.log('createKey:', createKey ? 'Configurada' : 'NO configurada');
+  console.log('Todas las env:', import.meta.env);
+
   if (!apiCreateUrl || !createKey) {
-    console.warn('No hay configuración de API DGI. Usando modo simulación.');
+    console.warn('⚠️ No hay configuración de API DGI. Usando modo simulación.');
+    console.warn('apiCreateUrl:', apiCreateUrl);
+    console.warn('createKey:', createKey);
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const cae = `CAE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
