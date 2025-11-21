@@ -19,13 +19,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-    });
+    // Usar service role key para bypass RLS (sistema usa Auth0, no Supabase Auth)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('Iniciando generacion de facturas a partners...');
 
