@@ -161,11 +161,14 @@ Deno.serve(async (req: Request) => {
 });
 
 function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
-  // Determinar tipo de CFE:
-  // - Si el número de factura empieza con "COM-" es factura de comisiones → e-ticket (101)
-  // - Si no, es factura normal → e-factura (111)
-  const esFacturaComision = factura.numero_factura?.startsWith('COM-');
-  const tipoCFE = esFacturaComision ? 101 : 111;
+  // Determinar tipo de CFE según prefijo del número de factura:
+  // - Prefijo "A-" → e-ticket ventas normales (101)
+  // - Prefijo "COM-" → e-ticket comisiones partners (101)
+  // - Sin prefijo especial → e-factura (111)
+  const numeroFactura = factura.numero_factura || '';
+  const esTicketVentaNormal = numeroFactura.startsWith('A-');
+  const esTicketComision = numeroFactura.startsWith('COM-');
+  const tipoCFE = (esTicketVentaNormal || esTicketComision) ? 101 : 111;
 
   // Mapear tipo de documento a código DGI
   const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 2; // Default: CI
@@ -185,39 +188,42 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     } : {})
   }));
 
-  // Construir JSON según formato DGI (nombres exactos que DGI requiere)
-  const jsonCFE = {
+  // Construir JSON según formato DGI (estructura Comprobantes[])
+  const comprobante = {
     tipo_comprobante: tipoCFE,
     numero_interno: factura.numero_factura,
     forma_pago: formaPago,
     sucursal: parseInt(config.codigo_sucursal) || 1,
     moneda: factura.moneda || 'UYU',
     montos_brutos: parseFloat(factura.subtotal) || 0,
-    tipo_doc_receptor: tipoDocumentoDGI,          // ✅ Campo requerido por DGI
-    doc_receptor: cliente.numero_documento,        // ✅ Campo requerido por DGI
-    cod_pais: paisCodigo,                          // ✅ Campo requerido por DGI
+    tipo_doc_receptor: tipoDocumentoDGI,
+    doc_receptor: cliente.numero_documento,
+    cod_pais: paisCodigo,
     razon_social: cliente.razon_social,
     items: itemsDGI
   };
 
   // Agregar campos opcionales si existen
   if (cliente.email) {
-    jsonCFE.email_receptor = cliente.email;
+    comprobante.email_receptor = cliente.email;
   }
   if (cliente.telefono) {
-    jsonCFE.telefono_receptor = cliente.telefono;
+    comprobante.telefono_receptor = cliente.telefono;
   }
   if (cliente.direccion) {
-    jsonCFE.direccion_receptor = cliente.direccion;
+    comprobante.direccion_receptor = cliente.direccion;
   }
   if (cliente.ciudad) {
-    jsonCFE.ciudad_receptor = cliente.ciudad;
+    comprobante.ciudad_receptor = cliente.ciudad;
   }
   if (cliente.departamento) {
-    jsonCFE.departamento_receptor = cliente.departamento;
+    comprobante.departamento_receptor = cliente.departamento;
   }
 
-  return jsonCFE;
+  // Retornar en estructura Comprobantes[]
+  return {
+    Comprobantes: [comprobante]
+  };
 }
 
 async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
