@@ -7,13 +7,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
-// Mapeo de tipos de documento a códigos DGI
 const TIPOS_DOCUMENTO_DGI: Record<string, number> = {
-  'CI': 2,
-  'RUT': 3,
-  'PASAPORTE': 4,
-  'DNI': 5,
-  'OTRO': 6,
+  'RUT': 2,
+  'CI': 3,
+  'OTRO': 4,
+  'PASAPORTE': 5,
+  'DNI': 6,
+  'NIFE': 7,
+};
+
+const TIPO_COMPROBANTE_DGI: Record<string, number> = {
+  'e-ticket': 101,
+  'e-factura': 111,
+  'nota-credito-eticket': 102,
+  'nota-debito-eticket': 103,
+  'nota-credito-efactura': 112,
+  'nota-debito-efactura': 113,
 };
 
 Deno.serve(async (req: Request) => {
@@ -30,7 +39,6 @@ Deno.serve(async (req: Request) => {
 
     console.log('🚀 [AutoSendDGI] Procesando factura:', facturaId);
 
-    // 1. Obtener la factura
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .select('*')
@@ -41,7 +49,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('Factura no encontrada');
     }
 
-    // 2. Validar que no esté ya enviada
     if (factura.dgi_enviada) {
       console.log('⚠️ [AutoSendDGI] Factura ya enviada a DGI');
       return new Response(
@@ -50,7 +57,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 3. Obtener configuración CFE de la empresa
     const { data: config, error: configError } = await supabase
       .from('empresas_config_cfe')
       .select('*')
@@ -65,7 +71,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 4. Obtener items de la factura
     const { data: items, error: itemsError } = await supabase
       .from('facturas_venta_items')
       .select('*')
@@ -76,7 +81,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('No se encontraron items de la factura');
     }
 
-    // 5. Obtener cliente
     const { data: cliente, error: clienteError } = await supabase
       .from('clientes')
       .select('*')
@@ -87,7 +91,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('Cliente no encontrado');
     }
 
-    // 6. Obtener tipo de documento del cliente
     let tipoDocumento = 'CI';
     if (cliente.tipo_documento_id) {
       const { data: tipoDoc } = await supabase
@@ -100,7 +103,6 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 7. Obtener país de la empresa
     const { data: empresa } = await supabase
       .from('empresas')
       .select('pais_id')
@@ -119,13 +121,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 8. Generar JSON CFE para DGI
     const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo);
 
-    // 9. Enviar a DGI
     const resultadoDGI = await enviarADGI(jsonCFE, config);
 
-    // 10. Actualizar factura con datos de DGI
     const { error: updateError } = await supabase
       .from('facturas_venta')
       .update({
@@ -161,79 +160,119 @@ Deno.serve(async (req: Request) => {
 });
 
 function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
-  // Determinar tipo de CFE según prefijo del número de factura:
-  // - Prefijo "A-" → e-ticket ventas normales (101)
-  // - Prefijo "COM-" → e-ticket comisiones partners (101)
-  // - Sin prefijo especial → e-factura (111)
-  const numeroFactura = factura.numero_factura || '';
-  const esTicketVentaNormal = numeroFactura.startsWith('A-');
-  const esTicketComision = numeroFactura.startsWith('COM-');
-  const tipoCFE = (esTicketVentaNormal || esTicketComision) ? 101 : 111;
+  let tipoCFE: number;
 
-  // Mapear tipo de documento a código DGI
-  const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 2; // Default: CI
+  if (factura.serie === 'COM') {
+    tipoCFE = 141;
+  } else if (factura.tipo_documento === 'e-ticket') {
+    tipoCFE = 101;
+  } else if (factura.tipo_documento === 'e-factura') {
+    tipoCFE = 111;
+  } else {
+    tipoCFE = TIPO_COMPROBANTE_DGI[factura.tipo_documento] || 111;
+  }
 
-  // Determinar forma de pago (1: Contado, 2: Crédito)
+  const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 3;
   const formaPago = factura.estado === 'pagada' ? 1 : 2;
 
-  // Generar items en formato DGI
-  const itemsDGI = items.map((item, index) => ({
-    codigo: item.codigo || `ITEM-${index + 1}`,
-    cantidad: parseFloat(item.cantidad),
-    concepto: item.descripcion,
-    precio: parseFloat(item.precio_unitario),
-    indicador_facturacion: 3, // 3: Producto/Servicio
-    ...(item.tasa_iva && parseFloat(item.tasa_iva) > 0 ? {
-      tasa_iva: parseFloat(item.tasa_iva) * 100 // Convertir 0.22 a 22
-    } : {})
-  }));
+  const fechaVencimiento = factura.fecha_vencimiento
+    ? formatearFechaDGI(factura.fecha_vencimiento)
+    : formatearFechaDGI(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
 
-  // Construir JSON según formato DGI (estructura Comprobantes[])
-  const comprobante = {
+  const itemsDGI = items.map((item) => {
+    const itemDGI: any = {
+      cantidad: parseFloat(item.cantidad),
+      concepto: item.descripcion,
+      precio: parseFloat(item.precio_unitario),
+      indicador_facturacion: determinarIndicadorFacturacion(item.tasa_iva),
+    };
+
+    if (item.codigo) {
+      itemDGI.codigo = item.codigo;
+    }
+
+    if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
+      itemDGI.descuento_tipo = '$';
+      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
+    } else if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
+      itemDGI.descuento_tipo = '%';
+      itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
+    }
+
+    return itemDGI;
+  });
+
+  const comprobante: any = {
     tipo_comprobante: tipoCFE,
-    numero_interno: factura.numero_factura,
     forma_pago: formaPago,
+    fecha_vencimiento: fechaVencimiento,
     sucursal: parseInt(config.codigo_sucursal) || 1,
     moneda: factura.moneda || 'UYU',
-    montos_brutos: parseFloat(factura.subtotal) || 0,
-    tipo_doc_receptor: tipoDocumentoDGI,
-    doc_receptor: cliente.numero_documento,
-    cod_pais: paisCodigo,
-    razon_social: cliente.razon_social,
+    cliente: {
+      tipo_documento: tipoDocumentoDGI,
+      documento: cliente.numero_documento,
+      razon_social: cliente.razon_social,
+      sucursal: {
+        direccion: cliente.direccion || 'Sin dirección',
+        ciudad: cliente.ciudad || 'Montevideo',
+        departamento: cliente.departamento || 'Montevideo',
+        pais: paisCodigo,
+      }
+    },
     items: itemsDGI
   };
 
-  // Agregar campos opcionales si existen
-  if (cliente.email) {
-    comprobante.email_receptor = cliente.email;
-  }
-  if (cliente.telefono) {
-    comprobante.telefono_receptor = cliente.telefono;
-  }
-  if (cliente.direccion) {
-    comprobante.direccion_receptor = cliente.direccion;
-  }
-  if (cliente.ciudad) {
-    comprobante.ciudad_receptor = cliente.ciudad;
-  }
-  if (cliente.departamento) {
-    comprobante.departamento_receptor = cliente.departamento;
+  if (factura.serie && factura.numero_factura) {
+    comprobante.numero_interno = `${factura.serie}-${factura.numero_factura}`;
+  } else if (factura.numero_factura) {
+    comprobante.numero_interno = factura.numero_factura;
   }
 
-  // Retornar en estructura Comprobantes[]
-  return {
-    Comprobantes: [comprobante]
-  };
+  if (cliente.nombre_comercial) {
+    comprobante.cliente.nombre_fantasia = cliente.nombre_comercial;
+  }
+
+  if (cliente.email) {
+    comprobante.cliente.sucursal.emails = [cliente.email];
+  }
+
+  if (factura.moneda !== 'UYU' && factura.tipo_cambio) {
+    comprobante.tasa_cambio = parseFloat(factura.tipo_cambio);
+  }
+
+  return comprobante;
+}
+
+function formatearFechaDGI(fechaISO: string): string {
+  const fecha = new Date(fechaISO);
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const anio = fecha.getFullYear();
+  return `${dia}/${mes}/${anio}`;
+}
+
+function determinarIndicadorFacturacion(tasaIva: string | number | null): number {
+  if (!tasaIva || parseFloat(tasaIva.toString()) === 0) {
+    return 1;
+  }
+
+  const tasa = parseFloat(tasaIva.toString());
+
+  if (tasa === 0.10) {
+    return 2;
+  } else if (tasa === 0.22) {
+    return 3;
+  } else {
+    return 4;
+  }
 }
 
 async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
   console.log('📤 [DGI] Enviando JSON CFE a DGI...');
   console.log('📋 [DGI] Payload:', JSON.stringify(jsonCFE, null, 2));
 
-  // SIMULADO: En producción conectar con API real de DGI
   await new Promise((resolve) => setTimeout(resolve, 500));
 
-  // Generar CAE simulado
   const cae = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const hash = `SHA256-${Math.random().toString(36).substr(2, 16)}`;
 
@@ -244,23 +283,4 @@ async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
     fecha: new Date().toISOString(),
     mensaje: 'CFE aceptado por DGI (simulado)',
   };
-
-  /*
-  // PRODUCCIÓN: Descomentar y configurar cuando tengas la URL de la API DGI
-  const response = await fetch(config.url_webservice, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.dgi_api_key}`,
-    },
-    body: JSON.stringify(jsonCFE),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`DGI Error (${response.status}): ${errorText}`);
-  }
-
-  return await response.json();
-  */
 }
