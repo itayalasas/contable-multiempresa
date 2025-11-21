@@ -138,11 +138,12 @@ export default function ComisionesPartners() {
       if (error) throw error;
 
       if (data.success) {
+        setShowGenerarModal(false);
         setNotification({
           show: true,
           type: 'success',
-          title: 'Facturas Generadas',
-          message: `Se generaron ${data.facturas_generadas} factura(s) para ${data.comisiones_procesadas} comisión(es).`,
+          title: 'Facturas Generadas Exitosamente',
+          message: `Se generaron ${data.facturas_generadas} factura(s) electrónica(s) para ${data.comisiones_procesadas} comisión(es). Las facturas están listas para enviar a DGI.`,
         });
         await cargarDatos();
       } else {
@@ -163,7 +164,6 @@ export default function ComisionesPartners() {
       });
     } finally {
       setGenerandoFacturas(false);
-      setShowGenerarModal(false);
     }
   };
 
@@ -501,12 +501,13 @@ export default function ComisionesPartners() {
       {showGenerarModal && (
         <ConfirmModal
           isOpen={showGenerarModal}
-          onClose={() => setShowGenerarModal(false)}
+          onClose={() => !generandoFacturas && setShowGenerarModal(false)}
           onConfirm={generarFacturasAhora}
           title="Generar Facturas de Comisiones"
-          message="¿Deseas generar las facturas de comisiones pendientes ahora? Esto agrupará todas las comisiones pendientes por partner y creará facturas de compra."
+          message="¿Deseas generar las facturas de comisiones pendientes ahora? Esto agrupará todas las comisiones pendientes por partner y creará facturas electrónicas para enviar a DGI."
           confirmText="Generar"
           cancelText="Cancelar"
+          loading={generandoFacturas}
         />
       )}
 
