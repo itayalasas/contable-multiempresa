@@ -19,7 +19,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Usuario, Rol, Permiso } from '../../types';
-import { UsuarioService, RolService } from '../../services/firebase/usuarios';
+import { getUsuariosByEmpresa } from '../../services/supabase/usuarios';
 import { useAuth } from '../../context/AuthContext';
 import { useSesion } from '../../context/SesionContext';
 
@@ -59,15 +59,17 @@ export const GestionUsuarios: React.FC = () => {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      const [usuariosData, rolesData, permisosData] = await Promise.all([
-        empresaActual ? UsuarioService.getUsuariosByEmpresa(empresaActual.id) : [],
-        RolService.getRoles(empresaActual?.id),
-        RolService.getPermisos()
-      ]);
+      if (!empresaActual) {
+        setUsuarios([]);
+        return;
+      }
 
+      const usuariosData = await getUsuariosByEmpresa(empresaActual.id);
       setUsuarios(usuariosData);
-      setRoles(rolesData);
-      setPermisos(permisosData);
+
+      // TODO: Implementar roles y permisos desde Supabase
+      setRoles([]);
+      setPermisos([]);
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -77,8 +79,8 @@ export const GestionUsuarios: React.FC = () => {
 
   const verificarConexionAuth0 = async () => {
     try {
-      const connected = await UsuarioService.verificarConexionAuth0();
-      setAuth0Connected(connected);
+      // TODO: Implementar verificación Auth0 con Supabase
+      setAuth0Connected(false);
     } catch (error) {
       setAuth0Connected(false);
     }
@@ -93,25 +95,17 @@ export const GestionUsuarios: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!auth0Connected) {
-      alert('No se puede crear usuarios sin conexión a Auth0. Verifica la configuración del Management API.');
-      return;
-    }
-    
+
+    alert('Funcionalidad en desarrollo. Próximamente se podrá crear/editar usuarios desde Supabase.');
+
+    // TODO: Implementar creación/edición de usuarios con Supabase
+    /*
     try {
       if (modalType === 'create' || modalType === 'invite') {
-        await UsuarioService.crearUsuario({
-          ...formData,
-          empresas: empresaActual ? [empresaActual.id] : []
-        });
+        // await crearUsuario(...)
         alert('Usuario creado exitosamente');
       } else if (modalType === 'edit' && selectedUser) {
-        await UsuarioService.actualizarUsuario(selectedUser.id, {
-          nombre: formData.nombre,
-          rol: formData.rol as any,
-          permisos: formData.permisos
-        });
+        // await actualizarUsuario(...)
         alert('Usuario actualizado exitosamente');
       }
 
@@ -122,6 +116,7 @@ export const GestionUsuarios: React.FC = () => {
       console.error('Error guardando usuario:', error);
       alert(`Error al guardar usuario: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
+    */
   };
 
   const resetForm = () => {

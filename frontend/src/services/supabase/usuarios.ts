@@ -100,4 +100,25 @@ export const usuariosSupabaseService = {
       ultimaConexion: user.ultima_conexion ? new Date(user.ultima_conexion) : undefined,
     }));
   },
+
+  async getUsuariosByEmpresa(empresaId: string): Promise<Usuario[]> {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('*')
+      .contains('empresas_asignadas', [empresaId])
+      .order('nombre');
+
+    if (error) throw error;
+
+    return data.map(user => ({
+      ...user,
+      empresasAsignadas: user.empresas_asignadas,
+      paisId: user.pais_id,
+      auth0Id: user.auth0_id,
+      fechaCreacion: new Date(user.fecha_creacion),
+      ultimaConexion: user.ultima_conexion ? new Date(user.ultima_conexion) : undefined,
+    }));
+  },
 };
+
+export const getUsuariosByEmpresa = usuariosSupabaseService.getUsuariosByEmpresa;
