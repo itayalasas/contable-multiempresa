@@ -1,0 +1,237 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+};
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No autorizado');
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
+
+    console.log('Iniciando generacion de facturas a partners...');
+
+    const { empresaId, forzar } = await req.json().catch(() => ({ empresaId: null, forzar: false }));
+
+    if (!empresaId) {
+      throw new Error('empresaId es requerido');
+    }
+
+    const resultado = await procesarEmpresa(supabase, empresaId, forzar);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        facturas_generadas: resultado.facturas_generadas,
+        comisiones_procesadas: resultado.comisiones_procesadas,
+        errores: resultado.errores,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error: any) {
+    console.error('Error:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean = false) {
+  try {
+    const { data: partners, error: partnersError } = await supabase
+      .from('partners_aliados')
+      .select('id, partner_id_externo, razon_social, documento, email')
+      .eq('empresa_id', empresaId)
+      .eq('activo', true);
+
+    if (partnersError) throw partnersError;
+
+    console.log('Partners activos:', partners?.length || 0);
+
+    let facturasGeneradas = 0;
+    let comisionesProcesadas = 0;
+    const errores = [];
+
+    for (const partner of partners || []) {
+      try {
+        console.log('Procesando partner:', partner.razon_social);
+
+        const { data: comisiones, error: comisionesError } = await supabase
+          .from('comisiones_partners')
+          .select('*')
+          .eq('partner_id', partner.id)
+          .eq('estado_comision', 'pendiente')
+          .order('fecha', { ascending: true });
+
+        if (comisionesError) throw comisionesError;
+
+        if (!comisiones || comisiones.length === 0) {
+          console.log(partner.razon_social, ': Sin comisiones pendientes');
+          continue;
+        }
+
+        const totalComisiones = comisiones.reduce((sum, c) => sum + parseFloat(c.comision_monto), 0);
+        const fechaInicio = comisiones[0].fecha;
+        const fechaFin = comisiones[comisiones.length - 1].fecha;
+
+        console.log('Total:', totalComisiones.toFixed(2), comisiones.length, 'comisiones');
+
+        let clienteId;
+        const { data: clienteExistente } = await supabase
+          .from('clientes')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('numero_documento', partner.documento)
+          .maybeSingle();
+
+        if (clienteExistente) {
+          clienteId = clienteExistente.id;
+        } else {
+          const { data: nuevoCliente, error: clienteError } = await supabase
+            .from('clientes')
+            .insert({
+              empresa_id: empresaId,
+              razon_social: partner.razon_social,
+              tipo_documento: 'RUT',
+              numero_documento: partner.documento,
+              email: partner.email,
+              activo: true,
+            })
+            .select()
+            .single();
+
+          if (clienteError) throw clienteError;
+          clienteId = nuevoCliente.id;
+        }
+
+        const { data: ultimaFactura } = await supabase
+          .from('facturas_venta')
+          .select('numero_factura')
+          .eq('empresa_id', empresaId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const siguienteNumero = ultimaFactura
+          ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
+          : '00000001';
+
+        const fechaEmision = new Date().toISOString().split('T')[0];
+        const fechaVencimiento = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        const { data: factura, error: facturaError } = await supabase
+          .from('facturas_venta')
+          .insert({
+            empresa_id: empresaId,
+            cliente_id: clienteId,
+            numero_factura: siguienteNumero,
+            serie: '',
+            tipo_comprobante: '101',
+            fecha_emision: fechaEmision,
+            fecha_vencimiento: fechaVencimiento,
+            estado_dgi: 'borrador',
+            estado_pago: 'pendiente',
+            subtotal: totalComisiones,
+            total_iva: 0,
+            total_descuentos: 0,
+            total: totalComisiones,
+            moneda: 'UYU',
+            tipo_cambio: 1,
+            observaciones: 'Comisiones periodo ' + fechaInicio + ' a ' + fechaFin,
+            metadata: { tipo: 'factura_comisiones_partner', partner_id: partner.id },
+          })
+          .select()
+          .single();
+
+        if (facturaError) throw facturaError;
+
+        const itemsFactura = [{
+          factura_id: factura.id,
+          numero_linea: 1,
+          codigo: 'COMISION',
+          descripcion: 'Comisiones por ventas - ' + partner.razon_social + ' (' + fechaInicio + ' a ' + fechaFin + ')',
+          cantidad: comisiones.length,
+          precio_unitario: totalComisiones / comisiones.length,
+          descuento: 0,
+          tasa_iva: 0,
+          monto_iva: 0,
+          subtotal: totalComisiones,
+          total: totalComisiones,
+        }];
+
+        const { error: itemsError } = await supabase
+          .from('facturas_venta_items')
+          .insert(itemsFactura);
+
+        if (itemsError) throw itemsError;
+
+        const comisionIds = comisiones.map((c) => c.id);
+        const { error: updateComisionesError } = await supabase
+          .from('comisiones_partners')
+          .update({
+            estado_comision: 'facturada',
+            fecha_facturada: new Date().toISOString(),
+            factura_venta_comision_id: factura.id,
+          })
+          .in('id', comisionIds);
+
+        if (updateComisionesError) throw updateComisionesError;
+
+        try {
+          const { error: asientoError } = await supabase.functions.invoke('generar-asiento-factura', {
+            body: {
+              type: 'INSERT',
+              record: {
+                table: 'facturas_venta',
+                ...factura,
+              },
+            },
+          });
+
+          if (asientoError) {
+            console.error('Error generando asiento para factura', factura.numero_factura, asientoError);
+          } else {
+            console.log('Asiento contable generado para factura', factura.numero_factura);
+          }
+        } catch (asientoErr: any) {
+          console.error('Error al invocar generacion de asiento:', asientoErr.message);
+        }
+
+        console.log('Factura', factura.numero_factura, 'creada:', totalComisiones.toFixed(2));
+
+        facturasGeneradas++;
+        comisionesProcesadas += comisiones.length;
+      } catch (error: any) {
+        console.error('Error procesando', partner.razon_social, error.message);
+        errores.push({ partner: partner.razon_social, error: error.message });
+      }
+    }
+
+    return {
+      facturas_generadas: facturasGeneradas,
+      comisiones_procesadas: comisionesProcesadas,
+      errores: errores.length > 0 ? errores : undefined
+    };
+  } catch (error: any) {
+    return { facturas_generadas: 0, comisiones_procesadas: 0, error: error.message };
+  }
+}
