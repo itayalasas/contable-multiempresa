@@ -141,17 +141,17 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           .from('facturas_venta')
           .select('numero_factura')
           .eq('empresa_id', empresaId)
-          .like('numero_factura', 'COM-%')
+          .eq('serie', 'COM')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
         let siguienteNumero;
         if (ultimaFacturaComision) {
-          const ultimoNum = parseInt(ultimaFacturaComision.numero_factura.replace('COM-', ''));
-          siguienteNumero = 'COM-' + String(ultimoNum + 1).padStart(8, '0');
+          const ultimoNum = parseInt(ultimaFacturaComision.numero_factura);
+          siguienteNumero = String(ultimoNum + 1).padStart(8, '0');
         } else {
-          siguienteNumero = 'COM-00000001';
+          siguienteNumero = '00000001';
         }
 
         const fechaEmision = new Date().toISOString().split('T')[0];
@@ -163,7 +163,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
             empresa_id: empresaId,
             cliente_id: clienteId,
             numero_factura: siguienteNumero,
-            serie: '',
+            serie: 'COM',
             tipo_documento: 'e-factura',
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
