@@ -186,7 +186,7 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
       documento: cliente.numero_documento,
       nombre_fantasia: cliente.razon_social,
       sucursal: {
-        pais: cliente.pais_codigo || 'UY'
+        pais: paisCodigo
       }
     },
     items: itemsDGI
