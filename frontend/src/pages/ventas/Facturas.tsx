@@ -7,6 +7,7 @@ import {
   enviarFacturaDGI,
   obtenerEstadisticasFacturas,
   obtenerFacturaPorId,
+  regenerarAsientoContable,
   type FacturaVenta,
 } from '../../services/supabase/facturas';
 import { supabase } from '../../config/supabase';
@@ -443,6 +444,17 @@ export default function Facturas() {
     }
   };
 
+  const handleRegenerarAsiento = async (factura: FacturaVenta) => {
+    try {
+      await regenerarAsientoContable(factura.id);
+      mostrarNotificacion('success', 'Asiento Regenerado', 'El asiento contable se ha generado correctamente');
+      cargarFacturas();
+    } catch (error: any) {
+      console.error('❌ Error al regenerar asiento:', error);
+      mostrarNotificacion('error', 'Error', `No se pudo regenerar el asiento: ${error.message}`);
+    }
+  };
+
   const mostrarNotificacion = (
     type: 'success' | 'error' | 'warning' | 'info',
     title: string,
@@ -711,6 +723,32 @@ export default function Facturas() {
                             />
                           </svg>
                         </button>
+
+                        {/* Regenerar asiento - solo si falló */}
+                        {factura.asiento_error && (
+                          <button
+                            onClick={() => handleRegenerarAsiento(factura)}
+                            className="relative text-amber-600 hover:text-amber-900 group"
+                            title={`Regenerar asiento contable - ${factura.asiento_error}`}
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
+                            </svg>
+                            <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
+                              Error: {factura.asiento_error}
+                            </div>
+                          </button>
+                        )}
 
                         {/* Editar - solo borrador */}
                         {factura.estado === 'borrador' && (

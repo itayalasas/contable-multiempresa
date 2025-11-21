@@ -24,6 +24,9 @@ export interface FacturaVenta {
   fecha_anulacion?: string;
   motivo_anulacion?: string;
   asiento_contable_id?: string;
+  asiento_generado?: boolean;
+  asiento_error?: string;
+  asiento_intentos?: number;
   metadata?: any;
   created_at: string;
   updated_at: string;
@@ -623,4 +626,13 @@ export async function obtenerEstadisticasFacturas(empresaId: string) {
     facturas_vencidas: facturas.filter((f) => f.estado === 'vencida').length,
     facturas_anuladas: facturas.filter((f) => f.estado === 'anulada').length,
   };
+}
+
+export async function regenerarAsientoContable(facturaId: string) {
+  const { data, error } = await supabase.functions.invoke('generar-asiento-factura', {
+    body: { factura_id: facturaId, manual: true }
+  });
+
+  if (error) throw error;
+  return data;
 }

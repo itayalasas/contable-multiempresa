@@ -62,6 +62,12 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
       return;
     }
 
+    // Incrementar contador de intentos
+    await supabase
+      .from('facturas_venta')
+      .update({ asiento_intentos: (factura.asiento_intentos || 0) + 1 })
+      .eq('id', factura.id);
+
     // Generar número de asiento
     const numeroAsiento = await generarNumeroAsiento(supabase, factura.empresa_id);
 
@@ -71,10 +77,23 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     const cuentaIvaId = await obtenerCuentaId(supabase, factura.empresa_id, '2113');
 
     if (!cuentaCobrarId || !cuentaVentasId || !cuentaIvaId) {
-      console.error('❌ Faltan cuentas contables en el plan de cuentas');
-      console.error(`   - Cuenta 1212 (Cuentas por Cobrar): ${cuentaCobrarId ? 'OK' : 'FALTA'}`);
-      console.error(`   - Cuenta 7011 (Ventas): ${cuentaVentasId ? 'OK' : 'FALTA'}`);
-      console.error(`   - Cuenta 2113 (IVA por Pagar): ${cuentaIvaId ? 'OK' : 'FALTA'}`);
+      const cuentasFaltantes = [];
+      if (!cuentaCobrarId) cuentasFaltantes.push('1212 (Cuentas por Cobrar)');
+      if (!cuentaVentasId) cuentasFaltantes.push('7011 (Ventas)');
+      if (!cuentaIvaId) cuentasFaltantes.push('2113 (IVA por Pagar)');
+
+      const errorMsg = `Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`;
+      console.error('❌', errorMsg);
+
+      // Guardar error en la factura
+      await supabase
+        .from('facturas_venta')
+        .update({
+          asiento_generado: false,
+          asiento_error: errorMsg
+        })
+        .eq('id', factura.id);
+
       return;
     }
 
@@ -144,12 +163,42 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     if (movError) {
       console.error('❌ Error insertando movimientos:', movError);
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+
+      const errorMsg = movError.message || JSON.stringify(movError);
+      await supabase
+        .from('facturas_venta')
+        .update({
+          asiento_generado: false,
+          asiento_error: errorMsg.substring(0, 500)
+        })
+        .eq('id', factura.id);
+
       return;
     }
+
+    // Marcar como exitoso
+    await supabase
+      .from('facturas_venta')
+      .update({
+        asiento_generado: true,
+        asiento_contable_id: asiento.id,
+        asiento_error: null
+      })
+      .eq('id', factura.id);
 
     console.log('✅ Asiento contable generado exitosamente:', numeroAsiento);
   } catch (error) {
     console.error('❌ Error generando asiento:', error);
+
+    // Guardar el error en la factura
+    const errorMsg = error.message || JSON.stringify(error);
+    await supabase
+      .from('facturas_venta')
+      .update({
+        asiento_generado: false,
+        asiento_error: errorMsg.substring(0, 500)
+      })
+      .eq('id', new_record.id);
   }
 }
 

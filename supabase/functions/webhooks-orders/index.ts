@@ -515,6 +515,12 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
   try {
     console.log('📝 [Asiento] Generando para factura:', factura.numero_factura);
 
+    // Incrementar contador de intentos
+    await supabase
+      .from('facturas_venta')
+      .update({ asiento_intentos: (factura.asiento_intentos || 0) + 1 })
+      .eq('id', factura.id);
+
     const { data: cliente } = await supabase
       .from('clientes')
       .select('razon_social')
@@ -532,10 +538,23 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
     const cuentaIvaId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '2113');
 
     if (!cuentaCobrarId || !cuentaVentasId || !cuentaIvaId) {
-      console.error('❌ [Asiento] Faltan cuentas contables en el plan de cuentas');
-      console.error(`   - Cuenta 1212 (Cuentas por Cobrar): ${cuentaCobrarId ? 'OK' : 'FALTA'}`);
-      console.error(`   - Cuenta 7011 (Ventas): ${cuentaVentasId ? 'OK' : 'FALTA'}`);
-      console.error(`   - Cuenta 2113 (IVA por Pagar): ${cuentaIvaId ? 'OK' : 'FALTA'}`);
+      const cuentasFaltantes = [];
+      if (!cuentaCobrarId) cuentasFaltantes.push('1212 (Cuentas por Cobrar)');
+      if (!cuentaVentasId) cuentasFaltantes.push('7011 (Ventas)');
+      if (!cuentaIvaId) cuentasFaltantes.push('2113 (IVA por Pagar)');
+
+      const errorMsg = `Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`;
+      console.error('❌ [Asiento]', errorMsg);
+
+      // Guardar error en la factura
+      await supabase
+        .from('facturas_venta')
+        .update({
+          asiento_generado: false,
+          asiento_error: errorMsg
+        })
+        .eq('id', factura.id);
+
       return;
     }
 
@@ -597,10 +616,29 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
       throw movError;
     }
 
+    // Marcar como exitoso
+    await supabase
+      .from('facturas_venta')
+      .update({
+        asiento_generado: true,
+        asiento_contable_id: asiento.id,
+        asiento_error: null
+      })
+      .eq('id', factura.id);
+
     console.log('✅ [Asiento] Generado exitosamente:', numeroAsiento);
   } catch (error) {
     console.error('❌ [Asiento] Error:', error);
-    throw error;
+
+    // Guardar el error en la factura
+    const errorMsg = error.message || JSON.stringify(error);
+    await supabase
+      .from('facturas_venta')
+      .update({
+        asiento_generado: false,
+        asiento_error: errorMsg.substring(0, 500) // Limitar tamaño
+      })
+      .eq('id', factura.id);
   }
 }
 
