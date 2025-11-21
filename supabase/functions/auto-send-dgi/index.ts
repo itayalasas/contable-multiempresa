@@ -132,7 +132,7 @@ Deno.serve(async (req: Request) => {
         dgi_cae: resultadoDGI.cae,
         dgi_fecha_envio: new Date().toISOString(),
         dgi_hash: resultadoDGI.hash,
-        dgi_respuesta: resultadoDGI,
+        dgi_response: resultadoDGI,
       })
       .eq('id', facturaId);
 
@@ -280,8 +280,7 @@ async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
 
   await new Promise((resolve) => setTimeout(resolve, 500));
 
-  const cae = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const hash = `SHA256-${Math.random().toString(36).substr(2, 16)}`;
+  const cae = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;  const hash = `SHA256-${Math.random().toString(36).substr(2, 16)}`;
 
   return {
     success: true,
