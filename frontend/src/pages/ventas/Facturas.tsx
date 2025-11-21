@@ -680,7 +680,7 @@ export default function Facturas() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {factura.dgi_enviada ? (
+                      {factura.dgi_enviada && factura.dgi_cae ? (
                         <div className="flex items-center text-green-600">
                           <svg
                             className="w-4 h-4 mr-1"
@@ -694,6 +694,24 @@ export default function Facturas() {
                             />
                           </svg>
                           <span className="text-xs">Enviada</span>
+                        </div>
+                      ) : factura.dgi_response?.error ? (
+                        <div className="flex items-center text-red-600 group relative">
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          <span className="text-xs">Error</span>
+                          <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
+                            {factura.dgi_response?.error || 'Error al enviar a DGI'}
+                          </div>
                         </div>
                       ) : (
                         <span className="text-xs text-gray-400">Pendiente</span>
@@ -800,17 +818,19 @@ export default function Facturas() {
                           </button>
                         )}
 
-                        {/* Enviar a DGI - botón visible si no está enviada */}
-                        {!factura.dgi_enviada && factura.estado !== 'anulada' && (
+                        {/* Enviar a DGI - botón visible si no está enviada o si tuvo error */}
+                        {((!factura.dgi_enviada || factura.dgi_response?.error) && factura.estado !== 'anulada') && (
                           <button
                             onClick={() => handleEnviarDGI(factura)}
                             disabled={enviandoDGI === factura.id}
                             className={`flex items-center gap-1 px-3 py-1 text-white text-xs font-medium rounded transition-colors ${
                               enviandoDGI === factura.id
                                 ? 'bg-blue-400 cursor-not-allowed'
+                                : factura.dgi_response?.error
+                                ? 'bg-amber-600 hover:bg-amber-700'
                                 : 'bg-blue-600 hover:bg-blue-700'
                             }`}
-                            title="Enviar a DGI"
+                            title={factura.dgi_response?.error ? 'Reintentar envío a DGI' : 'Enviar a DGI'}
                           >
                             {enviandoDGI === factura.id ? (
                               <>
@@ -837,20 +857,41 @@ export default function Facturas() {
                               </>
                             ) : (
                               <>
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                                  />
-                                </svg>
-                                <span>Enviar DGI</span>
+                                {factura.dgi_response?.error ? (
+                                  <>
+                                    <svg
+                                      className="w-4 h-4"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                      />
+                                    </svg>
+                                    <span>Reintentar</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg
+                                      className="w-4 h-4"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                                      />
+                                    </svg>
+                                    <span>Enviar DGI</span>
+                                  </>
+                                )}
                               </>
                             )}
                           </button>

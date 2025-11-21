@@ -331,8 +331,12 @@ export async function enviarFacturaDGI(facturaId: string) {
   const factura = await obtenerFacturaPorId(facturaId);
   console.log('✅ [enviarFacturaDGI] Factura obtenida:', factura.numero_factura);
 
-  if (factura.dgi_enviada) {
-    throw new Error('Esta factura ya fue enviada a DGI');
+  if (factura.dgi_enviada && factura.dgi_cae) {
+    throw new Error('Esta factura ya fue enviada exitosamente a DGI');
+  }
+
+  if (factura.dgi_response?.error) {
+    console.log('⚠️ [enviarFacturaDGI] Reintentando envío después de error previo');
   }
 
   console.log('📤 [enviarFacturaDGI] Invocando Edge Function auto-send-dgi...');
