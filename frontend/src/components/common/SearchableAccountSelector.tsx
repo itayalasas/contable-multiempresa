@@ -162,14 +162,13 @@ export const SearchableAccountSelector: React.FC<SearchableAccountSelectorProps>
           </span>
           <div className="flex items-center space-x-1">
             {selectedCuenta && !disabled && (
-              <button
-                type="button"
+              <div
                 onClick={handleClear}
-                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                className="p-1 hover:bg-gray-200 rounded transition-colors cursor-pointer"
                 title="Limpiar selección"
               >
                 <X className="h-3 w-3 text-gray-400" />
-              </button>
+              </div>
             )}
             <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${
               isOpen ? 'rotate-180' : ''
@@ -260,6 +259,7 @@ export const SearchableAccountSelector: React.FC<SearchableAccountSelectorProps>
                 </p>
                 {searchTerm && (
                   <button
+                    type="button"
                     onClick={() => setSearchTerm('')}
                     className="text-xs text-blue-600 hover:text-blue-800 mt-1"
                   >
