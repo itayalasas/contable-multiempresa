@@ -57,6 +57,16 @@ Deno.serve(async (req: Request) => {
 
 async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean = false) {
   try {
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', empresaId)
+      .maybeSingle();
+
+    if (!empresa?.pais_id) {
+      throw new Error('La empresa no tiene un pais_id configurado');
+    }
+
     const { data: partners, error: partnersError } = await supabase
       .from('partners_aliados')
       .select('id, partner_id_externo, razon_social, documento, email')
@@ -106,12 +116,19 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
         if (clienteExistente) {
           clienteId = clienteExistente.id;
         } else {
+          const { data: tipoDoc } = await supabase
+            .from('tipo_documento_identidad')
+            .select('id')
+            .eq('codigo', 'RUT')
+            .maybeSingle();
+
           const { data: nuevoCliente, error: clienteError } = await supabase
             .from('clientes')
             .insert({
               empresa_id: empresaId,
+              pais_id: empresa.pais_id,
               razon_social: partner.razon_social,
-              tipo_documento: 'RUT',
+              tipo_documento_id: tipoDoc?.id,
               numero_documento: partner.documento,
               email: partner.email,
               activo: true,
