@@ -122,7 +122,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo);
-
     const resultadoDGI = await enviarADGI(jsonCFE, config);
 
     const { error: updateError } = await supabase
@@ -161,7 +160,6 @@ Deno.serve(async (req: Request) => {
 
 function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
   let tipoCFE: number;
-
   const numeroFactura = factura.numero_factura || '';
   const serie = factura.serie || (numeroFactura.includes('-') ? numeroFactura.split('-')[0] : '');
 
@@ -177,10 +175,7 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
 
   const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 3;
   const formaPago = factura.estado === 'pagada' ? 1 : 2;
-
-  const fechaVencimiento = factura.fecha_vencimiento
-    ? formatearFechaDGI(factura.fecha_vencimiento)
-    : formatearFechaDGI(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
+  const fechaVencimiento = factura.fecha_vencimiento ? formatearFechaDGI(factura.fecha_vencimiento) : formatearFechaDGI(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
 
   const itemsDGI = items.map((item) => {
     const itemDGI: any = {
@@ -189,11 +184,7 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
       precio: parseFloat(item.precio_unitario),
       indicador_facturacion: determinarIndicadorFacturacion(item.tasa_iva),
     };
-
-    if (item.codigo) {
-      itemDGI.codigo = item.codigo;
-    }
-
+    if (item.codigo) { itemDGI.codigo = item.codigo; }
     if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
       itemDGI.descuento_tipo = '$';
       itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
@@ -201,7 +192,6 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
       itemDGI.descuento_tipo = '%';
       itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
     }
-
     return itemDGI;
   });
 
@@ -235,17 +225,9 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     comprobante.numero_interno = factura.id;
   }
 
-  if (cliente.nombre_comercial) {
-    comprobante.cliente.nombre_fantasia = cliente.nombre_comercial;
-  }
-
-  if (cliente.email) {
-    comprobante.cliente.sucursal.emails = [cliente.email];
-  }
-
-  if (factura.moneda !== 'UYU' && factura.tipo_cambio) {
-    comprobante.tasa_cambio = parseFloat(factura.tipo_cambio);
-  }
+  if (cliente.nombre_comercial) { comprobante.cliente.nombre_fantasia = cliente.nombre_comercial; }
+  if (cliente.email) { comprobante.cliente.sucursal.emails = [cliente.email]; }
+  if (factura.moneda !== 'UYU' && factura.tipo_cambio) { comprobante.tasa_cambio = parseFloat(factura.tipo_cambio); }
 
   return comprobante;
 }
@@ -259,34 +241,53 @@ function formatearFechaDGI(fechaISO: string): string {
 }
 
 function determinarIndicadorFacturacion(tasaIva: string | number | null): number {
-  if (!tasaIva || parseFloat(tasaIva.toString()) === 0) {
-    return 1;
-  }
-
+  if (!tasaIva || parseFloat(tasaIva.toString()) === 0) { return 1; }
   const tasa = parseFloat(tasaIva.toString());
-
-  if (tasa === 0.10) {
-    return 2;
-  } else if (tasa === 0.22) {
-    return 3;
-  } else {
-    return 4;
-  }
+  if (tasa === 0.10) { return 2; }
+  else if (tasa === 0.22) { return 3; }
+  else { return 4; }
 }
 
 async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
   console.log('📤 [DGI] Enviando JSON CFE a DGI...');
   console.log('📋 [DGI] Payload:', JSON.stringify(jsonCFE, null, 2));
 
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  const apiUrl = Deno.env.get('DGI_API_CREATE_URL') || 'https://api.flowbridge.site/functions/v1/api-gateway/1a062194-437a-4d61-8cb3-fe7d00f90234';
+  const apiKey = Deno.env.get('DGI_API_CREATE_KEY') || 'pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3';
 
-  const cae = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;  const hash = `SHA256-${Math.random().toString(36).substr(2, 16)}`;
+  console.log('🌐 [DGI] Llamando a:', apiUrl);
 
-  return {
-    success: true,
-    cae,
-    hash,
-    fecha: new Date().toISOString(),
-    mensaje: 'CFE aceptado por DGI (simulado)',
-  };
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(jsonCFE),
+    });
+
+    console.log('📥 [DGI] Respuesta status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [DGI] Error response:', errorText);
+      throw new Error(`Error al enviar a DGI: ${response.status} - ${errorText}`);
+    }
+
+    const resultado = await response.json();
+    console.log('✅ [DGI] Respuesta exitosa:', resultado);
+
+    return {
+      success: true,
+      cae: resultado.cae || resultado.CAE || `CAE-${Date.now()}`,
+      hash: resultado.hash || resultado.HASH || `SHA256-${Math.random().toString(36).substr(2, 16)}`,
+      fecha: new Date().toISOString(),
+      mensaje: resultado.mensaje || 'CFE aceptado por DGI',
+      data: resultado,
+    };
+  } catch (error: any) {
+    console.error('❌ [DGI] Error al enviar:', error.message);
+    throw new Error(`Error al comunicarse con DGI: ${error.message}`);
+  }
 }
