@@ -159,13 +159,9 @@ Deno.serve(async (req: Request) => {
 });
 
 function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
-  let tipoCFE: number;
-  const numeroFactura = factura.numero_factura || '';
-  const serie = factura.serie || (numeroFactura.includes('-') ? numeroFactura.split('-')[0] : '');
+  let tipoCFE: number = 111;
 
-  if (serie === 'COM') {
-    tipoCFE = 141;
-  } else if (factura.tipo_documento === 'e-ticket') {
+  if (factura.tipo_documento === 'e-ticket') {
     tipoCFE = 101;
   } else if (factura.tipo_documento === 'e-factura') {
     tipoCFE = 111;
@@ -201,7 +197,6 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     fecha_vencimiento: fechaVencimiento,
     sucursal: parseInt(config.codigo_sucursal) || 1,
     moneda: factura.moneda || 'UYU',
-    doc_receptor: cliente.numero_documento || '219357800013',
     cliente: {
       tipo_documento: tipoDocumentoDGI,
       documento: cliente.numero_documento || '219357800013',
@@ -216,26 +211,8 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     items: itemsDGI
   };
 
-  if (tipoCFE === 141) {
-    comprobante.contactoCuentaAjena = cliente.email || 'info@empresa.com.uy';
-  }
-
-  if (numeroFactura.includes('-')) {
-    comprobante.numero_interno = numeroFactura;
-  } else if (serie && numeroFactura) {
-    comprobante.numero_interno = `${serie}-${numeroFactura}`;
-  } else if (numeroFactura) {
-    comprobante.numero_interno = numeroFactura;
-  } else {
-    comprobante.numero_interno = factura.id;
-  }
-
   if (cliente.nombre_comercial) {
     comprobante.cliente.nombre_fantasia = cliente.nombre_comercial;
-  }
-
-  if (cliente.email && cliente.email.includes('@') && cliente.email.includes('.')) {
-    comprobante.cliente.sucursal.emails = [cliente.email];
   }
 
   if (factura.moneda !== 'UYU' && factura.tipo_cambio) {
