@@ -48,10 +48,9 @@ export default function Clientes() {
 
     const term = searchTerm.toLowerCase();
     const filtered = clientes.filter(cliente => {
-      const nombre = cliente.tipo_persona === 'fisica' ? cliente.nombre_completo : cliente.razon_social;
       return (
-        nombre?.toLowerCase().includes(term) ||
-        cliente.documento_numero.toLowerCase().includes(term) ||
+        cliente.razon_social?.toLowerCase().includes(term) ||
+        cliente.numero_documento?.toLowerCase().includes(term) ||
         cliente.email?.toLowerCase().includes(term)
       );
     });
@@ -97,9 +96,7 @@ export default function Clientes() {
   };
 
   const getNombreCliente = (cliente: Cliente) => {
-    return cliente.tipo_persona === 'fisica'
-      ? cliente.nombre_completo
-      : cliente.razon_social;
+    return cliente.razon_social || 'Sin nombre';
   };
 
   if (loading) {
@@ -193,11 +190,7 @@ export default function Clientes() {
                   <tr key={cliente.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        {cliente.tipo_persona === 'fisica' ? (
-                          <User className="h-5 w-5 text-gray-400" />
-                        ) : (
-                          <Building2 className="h-5 w-5 text-gray-400" />
-                        )}
+                        <Building2 className="h-5 w-5 text-gray-400" />
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -212,10 +205,7 @@ export default function Clientes() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {cliente.documento_numero}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {cliente.documento_tipo}
+                        {cliente.numero_documento || '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -223,12 +213,7 @@ export default function Clientes() {
                       <div className="text-sm text-gray-500">{cliente.telefono || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{cliente.condicion_pago}</div>
-                      {cliente.dias_credito > 0 && (
-                        <div className="text-xs text-gray-500">
-                          {cliente.dias_credito} días
-                        </div>
-                      )}
+                      <div className="text-sm text-gray-900">{cliente.dias_credito ? `${cliente.dias_credito} días` : 'Contado'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span

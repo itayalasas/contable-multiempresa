@@ -331,7 +331,14 @@ async function handleOrder(
 
     console.log('✅ [Order] Factura creada:', factura.id);
 
-    // 7. Crear items de factura
+    // 7. Generar asiento contable
+    try {
+      await generarAsientoContable(supabase, factura, empresa.pais_id);
+    } catch (error) {
+      console.warn('⚠️ [Order] Error generando asiento contable:', error);
+    }
+
+    // 8. Crear items de factura
     const comisionesCreadas = [];
 
     for (let i = 0; i < payload.items.length; i++) {
@@ -502,4 +509,123 @@ async function procesarComisionPartner(
     console.error('❌ [Comision] Error:', error);
     return { success: false, error: error.message };
   }
+}
+
+async function generarAsientoContable(supabase: any, factura: any, paisId: string) {
+  try {
+    console.log('📝 [Asiento] Generando para factura:', factura.numero_factura);
+
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('razon_social')
+      .eq('id', factura.cliente_id)
+      .maybeSingle();
+
+    const clienteNombre = cliente?.razon_social || 'Cliente';
+
+    const numeroAsiento = await generarNumeroAsiento(supabase, factura.empresa_id);
+    const cuentaCobrarId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '1212');
+    const cuentaVentasId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '7011');
+    const cuentaIvaId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '2113');
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert({
+        empresa_id: factura.empresa_id,
+        pais_id: paisId,
+        numero: numeroAsiento,
+        fecha: factura.fecha_emision,
+        descripcion: `Factura de Venta ${factura.numero_factura} - ${clienteNombre}`,
+        referencia: `FACT-${factura.numero_factura}`,
+        estado: 'confirmado',
+        creado_por: 'sistema',
+        documento_soporte: {
+          tipo: 'factura_venta',
+          id: factura.id,
+          numero: factura.numero_factura,
+        },
+      })
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientos = [
+      {
+        asiento_id: asiento.id,
+        numero_linea: 1,
+        cuenta_id: cuentaCobrarId,
+        cuenta_codigo: '1212',
+        cuenta_nombre: 'Cuentas por Cobrar - Comerciales',
+        debe: parseFloat(factura.total),
+        haber: 0,
+        descripcion: `Factura ${factura.numero_factura} - ${clienteNombre}`,
+      },
+      {
+        asiento_id: asiento.id,
+        numero_linea: 2,
+        cuenta_id: cuentaVentasId,
+        cuenta_codigo: '7011',
+        cuenta_nombre: 'Ventas',
+        debe: 0,
+        haber: parseFloat(factura.subtotal),
+        descripcion: `Factura ${factura.numero_factura} - ${clienteNombre}`,
+      },
+      {
+        asiento_id: asiento.id,
+        numero_linea: 3,
+        cuenta_id: cuentaIvaId,
+        cuenta_codigo: '2113',
+        cuenta_nombre: 'IVA por Pagar',
+        debe: 0,
+        haber: parseFloat(factura.total_iva),
+        descripcion: `IVA Factura ${factura.numero_factura}`,
+      },
+    ];
+
+    const { error: movError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientos);
+
+    if (movError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movError;
+    }
+
+    console.log('✅ [Asiento] Generado exitosamente:', numeroAsiento);
+  } catch (error) {
+    console.error('❌ [Asiento] Error:', error);
+    throw error;
+  }
+}
+
+async function generarNumeroAsiento(supabase: any, empresaId: string): Promise<string> {
+  const { data: ultimoAsiento } = await supabase
+    .from('asientos_contables')
+    .select('numero')
+    .eq('empresa_id', empresaId)
+    .order('numero', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!ultimoAsiento) return 'ASI-00001';
+
+  const match = ultimoAsiento.numero.match(/ASI-(\d+)/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return `ASI-${String(num + 1).padStart(5, '0')}`;
+  }
+
+  return `ASI-${Date.now().toString().slice(-5)}`;
+}
+
+async function obtenerCuentaIdAsiento(supabase: any, empresaId: string, codigo: string): Promise<string> {
+  const { data: cuenta } = await supabase
+    .from('plan_cuentas')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('codigo', codigo)
+    .maybeSingle();
+
+  return cuenta?.id || codigo;
 }
