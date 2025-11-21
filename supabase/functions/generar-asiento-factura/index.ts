@@ -70,6 +70,9 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     const cuentaVentasId = await obtenerCuentaId(supabase, factura.empresa_id, '7011');
     const cuentaIvaId = await obtenerCuentaId(supabase, factura.empresa_id, '2113');
 
+    // Usar el usuario Sistema para operaciones automáticas
+    const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
+
     // Crear asiento
     const { data: asiento, error: asientoError } = await supabase
       .from('asientos_contables')
@@ -81,7 +84,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         descripcion: `Factura de Venta ${factura.numero_factura} - ${clienteNombre}`,
         referencia: `FACT-${factura.numero_factura}`,
         estado: 'confirmado',
-        creado_por: 'sistema',
+        creado_por: SISTEMA_USER_ID,
         documento_soporte: {
           tipo: 'factura_venta',
           id: factura.id,
