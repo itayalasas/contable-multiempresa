@@ -16,15 +16,6 @@ const TIPOS_DOCUMENTO_DGI: Record<string, number> = {
   'OTRO': 6,
 };
 
-// Tipos de CFE según DGI
-const TIPOS_CFE: Record<string, number> = {
-  'e-ticket': 101,
-  'e-factura': 111,
-  'factura_exportacion': 121,
-  'nota_credito': 112,
-  'nota_debito': 113,
-};
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -42,7 +33,7 @@ Deno.serve(async (req: Request) => {
     // 1. Obtener la factura
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
-      .select('*, empresa_id, numero_factura')
+      .select('*')
       .eq('id', facturaId)
       .single();
 
@@ -64,10 +55,9 @@ Deno.serve(async (req: Request) => {
       .from('empresas_config_cfe')
       .select('*')
       .eq('empresa_id', factura.empresa_id)
-      .eq('activa', true)
       .maybeSingle();
 
-    if (configError || !config) {
+    if (configError || !config || !config.activa) {
       console.log('⚠️ [AutoSendDGI] Empresa sin configuración CFE activa');
       return new Response(
         JSON.stringify({ success: false, error: 'Empresa sin configuración CFE' }),
@@ -110,13 +100,32 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 7. Generar JSON CFE para DGI
-    const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento);
+    // 7. Obtener país de la empresa
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', factura.empresa_id)
+      .maybeSingle();
 
-    // 8. Enviar a DGI
+    let paisCodigo = 'UY';
+    if (empresa?.pais_id) {
+      const { data: pais } = await supabase
+        .from('paises')
+        .select('codigo')
+        .eq('id', empresa.pais_id)
+        .maybeSingle();
+      if (pais) {
+        paisCodigo = pais.codigo;
+      }
+    }
+
+    // 8. Generar JSON CFE para DGI
+    const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo);
+
+    // 9. Enviar a DGI
     const resultadoDGI = await enviarADGI(jsonCFE, config);
 
-    // 9. Actualizar factura con datos de DGI
+    // 10. Actualizar factura con datos de DGI
     const { error: updateError } = await supabase
       .from('facturas_venta')
       .update({
@@ -151,9 +160,12 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string): any {
-  // Obtener tipo de CFE según el tipo de documento
-  const tipoCFE = TIPOS_CFE[factura.tipo_documento] || 101; // Default: e-ticket
+function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
+  // Determinar tipo de CFE:
+  // - Si el número de factura empieza con "COM-" es factura de comisiones → e-ticket (101)
+  // - Si no, es factura normal → e-factura (111)
+  const esFacturaComision = factura.numero_factura?.startsWith('COM-');
+  const tipoCFE = esFacturaComision ? 101 : 111;
 
   // Mapear tipo de documento a código DGI
   const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 2; // Default: CI
@@ -173,7 +185,7 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     } : {})
   }));
 
-  // Construir JSON según formato DGI
+  // Construir JSON según formato DGI (nombres exactos que DGI requiere)
   const jsonCFE = {
     tipo_comprobante: tipoCFE,
     numero_interno: factura.numero_factura,
@@ -181,32 +193,28 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     sucursal: parseInt(config.codigo_sucursal) || 1,
     moneda: factura.moneda || 'UYU',
     montos_brutos: parseFloat(factura.subtotal) || 0,
-    cliente: {
-      tipo_documento: tipoDocumentoDGI,
-      documento: cliente.numero_documento,
-      nombre_fantasia: cliente.razon_social,
-      sucursal: {
-        pais: paisCodigo
-      }
-    },
+    tipo_doc_receptor: tipoDocumentoDGI,          // ✅ Campo requerido por DGI
+    doc_receptor: cliente.numero_documento,        // ✅ Campo requerido por DGI
+    cod_pais: paisCodigo,                          // ✅ Campo requerido por DGI
+    razon_social: cliente.razon_social,
     items: itemsDGI
   };
 
   // Agregar campos opcionales si existen
   if (cliente.email) {
-    jsonCFE.cliente.email = cliente.email;
+    jsonCFE.email_receptor = cliente.email;
   }
   if (cliente.telefono) {
-    jsonCFE.cliente.telefono = cliente.telefono;
+    jsonCFE.telefono_receptor = cliente.telefono;
   }
   if (cliente.direccion) {
-    jsonCFE.cliente.sucursal.direccion = cliente.direccion;
+    jsonCFE.direccion_receptor = cliente.direccion;
   }
   if (cliente.ciudad) {
-    jsonCFE.cliente.sucursal.ciudad = cliente.ciudad;
+    jsonCFE.ciudad_receptor = cliente.ciudad;
   }
   if (cliente.departamento) {
-    jsonCFE.cliente.sucursal.departamento = cliente.departamento;
+    jsonCFE.departamento_receptor = cliente.departamento;
   }
 
   return jsonCFE;
@@ -233,7 +241,7 @@ async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
 
   /*
   // PRODUCCIÓN: Descomentar y configurar cuando tengas la URL de la API DGI
-  const response = await fetch(config.dgi_url_webservice, {
+  const response = await fetch(config.url_webservice, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
