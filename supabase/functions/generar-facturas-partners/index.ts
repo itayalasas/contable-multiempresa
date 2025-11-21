@@ -137,17 +137,22 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           clienteId = nuevoCliente.id;
         }
 
-        const { data: ultimaFactura } = await supabase
+        const { data: ultimaFacturaComision } = await supabase
           .from('facturas_venta')
           .select('numero_factura')
           .eq('empresa_id', empresaId)
+          .like('numero_factura', 'COM-%')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
-        const siguienteNumero = ultimaFactura
-          ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
-          : '00000001';
+        let siguienteNumero;
+        if (ultimaFacturaComision) {
+          const ultimoNum = parseInt(ultimaFacturaComision.numero_factura.replace('COM-', ''));
+          siguienteNumero = 'COM-' + String(ultimoNum + 1).padStart(8, '0');
+        } else {
+          siguienteNumero = 'COM-00000001';
+        }
 
         const fechaEmision = new Date().toISOString().split('T')[0];
         const fechaVencimiento = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
