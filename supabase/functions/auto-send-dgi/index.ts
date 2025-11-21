@@ -262,7 +262,7 @@ async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'X-Integration-Key': apiKey,
       },
       body: JSON.stringify(jsonCFE),
     });
