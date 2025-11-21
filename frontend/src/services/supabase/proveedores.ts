@@ -34,7 +34,7 @@ export async function obtenerProveedores(empresaId: string): Promise<Proveedor[]
     .from('proveedores')
     .select('*')
     .eq('empresa_id', empresaId)
-    .order('created_at', { ascending: false });
+    .order('fecha_creacion', { ascending: false });
 
   if (error) throw error;
   return data || [];
@@ -89,7 +89,7 @@ export async function buscarProveedores(empresaId: string, termino: string): Pro
     .select('*')
     .eq('empresa_id', empresaId)
     .or(`nombre_completo.ilike.%${termino}%,razon_social.ilike.%${termino}%,documento_numero.ilike.%${termino}%`)
-    .order('created_at', { ascending: false})
+    .order('fecha_creacion', { ascending: false})
     .limit(10);
 
   if (error) throw error;

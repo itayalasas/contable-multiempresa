@@ -6,65 +6,73 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-Webhook-Secret',
 };
 
-interface OrderPaidPayload {
+interface WebhookItem {
+  tipo: 'servicio' | 'producto';
+  codigo: string;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  descuento_porcentaje: number;
+  descuento_monto: number;
+  subtotal: number;
+  tasa_iva: number;
+  monto_iva: number;
+  total: number;
+  partner?: {
+    id: string;
+    nombre: string;
+    documento: string;
+    tipo_documento?: string;
+    email: string;
+    telefono?: string;
+    direccion?: string;
+    comision_porcentaje: number;
+    comision_monto: number;
+  };
+}
+
+interface OrderPaidPayloadV2 {
   event: 'order.paid';
+  version: '2.0';
   order_id: string;
   empresa_id: string;
   crm_customer_id?: string;
   customer: {
     nombre: string;
     documento: string;
+    tipo_documento?: string;
     email: string;
     telefono?: string;
     direccion?: string;
   };
-  service: {
-    tipo: string;
-    descripcion: string;
-    partner_id?: string;
-    partner_name?: string;
-  };
-  amounts: {
-    total: number;
-    partner_commission?: number;
-    platform_fee?: number;
-    tax: number;
+  items: WebhookItem[];
+  totales: {
+    subtotal: number;
+    descuento_total: number;
+    subtotal_con_descuento: number;
+    iva_total: number;
+    total_factura: number;
+    comision_partners_total: number;
+    ganancia_plataforma: number;
+    impuesto_gateway: number;
   };
   payment: {
     method: string;
+    gateway: string;
     transaction_id: string;
     paid_at: string;
+    impuesto_gateway_porcentaje: number;
+    impuesto_gateway_monto: number;
+    neto_recibido: number;
   };
+  metadata?: Record<string, any>;
 }
 
-interface OrderCancelledPayload {
-  event: 'order.cancelled';
-  order_id: string;
-  empresa_id: string;
-  factura_id?: string;
-  motivo: string;
-  tipo_anulacion: 'total' | 'parcial';
-  monto_devolver: number;
-  refund?: {
-    method: string;
-    transaction_id: string;
-    status: string;
-  };
-  metadata: {
-    cancelled_by: string;
-    cancelled_at: string;
-    reason_detail: string;
-  };
-}
-
-type WebhookPayload = OrderPaidPayload | OrderCancelledPayload;
+type WebhookPayload = OrderPaidPayloadV2;
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -79,14 +87,13 @@ Deno.serve(async (req: Request) => {
     if (providedSecret !== webhookSecret) {
       return new Response(
         JSON.stringify({ error: 'Invalid webhook secret' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const payload: WebhookPayload = await req.json();
+
+    console.log('🔔 [Webhook] Recibido:', payload.event, payload.order_id);
 
     // Registrar el evento
     const { data: evento, error: eventoError } = await supabase
@@ -102,31 +109,15 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (eventoError) {
-      console.error('Error registrando evento:', eventoError);
+      console.error('❌ [Webhook] Error registrando evento:', eventoError);
       return new Response(
         JSON.stringify({ error: 'Error al registrar evento', details: eventoError }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Procesar el evento según el tipo
-    let result;
-    if (payload.event === 'order.paid') {
-      result = await handleOrderPaid(supabase, payload, evento.id);
-    } else if (payload.event === 'order.cancelled') {
-      result = await handleOrderCancelled(supabase, payload, evento.id);
-    } else {
-      return new Response(
-        JSON.stringify({ error: 'Evento no soportado' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    // Procesar el evento
+    const result = await handleOrderPaid(supabase, payload, evento.id);
 
     if (result.success) {
       // Marcar evento como procesado
@@ -136,16 +127,14 @@ Deno.serve(async (req: Request) => {
           procesado: true,
           procesado_at: new Date().toISOString(),
           factura_id: result.factura_id,
-          nota_credito_id: result.nota_credito_id,
         })
         .eq('id', evento.id);
 
+      console.log('✅ [Webhook] Procesado exitosamente:', result);
+
       return new Response(
         JSON.stringify({ success: true, data: result }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
       // Registrar error
@@ -153,40 +142,38 @@ Deno.serve(async (req: Request) => {
         .from('eventos_externos')
         .update({
           error: result.error,
-          reintentos: evento.reintentos + 1,
+          reintentos: (evento.reintentos || 0) + 1,
         })
         .eq('id', evento.id);
 
+      console.error('❌ [Webhook] Error procesando:', result.error);
+
       return new Response(
         JSON.stringify({ error: result.error }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (error) {
-    console.error('Error procesando webhook:', error);
+    console.error('❌ [Webhook] Error crítico:', error);
     return new Response(
       JSON.stringify({ error: 'Error interno del servidor', details: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
 
 async function handleOrderPaid(
   supabase: any,
-  payload: OrderPaidPayload,
+  payload: OrderPaidPayloadV2,
   eventoId: string
 ) {
   try {
-    // 1. Obtener país de la empresa
+    console.log('🔄 [OrderPaid] Procesando orden:', payload.order_id);
+
+    // 1. Obtener empresa y país
     const { data: empresa } = await supabase
       .from('empresas')
-      .select('pais_id')
+      .select('id, pais_id')
       .eq('id', payload.empresa_id)
       .single();
 
@@ -205,8 +192,8 @@ async function handleOrderPaid(
 
     if (clienteExistente) {
       clienteId = clienteExistente.id;
+      console.log('👤 [OrderPaid] Cliente existente:', clienteId);
     } else {
-      // Crear nuevo cliente
       const { data: nuevoCliente, error: clienteError } = await supabase
         .from('clientes')
         .insert({
@@ -214,6 +201,7 @@ async function handleOrderPaid(
           pais_id: empresa.pais_id,
           razon_social: payload.customer.nombre,
           numero_documento: payload.customer.documento,
+          tipo_documento: payload.customer.tipo_documento || 'CI',
           email: payload.customer.email,
           telefono: payload.customer.telefono,
           direccion: payload.customer.direccion,
@@ -226,6 +214,7 @@ async function handleOrderPaid(
         return { success: false, error: `Error creando cliente: ${clienteError.message}` };
       }
       clienteId = nuevoCliente.id;
+      console.log('✅ [OrderPaid] Cliente creado:', clienteId);
     }
 
     // 3. Obtener siguiente número de factura
@@ -241,11 +230,9 @@ async function handleOrderPaid(
       ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
       : '00000001';
 
-    // 4. Calcular montos
-    const subtotal = payload.amounts.total / (1 + 0.22);
-    const totalIva = payload.amounts.tax;
+    console.log('📝 [OrderPaid] Número factura:', siguienteNumero);
 
-    // 5. Crear factura
+    // 4. Crear factura
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -255,18 +242,22 @@ async function handleOrderPaid(
         tipo_documento: 'e-ticket',
         fecha_emision: new Date().toISOString().split('T')[0],
         estado: 'pagada',
-        subtotal: subtotal.toFixed(2),
-        total_iva: totalIva.toFixed(2),
-        total: payload.amounts.total.toFixed(2),
+        subtotal: payload.totales.subtotal_con_descuento.toFixed(2),
+        descuento: payload.totales.descuento_total.toFixed(2),
+        total_iva: payload.totales.iva_total.toFixed(2),
+        total: payload.totales.total_factura.toFixed(2),
         moneda: 'UYU',
         tipo_cambio: 1,
         dgi_enviada: false,
         metadata: {
-          crm_order_id: payload.order_id,
-          partner_id: payload.service.partner_id,
+          order_id: payload.order_id,
           payment_transaction: payload.payment.transaction_id,
           payment_method: payload.payment.method,
+          gateway: payload.payment.gateway,
+          gateway_fee: payload.payment.impuesto_gateway_monto,
+          neto_recibido: payload.payment.neto_recibido,
           evento_id: eventoId,
+          ...payload.metadata,
         },
       })
       .select()
@@ -276,177 +267,166 @@ async function handleOrderPaid(
       return { success: false, error: `Error creando factura: ${facturaError.message}` };
     }
 
-    // 6. Crear item de factura
-    const { error: itemError } = await supabase
-      .from('facturas_venta_items')
-      .insert({
-        factura_id: factura.id,
-        numero_linea: 1,
-        descripcion: payload.service.descripcion,
-        cantidad: 1,
-        precio_unitario: subtotal.toFixed(2),
-        tasa_iva: 0.22,
-        monto_iva: totalIva.toFixed(2),
-        subtotal: subtotal.toFixed(2),
-        total: payload.amounts.total.toFixed(2),
-        metadata: {
-          service_type: payload.service.tipo,
-          partner_id: payload.service.partner_id,
-        },
-      });
+    console.log('✅ [OrderPaid] Factura creada:', factura.id);
 
-    if (itemError) {
-      return { success: false, error: `Error creando item: ${itemError.message}` };
+    // 5. Crear items de factura y registrar comisiones
+    const comisionesCreadas = [];
+
+    for (let i = 0; i < payload.items.length; i++) {
+      const item = payload.items[i];
+
+      // Crear item de factura
+      const { error: itemError } = await supabase
+        .from('facturas_venta_items')
+        .insert({
+          factura_id: factura.id,
+          numero_linea: i + 1,
+          codigo: item.codigo,
+          descripcion: item.descripcion,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio_unitario.toFixed(2),
+          descuento_porcentaje: item.descuento_porcentaje,
+          descuento_monto: item.descuento_monto.toFixed(2),
+          tasa_iva: item.tasa_iva,
+          monto_iva: item.monto_iva.toFixed(2),
+          subtotal: item.subtotal.toFixed(2),
+          total: item.total.toFixed(2),
+          metadata: {
+            tipo: item.tipo,
+            partner_id: item.partner?.id,
+          },
+        });
+
+      if (itemError) {
+        console.error('❌ [OrderPaid] Error creando item:', itemError);
+        return { success: false, error: `Error creando item: ${itemError.message}` };
+      }
+
+      console.log(`✅ [OrderPaid] Item ${i + 1} creado`);
+
+      // Si tiene partner, procesar comisión
+      if (item.partner) {
+        const comisionResult = await procesarComisionPartner(
+          supabase,
+          payload.empresa_id,
+          empresa.pais_id,
+          factura.id,
+          payload.order_id,
+          item
+        );
+
+        if (comisionResult.success) {
+          comisionesCreadas.push(comisionResult.comision_id);
+        } else {
+          console.warn('⚠️ [OrderPaid] Error en comisión:', comisionResult.error);
+        }
+      }
     }
+
+    console.log(`💰 [OrderPaid] Comisiones registradas: ${comisionesCreadas.length}`);
 
     return {
       success: true,
       factura_id: factura.id,
       numero_factura: factura.numero_factura,
+      cliente_id: clienteId,
+      comisiones_registradas: comisionesCreadas.length,
+      comision_ids: comisionesCreadas,
     };
   } catch (error) {
+    console.error('❌ [OrderPaid] Error:', error);
     return { success: false, error: error.message };
   }
 }
 
-async function handleOrderCancelled(
+async function procesarComisionPartner(
   supabase: any,
-  payload: OrderCancelledPayload,
-  eventoId: string
+  empresaId: string,
+  paisId: string,
+  facturaId: string,
+  orderId: string,
+  item: WebhookItem
 ) {
   try {
-    // 1. Buscar la factura original
-    let facturaOriginal;
-    if (payload.factura_id) {
-      const { data } = await supabase
-        .from('facturas_venta')
-        .select('*')
-        .eq('id', payload.factura_id)
-        .single();
-      facturaOriginal = data;
-    } else {
-      const { data } = await supabase
-        .from('facturas_venta')
-        .select('*')
-        .eq('empresa_id', payload.empresa_id)
-        .eq('metadata->>crm_order_id', payload.order_id)
-        .single();
-      facturaOriginal = data;
+    if (!item.partner) {
+      return { success: false, error: 'Item sin partner' };
     }
 
-    if (!facturaOriginal) {
-      return { success: false, error: 'Factura no encontrada' };
-    }
+    console.log('🤝 [Comision] Procesando partner:', item.partner.id);
 
-    if (facturaOriginal.estado === 'anulada') {
-      return { success: false, error: 'La factura ya está anulada' };
-    }
-
-    // 2. Si no está enviada a DGI, simplemente eliminar
-    if (!facturaOriginal.dgi_enviada) {
-      await supabase
-        .from('facturas_venta_items')
-        .delete()
-        .eq('factura_id', facturaOriginal.id);
-
-      await supabase
-        .from('facturas_venta')
-        .delete()
-        .eq('id', facturaOriginal.id);
-
-      return {
-        success: true,
-        method: 'deleted',
-        factura_id: facturaOriginal.id,
-      };
-    }
-
-    // 3. Obtener siguiente número de nota de crédito
-    const { data: ultimaNota } = await supabase
-      .from('notas_credito')
-      .select('numero_nota')
-      .eq('empresa_id', payload.empresa_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    // 1. Buscar o crear partner
+    let partnerId;
+    const { data: partnerExistente } = await supabase
+      .from('partners_aliados')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('partner_id_externo', item.partner.id)
       .maybeSingle();
 
-    const siguienteNumero = ultimaNota
-      ? String(parseInt(ultimaNota.numero_nota) + 1).padStart(8, '0')
-      : '00000001';
+    if (partnerExistente) {
+      partnerId = partnerExistente.id;
+      console.log('🤝 [Comision] Partner existente:', partnerId);
+    } else {
+      // Crear nuevo partner
+      const { data: nuevoPartner, error: partnerError } = await supabase
+        .from('partners_aliados')
+        .insert({
+          empresa_id: empresaId,
+          partner_id_externo: item.partner.id,
+          razon_social: item.partner.nombre,
+          documento: item.partner.documento,
+          tipo_documento: item.partner.tipo_documento || 'RUT',
+          email: item.partner.email,
+          telefono: item.partner.telefono,
+          direccion: item.partner.direccion,
+          activo: true,
+          comision_porcentaje_default: item.partner.comision_porcentaje,
+          facturacion_frecuencia: 'quincenal',
+          dia_facturacion: 15,
+        })
+        .select()
+        .single();
 
-    // 4. Crear nota de crédito
-    const { data: notaCredito, error: notaError } = await supabase
-      .from('notas_credito')
+      if (partnerError) {
+        return { success: false, error: `Error creando partner: ${partnerError.message}` };
+      }
+      partnerId = nuevoPartner.id;
+      console.log('✅ [Comision] Partner creado:', partnerId);
+    }
+
+    // 2. Registrar comisión
+    const { data: comision, error: comisionError } = await supabase
+      .from('comisiones_partners')
       .insert({
-        empresa_id: payload.empresa_id,
-        cliente_id: facturaOriginal.cliente_id,
-        factura_referencia_id: facturaOriginal.id,
-        numero_nota: siguienteNumero,
-        tipo_documento: 'e-nota-credito',
-        fecha_emision: new Date().toISOString().split('T')[0],
-        motivo: payload.motivo,
-        tipo_anulacion: payload.tipo_anulacion,
-        subtotal: -facturaOriginal.subtotal,
-        total_iva: -facturaOriginal.total_iva,
-        total: -facturaOriginal.total,
-        moneda: facturaOriginal.moneda,
-        tipo_cambio: facturaOriginal.tipo_cambio,
-        dgi_enviada: false,
-        metadata: {
-          factura_anulada_id: facturaOriginal.id,
-          crm_order_id: payload.order_id,
-          motivo_cancelacion: payload.metadata.reason_detail,
-          refund_transaction: payload.refund?.transaction_id,
-          evento_id: eventoId,
-        },
+        empresa_id: empresaId,
+        partner_id: partnerId,
+        factura_venta_id: facturaId,
+        order_id: orderId,
+        item_codigo: item.codigo,
+        fecha: new Date().toISOString().split('T')[0],
+        subtotal_venta: item.subtotal,
+        comision_porcentaje: item.partner.comision_porcentaje,
+        comision_monto: item.partner.comision_monto,
+        estado_comision: 'pendiente',
+        estado_pago: 'pendiente',
+        descripcion: item.descripcion,
       })
       .select()
       .single();
 
-    if (notaError) {
-      return { success: false, error: `Error creando nota de crédito: ${notaError.message}` };
+    if (comisionError) {
+      return { success: false, error: `Error registrando comisión: ${comisionError.message}` };
     }
 
-    // 5. Copiar items con valores negativos
-    const { data: itemsFactura } = await supabase
-      .from('facturas_venta_items')
-      .select('*')
-      .eq('factura_id', facturaOriginal.id);
-
-    for (const item of itemsFactura || []) {
-      await supabase.from('notas_credito_items').insert({
-        nota_credito_id: notaCredito.id,
-        factura_item_id: item.id,
-        numero_linea: item.numero_linea,
-        descripcion: item.descripcion,
-        cantidad: -item.cantidad,
-        precio_unitario: item.precio_unitario,
-        tasa_iva: item.tasa_iva,
-        monto_iva: -item.monto_iva,
-        subtotal: -item.subtotal,
-        total: -item.total,
-        cuenta_contable_id: item.cuenta_contable_id,
-      });
-    }
-
-    // 6. Actualizar factura original
-    await supabase
-      .from('facturas_venta')
-      .update({
-        estado: 'anulada',
-        nota_credito_id: notaCredito.id,
-        fecha_anulacion: new Date().toISOString(),
-        motivo_anulacion: payload.motivo,
-      })
-      .eq('id', facturaOriginal.id);
+    console.log('✅ [Comision] Registrada:', comision.id);
 
     return {
       success: true,
-      nota_credito_id: notaCredito.id,
-      numero_nota: notaCredito.numero_nota,
-      factura_anulada_id: facturaOriginal.id,
+      comision_id: comision.id,
+      partner_id: partnerId,
     };
   } catch (error) {
+    console.error('❌ [Comision] Error:', error);
     return { success: false, error: error.message };
   }
 }
