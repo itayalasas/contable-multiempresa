@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
 
       // Eliminar movimientos del asiento
       const { error: movError } = await supabase
-        .from('asientos_contables_movimientos')
+        .from('movimientos_contables')
         .delete()
         .eq('asiento_id', factura.asiento_contable_id);
 
