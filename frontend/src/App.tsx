@@ -91,6 +91,14 @@ const Proveedores = React.lazy(() =>
   import('./pages/compras/Proveedores')
 )
 
+const Partners = React.lazy(() =>
+  import('./pages/compras/Partners').then(mod => ({ default: mod.default }))
+)
+
+const ComisionesPartners = React.lazy(() =>
+  import('./pages/compras/ComisionesPartners').then(mod => ({ default: mod.default }))
+)
+
 const PeriodosContables = React.lazy(() =>
   import('./pages/contabilidad/PeriodosContables')
 )
@@ -198,6 +206,8 @@ const AppRoutes: React.FC = () => {
 
             {/* Compras */}
             <Route path="/compras/proveedores" element={<Proveedores />} />
+            <Route path="/compras/partners" element={<Partners />} />
+            <Route path="/compras/comisiones" element={<ComisionesPartners />} />
             <Route path="/compras/facturas" element={<div className="p-6"><h1 className="text-2xl font-bold">Facturas de Compra</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
             <Route path="/compras/notas-credito" element={<div className="p-6"><h1 className="text-2xl font-bold">Notas de Crédito (Compras)</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />
             <Route path="/compras/ordenes" element={<div className="p-6"><h1 className="text-2xl font-bold">Órdenes de Compra</h1><p className="text-gray-600 mt-2">Módulo en desarrollo...</p></div>} />

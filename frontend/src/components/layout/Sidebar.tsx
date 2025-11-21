@@ -64,6 +64,8 @@ const menuItems = [
     icon: ShoppingBag,
     submenu: [
       { title: 'Proveedores', icon: Users, path: '/compras/proveedores' },
+      { title: 'Partners', icon: Users, path: '/compras/partners' },
+      { title: 'Comisiones', icon: DollarSign, path: '/compras/comisiones' },
       { title: 'Facturas de Compra', icon: Receipt, path: '/compras/facturas' },
       { title: 'Notas de Crédito', icon: FileText, path: '/compras/notas-credito' },
       { title: 'Órdenes de Compra', icon: FileBarChart, path: '/compras/ordenes' }

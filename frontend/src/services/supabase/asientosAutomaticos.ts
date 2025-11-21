@@ -280,3 +280,253 @@ function obtenerNombreCuentaPago(tipoPago: string): string {
       return 'Caja';
   }
 }
+
+export async function generarAsientoComision(
+  facturaId: string,
+  empresaId: string,
+  paisId: string,
+  numeroFactura: string,
+  partnerNombre: string,
+  montoComision: number,
+  fechaEmision: string,
+  usuarioId: string
+) {
+  try {
+    console.log('🔄 [AsientosAutomaticos] Generando asiento de comisión para:', partnerNombre);
+
+    const numeroAsiento = await generarNumeroAsiento(empresaId);
+
+    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '5211'),
+        cuenta_codigo: '5211',
+        cuenta_nombre: 'Gastos - Comisiones',
+        debe: montoComision,
+        haber: 0,
+        descripcion: `Comisión ${partnerNombre} - Factura ${numeroFactura}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '2111'),
+        cuenta_codigo: '2111',
+        cuenta_nombre: 'Cuentas por Pagar - Proveedores',
+        debe: 0,
+        haber: montoComision,
+        descripcion: `Comisión ${partnerNombre} - Factura ${numeroFactura}`,
+      },
+    ];
+
+    const asientoData = {
+      empresa_id: empresaId,
+      pais_id: paisId,
+      numero: numeroAsiento,
+      fecha: fechaEmision,
+      descripcion: `Comisión Partner ${partnerNombre} - Factura ${numeroFactura}`,
+      referencia: `COMISION-${numeroFactura}`,
+      estado: 'confirmado',
+      creado_por: usuarioId,
+      documento_soporte: {
+        tipo: 'comision_partner',
+        factura_id: facturaId,
+        numero_factura: numeroFactura,
+        partner: partnerNombre,
+      },
+    };
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert(asientoData)
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientosConLinea = movimientos.map((mov, index) => ({
+      ...mov,
+      asiento_id: asiento.id,
+      numero_linea: index + 1,
+    }));
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientosConLinea);
+
+    if (movimientosError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movimientosError;
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento de comisión generado:', numeroAsiento);
+    return asiento.id;
+  } catch (error: any) {
+    console.error('❌ [AsientosAutomaticos] Error generando asiento de comisión:', error);
+    throw new Error('Error generando asiento de comisión: ' + error.message);
+  }
+}
+
+export async function generarAsientoFacturaCompraComisiones(
+  facturaCompraId: string,
+  empresaId: string,
+  paisId: string,
+  numeroFactura: string,
+  partnerNombre: string,
+  totalComisiones: number,
+  fechaEmision: string,
+  usuarioId: string
+) {
+  try {
+    console.log('🔄 [AsientosAutomaticos] Generando asiento de factura compra comisiones:', numeroFactura);
+
+    const numeroAsiento = await generarNumeroAsiento(empresaId);
+
+    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '5211'),
+        cuenta_codigo: '5211',
+        cuenta_nombre: 'Gastos - Comisiones',
+        debe: totalComisiones,
+        haber: 0,
+        descripcion: `Factura comisiones ${partnerNombre} - ${numeroFactura}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '2111'),
+        cuenta_codigo: '2111',
+        cuenta_nombre: 'Cuentas por Pagar - Proveedores',
+        debe: 0,
+        haber: totalComisiones,
+        descripcion: `Factura comisiones ${partnerNombre} - ${numeroFactura}`,
+      },
+    ];
+
+    const asientoData = {
+      empresa_id: empresaId,
+      pais_id: paisId,
+      numero: numeroAsiento,
+      fecha: fechaEmision,
+      descripcion: `Factura Compra Comisiones ${numeroFactura} - ${partnerNombre}`,
+      referencia: `FC-COMISION-${numeroFactura}`,
+      estado: 'confirmado',
+      creado_por: usuarioId,
+      documento_soporte: {
+        tipo: 'factura_compra_comisiones',
+        id: facturaCompraId,
+        numero: numeroFactura,
+        partner: partnerNombre,
+      },
+    };
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert(asientoData)
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientosConLinea = movimientos.map((mov, index) => ({
+      ...mov,
+      asiento_id: asiento.id,
+      numero_linea: index + 1,
+    }));
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientosConLinea);
+
+    if (movimientosError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movimientosError;
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento de factura compra comisiones generado:', numeroAsiento);
+    return asiento.id;
+  } catch (error: any) {
+    console.error('❌ [AsientosAutomaticos] Error generando asiento:', error);
+    throw new Error('Error generando asiento de factura compra: ' + error.message);
+  }
+}
+
+export async function generarAsientoPagoFacturaCompra(
+  facturaCompraId: string,
+  empresaId: string,
+  paisId: string,
+  numeroFactura: string,
+  proveedorNombre: string,
+  montoPago: number,
+  fechaPago: string,
+  tipoPago: string,
+  usuarioId: string
+) {
+  try {
+    console.log('🔄 [AsientosAutomaticos] Generando asiento de pago factura compra:', numeroFactura);
+
+    const numeroAsiento = await generarNumeroAsiento(empresaId);
+
+    const cuentaPago = obtenerCuentaSegunTipoPago(tipoPago);
+
+    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '2111'),
+        cuenta_codigo: '2111',
+        cuenta_nombre: 'Cuentas por Pagar - Proveedores',
+        debe: montoPago,
+        haber: 0,
+        descripcion: `Pago ${proveedorNombre} - ${numeroFactura}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, cuentaPago),
+        cuenta_codigo: cuentaPago,
+        cuenta_nombre: obtenerNombreCuentaPago(tipoPago),
+        debe: 0,
+        haber: montoPago,
+        descripcion: `Pago ${proveedorNombre} - ${numeroFactura}`,
+      },
+    ];
+
+    const asientoData = {
+      empresa_id: empresaId,
+      pais_id: paisId,
+      numero: numeroAsiento,
+      fecha: fechaPago,
+      descripcion: `Pago Factura Compra ${numeroFactura} - ${proveedorNombre}`,
+      referencia: `PAGO-FC-${numeroFactura}`,
+      estado: 'confirmado',
+      creado_por: usuarioId,
+      documento_soporte: {
+        tipo: 'pago_factura_compra',
+        id: facturaCompraId,
+        numero: numeroFactura,
+        proveedor: proveedorNombre,
+        tipo_pago: tipoPago,
+      },
+    };
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert(asientoData)
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientosConLinea = movimientos.map((mov, index) => ({
+      ...mov,
+      asiento_id: asiento.id,
+      numero_linea: index + 1,
+    }));
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientosConLinea);
+
+    if (movimientosError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movimientosError;
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento de pago factura compra generado:', numeroAsiento);
+    return asiento.id;
+  } catch (error: any) {
+    console.error('❌ [AsientosAutomaticos] Error generando asiento de pago:', error);
+    throw new Error('Error generando asiento de pago: ' + error.message);
+  }
+}
