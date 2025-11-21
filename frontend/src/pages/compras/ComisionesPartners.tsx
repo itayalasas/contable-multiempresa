@@ -3,6 +3,7 @@ import { DollarSign, TrendingUp, Calendar, CheckCircle, Clock, XCircle, FileText
 import { useSesion } from '../../context/SesionContext';
 import { supabase } from '../../config/supabase';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { NotificationModal } from '../../components/common/NotificationModal';
 
 interface Comision {
   id: string;
@@ -48,6 +49,12 @@ export default function ComisionesPartners() {
   const [loading, setLoading] = useState(true);
   const [generandoFacturas, setGenerandoFacturas] = useState(false);
   const [showGenerarModal, setShowGenerarModal] = useState(false);
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'info', title: '', message: '' });
 
   useEffect(() => {
     if (empresaActual) {
@@ -121,37 +128,39 @@ export default function ComisionesPartners() {
     try {
       setGenerandoFacturas(true);
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-      if (!serviceRoleKey) {
-        alert('Error: SERVICE_ROLE_KEY no configurado');
-        return;
-      }
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/generar-facturas-partners`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceRoleKey}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('generar-facturas-partners', {
+        body: {
           empresaId: empresaActual.id,
           forzar: true,
-        }),
+        },
       });
 
-      const result = await response.json();
+      if (error) throw error;
 
-      if (result.success) {
-        alert(`✅ Facturas generadas exitosamente:\n\n- Facturas: ${result.facturas_generadas}\n- Comisiones procesadas: ${result.comisiones_procesadas}`);
+      if (data.success) {
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Facturas Generadas',
+          message: `Se generaron ${data.facturas_generadas} factura(s) para ${data.comisiones_procesadas} comisión(es).`,
+        });
         await cargarDatos();
       } else {
-        alert('Error: ' + (result.error || 'Error desconocido'));
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Error al Generar Facturas',
+          message: data.error || 'Ocurrió un error al generar las facturas.',
+        });
       }
     } catch (error: any) {
       console.error('Error al generar facturas:', error);
-      alert('Error al generar facturas: ' + error.message);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'No se pudieron generar las facturas. Por favor, intente nuevamente.',
+      });
     } finally {
       setGenerandoFacturas(false);
       setShowGenerarModal(false);
@@ -166,11 +175,21 @@ export default function ComisionesPartners() {
 
     if (error) {
       console.error('Error al aprobar factura:', error);
-      alert('Error al aprobar factura: ' + error.message);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo aprobar la factura. Por favor, intente nuevamente.',
+      });
       return;
     }
 
-    alert('✅ Factura aprobada exitosamente');
+    setNotification({
+      show: true,
+      type: 'success',
+      title: 'Factura Aprobada',
+      message: `La factura ${factura.numero_factura} ha sido aprobada exitosamente.`,
+    });
     await cargarDatos();
   };
 
@@ -182,7 +201,12 @@ export default function ComisionesPartners() {
 
     if (updateError) {
       console.error('Error al marcar como pagada:', updateError);
-      alert('Error: ' + updateError.message);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo marcar la factura como pagada. Por favor, intente nuevamente.',
+      });
       return;
     }
 
@@ -198,7 +222,12 @@ export default function ComisionesPartners() {
       console.error('Error al actualizar comisiones:', comisionesError);
     }
 
-    alert('✅ Factura marcada como pagada');
+    setNotification({
+      show: true,
+      type: 'success',
+      title: 'Factura Pagada',
+      message: `La factura ${factura.numero_factura} ha sido marcada como pagada.`,
+    });
     await cargarDatos();
   };
 
@@ -480,6 +509,14 @@ export default function ComisionesPartners() {
           cancelText="Cancelar"
         />
       )}
+
+      <NotificationModal
+        isOpen={notification.show}
+        onClose={() => setNotification({ ...notification, show: false })}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+      />
     </div>
   );
 }

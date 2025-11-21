@@ -12,9 +12,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Obtener el token de autorización del usuario
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No autorizado');
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    // Crear cliente con el token del usuario autenticado
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
 
     console.log('📅 [Job] Iniciando generación de facturas a partners...');
 
@@ -143,13 +155,11 @@ async function procesarEmpresa(supabase: any, empresaId: string, paisId: string,
             .from('proveedores')
             .insert({
               empresa_id: empresaId,
-              pais_id: paisId,
               razon_social: partner.razon_social,
+              tipo_documento: 'RUT',
               numero_documento: partner.documento,
               email: partner.email,
               activo: true,
-              tipo_proveedor: 'servicios',
-              condicion_iva: 'responsable_inscripto',
             })
             .select()
             .single();
@@ -162,7 +172,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, paisId: string,
           .from('facturas_compra')
           .select('numero_factura')
           .eq('empresa_id', empresaId)
-          .order('fecha_creacion', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
@@ -178,7 +188,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, paisId: string,
             numero_factura: siguienteNumero,
             fecha_emision: new Date().toISOString().split('T')[0],
             fecha_vencimiento: calcularFechaVencimiento(30),
-            estado: 'pendiente_aprobacion',
+            estado: 'pendiente',
             subtotal: totalComisiones,
             total_iva: 0,
             total: totalComisiones,
