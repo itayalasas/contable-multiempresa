@@ -201,9 +201,10 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     fecha_vencimiento: fechaVencimiento,
     sucursal: parseInt(config.codigo_sucursal) || 1,
     moneda: factura.moneda || 'UYU',
+    doc_receptor: cliente.numero_documento || '219357800013',
     cliente: {
       tipo_documento: tipoDocumentoDGI,
-      documento: cliente.numero_documento,
+      documento: cliente.numero_documento || '219357800013',
       razon_social: cliente.razon_social,
       sucursal: {
         direccion: cliente.direccion || 'Sin dirección',
@@ -215,6 +216,10 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     items: itemsDGI
   };
 
+  if (tipoCFE === 141) {
+    comprobante.contactoCuentaAjena = cliente.email || 'info@empresa.com.uy';
+  }
+
   if (numeroFactura.includes('-')) {
     comprobante.numero_interno = numeroFactura;
   } else if (serie && numeroFactura) {
@@ -225,9 +230,17 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     comprobante.numero_interno = factura.id;
   }
 
-  if (cliente.nombre_comercial) { comprobante.cliente.nombre_fantasia = cliente.nombre_comercial; }
-  if (cliente.email) { comprobante.cliente.sucursal.emails = [cliente.email]; }
-  if (factura.moneda !== 'UYU' && factura.tipo_cambio) { comprobante.tasa_cambio = parseFloat(factura.tipo_cambio); }
+  if (cliente.nombre_comercial) {
+    comprobante.cliente.nombre_fantasia = cliente.nombre_comercial;
+  }
+
+  if (cliente.email && cliente.email.includes('@') && cliente.email.includes('.')) {
+    comprobante.cliente.sucursal.emails = [cliente.email];
+  }
+
+  if (factura.moneda !== 'UYU' && factura.tipo_cambio) {
+    comprobante.tasa_cambio = parseFloat(factura.tipo_cambio);
+  }
 
   return comprobante;
 }
