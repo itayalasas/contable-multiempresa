@@ -46,8 +46,18 @@ interface SimpleWebhookPayload {
     discount?: number;
     total: number;
     category?: string;
-    partner_id?: string;
-    partner_commission_percentage?: number;
+    partner?: {
+      partner_id: string;
+      name: string;
+      email?: string;
+      phone?: string;
+      document_type?: string;
+      document_number?: string;
+      commission_percentage?: number;
+      commission_default?: number;
+      billing_frequency?: string;
+      billing_day?: number;
+    };
   }>;
   shipping?: any;
   partner?: {
@@ -354,7 +364,7 @@ async function handleOrder(
             item_id: item.item_id,
             sku: item.sku,
             category: item.category,
-            partner_id: item.partner_id,
+            partner_id: item.partner?.partner_id,
           },
         });
 
@@ -366,25 +376,21 @@ async function handleOrder(
       console.log(`✅ [Order] Item ${i + 1} creado`);
 
       // Si tiene partner, procesar comisión
-      if (item.partner_id) {
-        const partnerData = payload.partners?.find(p => p.partner_id === item.partner_id) || payload.partner;
-        
-        if (partnerData) {
-          const comisionResult = await procesarComisionPartner(
-            supabase,
-            payload.empresa_id,
-            empresa.pais_id,
-            factura.id,
-            payload.order.order_id,
-            item,
-            partnerData
-          );
+      if (item.partner) {
+        const comisionResult = await procesarComisionPartner(
+          supabase,
+          payload.empresa_id,
+          empresa.pais_id,
+          factura.id,
+          payload.order.order_id,
+          item,
+          item.partner
+        );
 
-          if (comisionResult.success) {
-            comisionesCreadas.push(comisionResult.comision_id);
-          } else {
-            console.warn('⚠️ [Order] Error en comisión:', comisionResult.error);
-          }
+        if (comisionResult.success) {
+          comisionesCreadas.push(comisionResult.comision_id);
+        } else {
+          console.warn('⚠️ [Order] Error en comisión:', comisionResult.error);
         }
       }
     }
@@ -442,7 +448,7 @@ async function procesarComisionPartner(
           email: partnerData.email,
           telefono: partnerData.phone,
           activo: true,
-          comision_porcentaje_default: partnerData.commission_default || item.partner_commission_percentage || 15,
+          comision_porcentaje_default: partnerData.commission_percentage || partnerData.commission_default || 15,
           facturacion_frecuencia: partnerData.billing_frequency || 'quincenal',
           dia_facturacion: partnerData.billing_day || 15,
         })
@@ -458,7 +464,7 @@ async function procesarComisionPartner(
 
     // 2. Calcular comisión
     const itemSubtotal = item.subtotal || (item.quantity * item.unit_price);
-    const comisionPorcentaje = item.partner_commission_percentage || partnerData.commission_default || 15;
+    const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
     const comisionMonto = itemSubtotal * (comisionPorcentaje / 100);
 
     // 3. Registrar comisión
