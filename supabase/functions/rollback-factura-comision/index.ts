@@ -96,9 +96,9 @@ Deno.serve(async (req: Request) => {
       const { error: updateComisionesError } = await supabase
         .from('comisiones_partners')
         .update({
-          estado: 'pendiente',
+          estado_comision: 'pendiente',
           factura_venta_comision_id: null,
-          fecha_facturacion: null,
+          fecha_facturada: null,
         })
         .eq('factura_venta_comision_id', facturaId);
 
