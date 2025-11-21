@@ -70,6 +70,14 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     const cuentaVentasId = await obtenerCuentaId(supabase, factura.empresa_id, '7011');
     const cuentaIvaId = await obtenerCuentaId(supabase, factura.empresa_id, '2113');
 
+    if (!cuentaCobrarId || !cuentaVentasId || !cuentaIvaId) {
+      console.error('❌ Faltan cuentas contables en el plan de cuentas');
+      console.error(`   - Cuenta 1212 (Cuentas por Cobrar): ${cuentaCobrarId ? 'OK' : 'FALTA'}`);
+      console.error(`   - Cuenta 7011 (Ventas): ${cuentaVentasId ? 'OK' : 'FALTA'}`);
+      console.error(`   - Cuenta 2113 (IVA por Pagar): ${cuentaIvaId ? 'OK' : 'FALTA'}`);
+      return;
+    }
+
     // Usar el usuario Sistema para operaciones automáticas
     const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -173,23 +181,23 @@ async function generarNumeroAsiento(supabase: any, empresaId: string): Promise<s
   }
 }
 
-async function obtenerCuentaId(supabase: any, empresaId: string, codigo: string): Promise<string> {
+async function obtenerCuentaId(supabase: any, empresaId: string, codigo: string): Promise<string | null> {
   try {
     const { data: cuenta } = await supabase
       .from('plan_cuentas')
-      .select('id')
+      .select('id, nombre')
       .eq('empresa_id', empresaId)
       .eq('codigo', codigo)
       .maybeSingle();
 
     if (!cuenta) {
-      console.warn(`⚠️ No se encontró cuenta ${codigo}`);
-      return codigo;
+      console.warn(`⚠️ No se encontró cuenta ${codigo} para empresa ${empresaId}`);
+      return null;
     }
 
     return cuenta.id;
   } catch (error) {
     console.warn(`⚠️ Error buscando cuenta ${codigo}:`, error);
-    return codigo;
+    return null;
   }
 }

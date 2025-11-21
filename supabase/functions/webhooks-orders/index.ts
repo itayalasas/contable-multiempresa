@@ -531,6 +531,14 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
     const cuentaVentasId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '7011');
     const cuentaIvaId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '2113');
 
+    if (!cuentaCobrarId || !cuentaVentasId || !cuentaIvaId) {
+      console.error('❌ [Asiento] Faltan cuentas contables en el plan de cuentas');
+      console.error(`   - Cuenta 1212 (Cuentas por Cobrar): ${cuentaCobrarId ? 'OK' : 'FALTA'}`);
+      console.error(`   - Cuenta 7011 (Ventas): ${cuentaVentasId ? 'OK' : 'FALTA'}`);
+      console.error(`   - Cuenta 2113 (IVA por Pagar): ${cuentaIvaId ? 'OK' : 'FALTA'}`);
+      return;
+    }
+
     const { data: asiento, error: asientoError } = await supabase
       .from('asientos_contables')
       .insert({
@@ -616,13 +624,18 @@ async function generarNumeroAsiento(supabase: any, empresaId: string): Promise<s
   return `ASI-${Date.now().toString().slice(-5)}`;
 }
 
-async function obtenerCuentaIdAsiento(supabase: any, empresaId: string, codigo: string): Promise<string> {
+async function obtenerCuentaIdAsiento(supabase: any, empresaId: string, codigo: string): Promise<string | null> {
   const { data: cuenta } = await supabase
     .from('plan_cuentas')
-    .select('id')
+    .select('id, nombre')
     .eq('empresa_id', empresaId)
     .eq('codigo', codigo)
     .maybeSingle();
 
-  return cuenta?.id || codigo;
+  if (!cuenta) {
+    console.warn(`⚠️ [Asiento] No se encontró cuenta con código ${codigo} para empresa ${empresaId}`);
+    return null;
+  }
+
+  return cuenta.id;
 }
