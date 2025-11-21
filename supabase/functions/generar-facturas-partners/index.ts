@@ -159,7 +159,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
             cliente_id: clienteId,
             numero_factura: siguienteNumero,
             serie: '',
-            tipo_documento: 'e-Factura',
+            tipo_documento: 'e-factura',
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
