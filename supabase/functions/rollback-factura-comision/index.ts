@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
 
     // 4. Revertir comisiones a estado pendiente
     const { data: comisiones, error: comisionesError } = await supabase
-      .from('partners_comisiones')
+      .from('comisiones_partners')
       .select('id')
       .eq('factura_venta_comision_id', facturaId);
 
@@ -94,7 +94,7 @@ Deno.serve(async (req: Request) => {
       console.log(`🔄 [Rollback] Revirtiendo ${comisiones.length} comisiones a pendiente`);
 
       const { error: updateComisionesError } = await supabase
-        .from('partners_comisiones')
+        .from('comisiones_partners')
         .update({
           estado: 'pendiente',
           factura_venta_comision_id: null,
