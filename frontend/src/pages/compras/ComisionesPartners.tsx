@@ -86,7 +86,7 @@ export default function ComisionesPartners() {
       .select(`
         *,
         partners_aliados!inner(razon_social, partner_id_externo),
-        facturas_venta!inner(numero_factura)
+        facturas_venta!comisiones_partners_factura_venta_id_fkey!inner(numero_factura)
       `)
       .eq('empresa_id', empresaActual.id)
       .order('fecha', { ascending: false })
