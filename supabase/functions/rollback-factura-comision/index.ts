@@ -32,12 +32,15 @@ Deno.serve(async (req: Request) => {
       throw new Error('Factura no encontrada');
     }
 
-    // 2. Validar que sea una factura de comisión
-    if (!factura.numero_factura?.startsWith('COM-')) {
-      throw new Error('Solo se pueden hacer rollback de facturas de comisiones (prefijo COM-)');
+    // 2. Validar que sea una factura de comisión (validar por serie)
+    const serie = factura.serie || '';
+    const esFacturaComision = serie === 'COM';
+
+    if (!esFacturaComision) {
+      throw new Error('Solo se pueden hacer rollback de facturas de comisiones (serie COM)');
     }
 
-    console.log('📋 [Rollback] Factura válida:', factura.numero_factura);
+    console.log('📋 [Rollback] Factura válida:', `${serie}-${factura.numero_factura}`);
 
     // 3. Eliminar asiento contable si existe
     if (factura.asiento_contable_id) {
@@ -130,7 +133,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         mensaje: 'Rollback completado exitosamente',
         detalles: {
-          facturaEliminada: factura.numero_factura,
+          facturaEliminada: `${factura.serie}-${factura.numero_factura}`,
           asientoEliminado: !!factura.asiento_contable_id,
           comisionesRevertidas: comisiones?.length || 0,
         },
