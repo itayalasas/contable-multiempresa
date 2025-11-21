@@ -1,9 +1,28 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+};
+
+// Mapeo de tipos de documento a códigos DGI
+const TIPOS_DOCUMENTO_DGI: Record<string, number> = {
+  'CI': 2,
+  'RUT': 3,
+  'PASAPORTE': 4,
+  'DNI': 5,
+  'OTRO': 6,
+};
+
+// Tipos de CFE según DGI
+const TIPOS_CFE: Record<string, number> = {
+  'e-ticket': 101,
+  'e-factura': 111,
+  'factura_exportacion': 121,
+  'nota_credito': 112,
+  'nota_debito': 113,
 };
 
 Deno.serve(async (req: Request) => {
@@ -78,13 +97,26 @@ Deno.serve(async (req: Request) => {
       throw new Error('Cliente no encontrado');
     }
 
-    // 6. Generar XML CFE
-    const xmlCFE = generarXMLCFE(factura, items, cliente, config);
+    // 6. Obtener tipo de documento del cliente
+    let tipoDocumento = 'CI';
+    if (cliente.tipo_documento_id) {
+      const { data: tipoDoc } = await supabase
+        .from('tipo_documento_identidad')
+        .select('codigo')
+        .eq('id', cliente.tipo_documento_id)
+        .maybeSingle();
+      if (tipoDoc) {
+        tipoDocumento = tipoDoc.codigo;
+      }
+    }
 
-    // 7. Enviar a DGI (simulado por ahora)
-    const resultadoDGI = await enviarADGI(xmlCFE, config);
+    // 7. Generar JSON CFE para DGI
+    const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento);
 
-    // 8. Actualizar factura con datos de DGI
+    // 8. Enviar a DGI
+    const resultadoDGI = await enviarADGI(jsonCFE, config);
+
+    // 9. Actualizar factura con datos de DGI
     const { error: updateError } = await supabase
       .from('facturas_venta')
       .update({
@@ -119,64 +151,72 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function generarXMLCFE(factura: any, items: any[], cliente: any, config: any): string {
-  // Simplificado - en producción usar librería XML
-  const fecha = new Date(factura.fecha_emision).toISOString().split('T')[0];
+function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string): any {
+  // Obtener tipo de CFE según el tipo de documento
+  const tipoCFE = TIPOS_CFE[factura.tipo_documento] || 101; // Default: e-ticket
 
-  const itemsXML = items
-    .map(
-      (item, idx) => `
-    <Item>
-      <NroLinDet>${idx + 1}</NroLinDet>
-      <CodItem>${item.codigo || 'SERV'}</CodItem>
-      <NomItem><![CDATA[${item.descripcion}]]></NomItem>
-      <Cantidad>${item.cantidad}</Cantidad>
-      <UniMed>Unidad</UniMed>
-      <PrecioUnitario>${item.precio_unitario}</PrecioUnitario>
-      <MontoItem>${item.total}</MontoItem>
-    </Item>`
-    )
-    .join('');
+  // Mapear tipo de documento a código DGI
+  const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 2; // Default: CI
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<CFE version="1.0">
-  <eFact>
-    <TmstFirma>${new Date().toISOString()}</TmstFirma>
-    <Encabezado>
-      <IdDoc>
-        <TipoCFE>101</TipoCFE>
-        <Serie>${config.codigo_sucursal}</Serie>
-        <Nro>${factura.numero_factura}</Nro>
-        <FchEmis>${fecha}</FchEmis>
-      </IdDoc>
-      <Emisor>
-        <RUCEmisor>${config.rut_emisor}</RUCEmisor>
-        <RznSoc><![CDATA[${config.razon_social}]]></RznSoc>
-        <CdgDGISucur>${config.codigo_sucursal}</CdgDGISucur>
-      </Emisor>
-      <Receptor>
-        <TipoDocRecep>2</TipoDocRecep>
-        <CodPaisRecep>UY</CodPaisRecep>
-        <DocRecep>${cliente.numero_documento}</DocRecep>
-        <RznSocRecep><![CDATA[${cliente.razon_social}]]></RznSocRecep>
-        <DirRecep><![CDATA[${cliente.direccion || ''}]]></DirRecep>
-      </Receptor>
-      <Totales>
-        <MntTotal>${factura.total}</MntTotal>
-      </Totales>
-    </Encabezado>
-    <Detalle>
-      ${itemsXML}
-    </Detalle>
-  </eFact>
-</CFE>`;
+  // Determinar forma de pago (1: Contado, 2: Crédito)
+  const formaPago = factura.estado === 'pagada' ? 1 : 2;
+
+  // Generar items en formato DGI
+  const itemsDGI = items.map((item, index) => ({
+    codigo: item.codigo || `ITEM-${index + 1}`,
+    cantidad: parseFloat(item.cantidad),
+    concepto: item.descripcion,
+    precio: parseFloat(item.precio_unitario),
+    indicador_facturacion: 3, // 3: Producto/Servicio
+    ...(item.tasa_iva && parseFloat(item.tasa_iva) > 0 ? {
+      tasa_iva: parseFloat(item.tasa_iva) * 100 // Convertir 0.22 a 22
+    } : {})
+  }));
+
+  // Construir JSON según formato DGI
+  const jsonCFE = {
+    tipo_comprobante: tipoCFE,
+    numero_interno: factura.numero_factura,
+    forma_pago: formaPago,
+    sucursal: parseInt(config.codigo_sucursal) || 1,
+    moneda: factura.moneda || 'UYU',
+    montos_brutos: parseFloat(factura.subtotal) || 0,
+    cliente: {
+      tipo_documento: tipoDocumentoDGI,
+      documento: cliente.numero_documento,
+      nombre_fantasia: cliente.razon_social,
+      sucursal: {
+        pais: cliente.pais_codigo || 'UY'
+      }
+    },
+    items: itemsDGI
+  };
+
+  // Agregar campos opcionales si existen
+  if (cliente.email) {
+    jsonCFE.cliente.email = cliente.email;
+  }
+  if (cliente.telefono) {
+    jsonCFE.cliente.telefono = cliente.telefono;
+  }
+  if (cliente.direccion) {
+    jsonCFE.cliente.sucursal.direccion = cliente.direccion;
+  }
+  if (cliente.ciudad) {
+    jsonCFE.cliente.sucursal.ciudad = cliente.ciudad;
+  }
+  if (cliente.departamento) {
+    jsonCFE.cliente.sucursal.departamento = cliente.departamento;
+  }
+
+  return jsonCFE;
 }
 
-async function enviarADGI(xmlCFE: string, config: any): Promise<any> {
-  // SIMULADO: En producción conectar con API real de DGI
-  console.log('📤 [DGI] Enviando XML CFE...');
+async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
+  console.log('📤 [DGI] Enviando JSON CFE a DGI...');
+  console.log('📋 [DGI] Payload:', JSON.stringify(jsonCFE, null, 2));
 
-  // Simular delay de red
+  // SIMULADO: En producción conectar con API real de DGI
   await new Promise((resolve) => setTimeout(resolve, 500));
 
   // Generar CAE simulado
@@ -192,18 +232,19 @@ async function enviarADGI(xmlCFE: string, config: any): Promise<any> {
   };
 
   /*
-  // PRODUCCIÓN: Descomentar y configurar
+  // PRODUCCIÓN: Descomentar y configurar cuando tengas la URL de la API DGI
   const response = await fetch(config.dgi_url_webservice, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/xml',
-      'X-API-Key': config.dgi_api_key,
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.dgi_api_key}`,
     },
-    body: xmlCFE,
+    body: JSON.stringify(jsonCFE),
   });
 
   if (!response.ok) {
-    throw new Error(`DGI Error: ${response.statusText}`);
+    const errorText = await response.text();
+    throw new Error(`DGI Error (${response.status}): ${errorText}`);
   }
 
   return await response.json();
