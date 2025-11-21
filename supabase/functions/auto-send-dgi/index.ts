@@ -162,7 +162,10 @@ Deno.serve(async (req: Request) => {
 function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
   let tipoCFE: number;
 
-  if (factura.serie === 'COM') {
+  const numeroFactura = factura.numero_factura || '';
+  const serie = factura.serie || (numeroFactura.includes('-') ? numeroFactura.split('-')[0] : '');
+
+  if (serie === 'COM') {
     tipoCFE = 141;
   } else if (factura.tipo_documento === 'e-ticket') {
     tipoCFE = 101;
@@ -222,10 +225,14 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     items: itemsDGI
   };
 
-  if (factura.serie && factura.numero_factura) {
-    comprobante.numero_interno = `${factura.serie}-${factura.numero_factura}`;
-  } else if (factura.numero_factura) {
-    comprobante.numero_interno = factura.numero_factura;
+  if (numeroFactura.includes('-')) {
+    comprobante.numero_interno = numeroFactura;
+  } else if (serie && numeroFactura) {
+    comprobante.numero_interno = `${serie}-${numeroFactura}`;
+  } else if (numeroFactura) {
+    comprobante.numero_interno = numeroFactura;
+  } else {
+    comprobante.numero_interno = factura.id;
   }
 
   if (cliente.nombre_comercial) {
