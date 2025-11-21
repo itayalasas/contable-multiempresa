@@ -6,69 +6,64 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-Webhook-Secret',
 };
 
-interface WebhookItem {
-  tipo: 'servicio' | 'producto';
-  codigo: string;
-  descripcion: string;
-  cantidad: number;
-  precio_unitario: number;
-  descuento_porcentaje: number;
-  descuento_monto: number;
-  subtotal: number;
-  tasa_iva: number;
-  monto_iva: number;
-  total: number;
-  partner?: {
-    id: string;
-    nombre: string;
-    documento: string;
-    tipo_documento?: string;
-    email: string;
-    telefono?: string;
-    direccion?: string;
-    comision_porcentaje: number;
-    comision_monto: number;
-  };
-}
-
-interface OrderPaidPayloadV2 {
-  event: 'order.paid';
-  version: '2.0';
-  order_id: string;
+interface SimpleWebhookPayload {
+  event: 'order.created' | 'order.paid' | 'order.cancelled' | 'order.updated';
   empresa_id: string;
-  crm_customer_id?: string;
-  customer: {
-    nombre: string;
-    documento: string;
-    tipo_documento?: string;
-    email: string;
-    telefono?: string;
-    direccion?: string;
-  };
-  items: WebhookItem[];
-  totales: {
+  timestamp?: string;
+  order: {
+    order_id: string;
+    order_number?: string;
+    created_at?: string;
+    status?: string;
+    total: number;
     subtotal: number;
-    descuento_total: number;
-    subtotal_con_descuento: number;
-    iva_total: number;
-    total_factura: number;
-    comision_partners_total: number;
-    ganancia_plataforma: number;
-    impuesto_gateway: number;
+    tax?: number;
+    shipping?: number;
+    discount?: number;
+    currency: string;
+    payment_method?: string;
+    payment_status?: string;
   };
-  payment: {
-    method: string;
-    gateway: string;
-    transaction_id: string;
-    paid_at: string;
-    impuesto_gateway_porcentaje: number;
-    impuesto_gateway_monto: number;
-    neto_recibido: number;
+  customer: {
+    customer_id?: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    document_type?: string;
+    document_number?: string;
+    address?: any;
   };
+  items: Array<{
+    item_id?: string;
+    sku?: string;
+    name: string;
+    description?: string;
+    quantity: number;
+    unit_price: number;
+    subtotal?: number;
+    tax_rate?: number;
+    tax_amount?: number;
+    discount?: number;
+    total: number;
+    category?: string;
+    partner_id?: string;
+    partner_commission_percentage?: number;
+  }>;
+  shipping?: any;
+  partner?: {
+    partner_id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    document_type?: string;
+    document_number?: string;
+    commission_default?: number;
+    billing_frequency?: string;
+    billing_day?: number;
+  };
+  partners?: Array<any>;
   metadata?: Record<string, any>;
 }
-
-type WebhookPayload = OrderPaidPayloadV2;
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -82,18 +77,18 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validar webhook secret
+    // Validar webhook secret (opcional)
     const providedSecret = req.headers.get('X-Webhook-Secret');
-    if (providedSecret !== webhookSecret) {
+    if (providedSecret && providedSecret !== webhookSecret) {
       return new Response(
         JSON.stringify({ error: 'Invalid webhook secret' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const payload: WebhookPayload = await req.json();
+    const payload: SimpleWebhookPayload = await req.json();
 
-    console.log('🔔 [Webhook] Recibido:', payload.event, payload.order_id);
+    console.log('🔔 [Webhook] Recibido:', payload.event, payload.order.order_id);
 
     // Registrar el evento
     const { data: evento, error: eventoError } = await supabase
@@ -111,13 +106,13 @@ Deno.serve(async (req: Request) => {
     if (eventoError) {
       console.error('❌ [Webhook] Error registrando evento:', eventoError);
       return new Response(
-        JSON.stringify({ error: 'Error al registrar evento', details: eventoError }),
+        JSON.stringify({ error: 'Error al registrar evento', details: eventoError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Procesar el evento
-    const result = await handleOrderPaid(supabase, payload, evento.id);
+    const result = await handleOrder(supabase, payload, evento.id);
 
     if (result.success) {
       // Marcar evento como procesado
@@ -150,7 +145,7 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ error: result.error }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (error) {
@@ -162,51 +157,104 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function handleOrderPaid(
+async function handleOrder(
   supabase: any,
-  payload: OrderPaidPayloadV2,
+  payload: SimpleWebhookPayload,
   eventoId: string
 ) {
   try {
-    console.log('🔄 [OrderPaid] Procesando orden:', payload.order_id);
+    console.log('🔄 [Order] Procesando orden:', payload.order.order_id);
 
-    // 1. Obtener empresa y país
+    // 1. Verificar si la orden ya fue procesada
+    const { data: ordenExistente } = await supabase
+      .from('facturas_venta')
+      .select('id, numero_factura')
+      .eq('metadata->>order_id', payload.order.order_id)
+      .maybeSingle();
+
+    if (ordenExistente) {
+      console.log('⚠️ [Order] Orden ya procesada:', ordenExistente.id);
+      return {
+        success: true,
+        factura_id: ordenExistente.id,
+        numero_factura: ordenExistente.numero_factura,
+        mensaje: 'Orden ya fue procesada anteriormente',
+      };
+    }
+
+    // 2. Obtener empresa y país
     const { data: empresa } = await supabase
       .from('empresas')
       .select('id, pais_id')
       .eq('id', payload.empresa_id)
-      .single();
+      .maybeSingle();
 
     if (!empresa) {
       return { success: false, error: 'Empresa no encontrada' };
     }
 
-    // 2. Buscar o crear cliente
+    // 3. Buscar o crear cliente
     let clienteId;
-    const { data: clienteExistente } = await supabase
-      .from('clientes')
-      .select('id')
-      .eq('empresa_id', payload.empresa_id)
-      .eq('numero_documento', payload.customer.documento)
-      .maybeSingle();
+    
+    // Buscar por documento si existe
+    if (payload.customer.document_number) {
+      const { data: clienteExistente } = await supabase
+        .from('clientes')
+        .select('id')
+        .eq('empresa_id', payload.empresa_id)
+        .eq('numero_documento', payload.customer.document_number)
+        .maybeSingle();
 
-    if (clienteExistente) {
-      clienteId = clienteExistente.id;
-      console.log('👤 [OrderPaid] Cliente existente:', clienteId);
-    } else {
+      if (clienteExistente) {
+        clienteId = clienteExistente.id;
+        console.log('👤 [Order] Cliente existente:', clienteId);
+      }
+    }
+
+    // Si no existe, crear nuevo cliente
+    if (!clienteId) {
+      const clienteData: any = {
+        empresa_id: payload.empresa_id,
+        pais_id: empresa.pais_id,
+        razon_social: payload.customer.name,
+        email: payload.customer.email,
+        telefono: payload.customer.phone,
+        activo: true,
+      };
+
+      // Agregar documento solo si existe
+      if (payload.customer.document_number) {
+        clienteData.numero_documento = payload.customer.document_number;
+      }
+      if (payload.customer.document_type) {
+        // Buscar tipo_documento_id
+        const { data: tipoDoc } = await supabase
+          .from('tipos_documento')
+          .select('id')
+          .eq('pais_id', empresa.pais_id)
+          .ilike('nombre', payload.customer.document_type)
+          .maybeSingle();
+        
+        if (tipoDoc) {
+          clienteData.tipo_documento_id = tipoDoc.id;
+        }
+      }
+
+      // Agregar dirección si existe
+      if (payload.customer.address) {
+        if (typeof payload.customer.address === 'string') {
+          clienteData.direccion = payload.customer.address;
+        } else {
+          clienteData.direccion = payload.customer.address.street || '';
+          clienteData.ciudad = payload.customer.address.city;
+          clienteData.departamento = payload.customer.address.state;
+          clienteData.codigo_postal = payload.customer.address.zip;
+        }
+      }
+
       const { data: nuevoCliente, error: clienteError } = await supabase
         .from('clientes')
-        .insert({
-          empresa_id: payload.empresa_id,
-          pais_id: empresa.pais_id,
-          razon_social: payload.customer.nombre,
-          numero_documento: payload.customer.documento,
-          tipo_documento: payload.customer.tipo_documento || 'CI',
-          email: payload.customer.email,
-          telefono: payload.customer.telefono,
-          direccion: payload.customer.direccion,
-          activo: true,
-        })
+        .insert(clienteData)
         .select()
         .single();
 
@@ -214,10 +262,10 @@ async function handleOrderPaid(
         return { success: false, error: `Error creando cliente: ${clienteError.message}` };
       }
       clienteId = nuevoCliente.id;
-      console.log('✅ [OrderPaid] Cliente creado:', clienteId);
+      console.log('✅ [Order] Cliente creado:', clienteId);
     }
 
-    // 3. Obtener siguiente número de factura
+    // 4. Obtener siguiente número de factura
     const { data: ultimaFactura } = await supabase
       .from('facturas_venta')
       .select('numero_factura')
@@ -230,9 +278,15 @@ async function handleOrderPaid(
       ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
       : '00000001';
 
-    console.log('📝 [OrderPaid] Número factura:', siguienteNumero);
+    console.log('📝 [Order] Número factura:', siguienteNumero);
 
-    // 4. Crear factura
+    // 5. Calcular totales
+    const subtotal = payload.order.subtotal;
+    const descuento = payload.order.discount || 0;
+    const impuestos = payload.order.tax || 0;
+    const total = payload.order.total;
+
+    // 6. Crear factura
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -241,21 +295,19 @@ async function handleOrderPaid(
         numero_factura: siguienteNumero,
         tipo_documento: 'e-ticket',
         fecha_emision: new Date().toISOString().split('T')[0],
-        estado: 'pagada',
-        subtotal: payload.totales.subtotal_con_descuento.toFixed(2),
-        descuento: payload.totales.descuento_total.toFixed(2),
-        total_iva: payload.totales.iva_total.toFixed(2),
-        total: payload.totales.total_factura.toFixed(2),
-        moneda: 'UYU',
+        estado: payload.order.payment_status === 'paid' ? 'pagada' : 'pendiente',
+        subtotal: subtotal.toFixed(2),
+        descuento: descuento.toFixed(2),
+        total_iva: impuestos.toFixed(2),
+        total: total.toFixed(2),
+        moneda: payload.order.currency || 'UYU',
         tipo_cambio: 1,
         dgi_enviada: false,
         metadata: {
-          order_id: payload.order_id,
-          payment_transaction: payload.payment.transaction_id,
-          payment_method: payload.payment.method,
-          gateway: payload.payment.gateway,
-          gateway_fee: payload.payment.impuesto_gateway_monto,
-          neto_recibido: payload.payment.neto_recibido,
+          order_id: payload.order.order_id,
+          order_number: payload.order.order_number,
+          payment_method: payload.order.payment_method,
+          customer_id: payload.customer.customer_id,
           evento_id: eventoId,
           ...payload.metadata,
         },
@@ -267,13 +319,20 @@ async function handleOrderPaid(
       return { success: false, error: `Error creando factura: ${facturaError.message}` };
     }
 
-    console.log('✅ [OrderPaid] Factura creada:', factura.id);
+    console.log('✅ [Order] Factura creada:', factura.id);
 
-    // 5. Crear items de factura y registrar comisiones
+    // 7. Crear items de factura
     const comisionesCreadas = [];
 
     for (let i = 0; i < payload.items.length; i++) {
       const item = payload.items[i];
+
+      // Calcular valores si no vienen
+      const itemSubtotal = item.subtotal || (item.quantity * item.unit_price);
+      const itemDescuento = item.discount || 0;
+      const itemTaxRate = item.tax_rate || 22;
+      const itemTaxAmount = item.tax_amount || (itemSubtotal - itemDescuento) * (itemTaxRate / 100);
+      const itemTotal = item.total;
 
       // Crear item de factura
       const { error: itemError } = await supabase
@@ -281,49 +340,56 @@ async function handleOrderPaid(
         .insert({
           factura_id: factura.id,
           numero_linea: i + 1,
-          codigo: item.codigo,
-          descripcion: item.descripcion,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario.toFixed(2),
-          descuento_porcentaje: item.descuento_porcentaje,
-          descuento_monto: item.descuento_monto.toFixed(2),
-          tasa_iva: item.tasa_iva,
-          monto_iva: item.monto_iva.toFixed(2),
-          subtotal: item.subtotal.toFixed(2),
-          total: item.total.toFixed(2),
+          codigo: item.sku || item.item_id || `ITEM-${i + 1}`,
+          descripcion: item.description || item.name,
+          cantidad: item.quantity,
+          precio_unitario: item.unit_price.toFixed(2),
+          descuento_porcentaje: itemDescuento > 0 ? ((itemDescuento / itemSubtotal) * 100) : 0,
+          descuento_monto: itemDescuento.toFixed(2),
+          tasa_iva: itemTaxRate,
+          monto_iva: itemTaxAmount.toFixed(2),
+          subtotal: itemSubtotal.toFixed(2),
+          total: itemTotal.toFixed(2),
           metadata: {
-            tipo: item.tipo,
-            partner_id: item.partner?.id,
+            item_id: item.item_id,
+            sku: item.sku,
+            category: item.category,
+            partner_id: item.partner_id,
           },
         });
 
       if (itemError) {
-        console.error('❌ [OrderPaid] Error creando item:', itemError);
+        console.error('❌ [Order] Error creando item:', itemError);
         return { success: false, error: `Error creando item: ${itemError.message}` };
       }
 
-      console.log(`✅ [OrderPaid] Item ${i + 1} creado`);
+      console.log(`✅ [Order] Item ${i + 1} creado`);
 
       // Si tiene partner, procesar comisión
-      if (item.partner) {
-        const comisionResult = await procesarComisionPartner(
-          supabase,
-          payload.empresa_id,
-          empresa.pais_id,
-          factura.id,
-          payload.order_id,
-          item
-        );
+      if (item.partner_id) {
+        const partnerData = payload.partners?.find(p => p.partner_id === item.partner_id) || payload.partner;
+        
+        if (partnerData) {
+          const comisionResult = await procesarComisionPartner(
+            supabase,
+            payload.empresa_id,
+            empresa.pais_id,
+            factura.id,
+            payload.order.order_id,
+            item,
+            partnerData
+          );
 
-        if (comisionResult.success) {
-          comisionesCreadas.push(comisionResult.comision_id);
-        } else {
-          console.warn('⚠️ [OrderPaid] Error en comisión:', comisionResult.error);
+          if (comisionResult.success) {
+            comisionesCreadas.push(comisionResult.comision_id);
+          } else {
+            console.warn('⚠️ [Order] Error en comisión:', comisionResult.error);
+          }
         }
       }
     }
 
-    console.log(`💰 [OrderPaid] Comisiones registradas: ${comisionesCreadas.length}`);
+    console.log(`💰 [Order] Comisiones registradas: ${comisionesCreadas.length}`);
 
     return {
       success: true,
@@ -334,7 +400,7 @@ async function handleOrderPaid(
       comision_ids: comisionesCreadas,
     };
   } catch (error) {
-    console.error('❌ [OrderPaid] Error:', error);
+    console.error('❌ [Order] Error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -345,14 +411,11 @@ async function procesarComisionPartner(
   paisId: string,
   facturaId: string,
   orderId: string,
-  item: WebhookItem
+  item: any,
+  partnerData: any
 ) {
   try {
-    if (!item.partner) {
-      return { success: false, error: 'Item sin partner' };
-    }
-
-    console.log('🤝 [Comision] Procesando partner:', item.partner.id);
+    console.log('🤝 [Comision] Procesando partner:', partnerData.partner_id);
 
     // 1. Buscar o crear partner
     let partnerId;
@@ -360,7 +423,7 @@ async function procesarComisionPartner(
       .from('partners_aliados')
       .select('id')
       .eq('empresa_id', empresaId)
-      .eq('partner_id_externo', item.partner.id)
+      .eq('partner_id_externo', partnerData.partner_id)
       .maybeSingle();
 
     if (partnerExistente) {
@@ -372,17 +435,16 @@ async function procesarComisionPartner(
         .from('partners_aliados')
         .insert({
           empresa_id: empresaId,
-          partner_id_externo: item.partner.id,
-          razon_social: item.partner.nombre,
-          documento: item.partner.documento,
-          tipo_documento: item.partner.tipo_documento || 'RUT',
-          email: item.partner.email,
-          telefono: item.partner.telefono,
-          direccion: item.partner.direccion,
+          partner_id_externo: partnerData.partner_id,
+          razon_social: partnerData.name,
+          documento: partnerData.document_number || '',
+          tipo_documento: partnerData.document_type || 'RUT',
+          email: partnerData.email,
+          telefono: partnerData.phone,
           activo: true,
-          comision_porcentaje_default: item.partner.comision_porcentaje,
-          facturacion_frecuencia: 'quincenal',
-          dia_facturacion: 15,
+          comision_porcentaje_default: partnerData.commission_default || item.partner_commission_percentage || 15,
+          facturacion_frecuencia: partnerData.billing_frequency || 'quincenal',
+          dia_facturacion: partnerData.billing_day || 15,
         })
         .select()
         .single();
@@ -394,7 +456,12 @@ async function procesarComisionPartner(
       console.log('✅ [Comision] Partner creado:', partnerId);
     }
 
-    // 2. Registrar comisión
+    // 2. Calcular comisión
+    const itemSubtotal = item.subtotal || (item.quantity * item.unit_price);
+    const comisionPorcentaje = item.partner_commission_percentage || partnerData.commission_default || 15;
+    const comisionMonto = itemSubtotal * (comisionPorcentaje / 100);
+
+    // 3. Registrar comisión
     const { data: comision, error: comisionError } = await supabase
       .from('comisiones_partners')
       .insert({
@@ -402,14 +469,14 @@ async function procesarComisionPartner(
         partner_id: partnerId,
         factura_venta_id: facturaId,
         order_id: orderId,
-        item_codigo: item.codigo,
+        item_codigo: item.sku || item.item_id,
         fecha: new Date().toISOString().split('T')[0],
-        subtotal_venta: item.subtotal,
-        comision_porcentaje: item.partner.comision_porcentaje,
-        comision_monto: item.partner.comision_monto,
+        subtotal_venta: itemSubtotal,
+        comision_porcentaje: comisionPorcentaje,
+        comision_monto: comisionMonto,
         estado_comision: 'pendiente',
         estado_pago: 'pendiente',
-        descripcion: item.descripcion,
+        descripcion: item.description || item.name,
       })
       .select()
       .single();
