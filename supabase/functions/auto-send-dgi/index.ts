@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: empresa } = await supabase
       .from('empresas')
-      .select('pais_id')
+      .select('pais_id, razon_social, rut, numero_documento')
       .eq('id', factura.empresa_id)
       .maybeSingle();
 
@@ -121,7 +121,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo);
+    const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo, empresa);
     const resultadoDGI = await enviarADGI(jsonCFE, config);
 
     const { error: updateError } = await supabase
@@ -158,18 +158,83 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string): any {
-  let tipoCFE: number = 111;
+function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string, empresa: any): any {
+  const numeroFactura = factura.numero_factura || '';
+  const serie = factura.serie || (numeroFactura.includes('-') ? numeroFactura.split('-')[0] : '');
 
-  if (factura.tipo_documento === 'e-ticket') {
-    tipoCFE = 101;
-  } else if (factura.tipo_documento === 'e-factura') {
-    tipoCFE = 111;
+  const esETicket = serie === 'A' || factura.tipo_documento === 'e-ticket';
+  const esEFactura = serie === 'COM' || factura.tipo_documento === 'e-factura';
+
+  if (esETicket) {
+    return generarETicket(factura, items, cliente, config, tipoDocumento, paisCodigo, empresa);
+  } else if (esEFactura) {
+    return generarEFactura(factura, items, cliente, config, tipoDocumento, paisCodigo, empresa);
   } else {
-    tipoCFE = TIPO_COMPROBANTE_DGI[factura.tipo_documento] || 111;
+    return generarEFactura(factura, items, cliente, config, tipoDocumento, paisCodigo, empresa);
+  }
+}
+
+function generarETicket(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string, empresa: any): any {
+  const formaPago = factura.estado === 'pagada' ? 1 : 2;
+  const fechaEmision = factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString());
+
+  const itemsDGI = items.map((item) => {
+    const itemDGI: any = {
+      cantidad: parseFloat(item.cantidad),
+      concepto: item.descripcion,
+      precio: parseFloat(item.precio_unitario),
+      indicador_facturacion: determinarIndicadorFacturacion(item.tasa_iva),
+    };
+    if (item.codigo) { itemDGI.codigo = item.codigo; }
+
+    if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
+      itemDGI.descuento_tipo = '$';
+      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
+    } else if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
+      itemDGI.descuento_tipo = '%';
+      itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
+    } else {
+      itemDGI.descuento_tipo = '';
+      itemDGI.descuento_cantidad = 0;
+    }
+
+    return itemDGI;
+  });
+
+  const comprobante: any = {
+    tipo_comprobante: 131,
+    numero_interno: factura.id,
+    forma_pago: formaPago,
+    fecha_emision: fechaEmision,
+    sucursal: parseInt(config.codigo_sucursal) || 1,
+    moneda: factura.moneda || 'UYU',
+    montos_brutos: 1,
+    cliente: '-',
+    items: itemsDGI,
+    complementoFiscal: {
+      nombre: empresa?.razon_social || 'DA VINCI',
+      tipo_documento: 2,
+      documento: empresa?.rut || empresa?.numero_documento || '210980330017',
+      pais: paisCodigo
+    }
+  };
+
+  if (factura.numero_orden || factura.orden_externa_id) {
+    comprobante.numero_orden = factura.numero_orden || factura.orden_externa_id;
   }
 
-  const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 3;
+  if (factura.lugar_entrega) {
+    comprobante.lugar_entrega = factura.lugar_entrega;
+  }
+
+  if (factura.adenda || factura.orden_externa_id) {
+    comprobante.adenda = factura.adenda || `Orden DC-${factura.orden_externa_id}`;
+  }
+
+  return comprobante;
+}
+
+function generarEFactura(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string, empresa: any): any {
   const formaPago = factura.estado === 'pagada' ? 1 : 2;
   const fechaVencimiento = factura.fecha_vencimiento ? formatearFechaDGI(factura.fecha_vencimiento) : formatearFechaDGI(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
 
@@ -191,15 +256,17 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
     return itemDGI;
   });
 
+  const tipoDocumentoDGI = TIPOS_DOCUMENTO_DGI[tipoDocumento] || 2;
+
   const comprobante: any = {
-    tipo_comprobante: tipoCFE,
+    tipo_comprobante: 141,
     forma_pago: formaPago,
     fecha_vencimiento: fechaVencimiento,
     sucursal: parseInt(config.codigo_sucursal) || 1,
     moneda: factura.moneda || 'UYU',
     cliente: {
       tipo_documento: tipoDocumentoDGI,
-      documento: cliente.numero_documento || '219357800013',
+      documento: cliente.numero_documento || '214987440015',
       razon_social: cliente.razon_social,
       sucursal: {
         direccion: cliente.direccion || 'Sin dirección',
@@ -208,11 +275,21 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
         pais: paisCodigo,
       }
     },
-    items: itemsDGI
+    items: itemsDGI,
+    complementoFiscal: {
+      nombre: empresa?.razon_social || 'DA VINCI',
+      tipo_documento: 2,
+      documento: empresa?.rut || empresa?.numero_documento || '210980330017',
+      pais: paisCodigo
+    }
   };
 
   if (cliente.nombre_comercial) {
     comprobante.cliente.nombre_fantasia = cliente.nombre_comercial;
+  }
+
+  if (factura.adenda || factura.orden_externa_id) {
+    comprobante.adenda = factura.adenda || `Orden DC-${factura.orden_externa_id}`;
   }
 
   if (factura.moneda !== 'UYU' && factura.tipo_cambio) {
