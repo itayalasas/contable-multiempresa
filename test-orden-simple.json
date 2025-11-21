@@ -1,0 +1,88 @@
+{
+  "event": "order.created",
+  "timestamp": "2025-11-21T14:30:00Z",
+  "order": {
+    "order_id": "DOG-2025-TEST-001",
+    "order_number": "ORD-TEST-001",
+    "created_at": "2025-11-21T14:30:00Z",
+    "status": "completed",
+    "total": 1830.00,
+    "subtotal": 1500.00,
+    "tax": 330.00,
+    "shipping": 0,
+    "currency": "UYU",
+    "payment_method": "credit_card",
+    "payment_status": "paid"
+  },
+  "customer": {
+    "customer_id": "CUST-TEST-001",
+    "name": "Cliente de Prueba",
+    "email": "prueba@dogcatify.com",
+    "phone": "+598 99 123 456",
+    "document_type": "CI",
+    "document_number": "12345678",
+    "address": {
+      "street": "Av. 18 de Julio 1234",
+      "city": "Montevideo",
+      "state": "Montevideo",
+      "zip": "11200",
+      "country": "UY"
+    }
+  },
+  "items": [
+    {
+      "item_id": "ITEM-TEST-001",
+      "sku": "COLLAR-PERRO-M",
+      "name": "Collar para Perro Mediano",
+      "description": "Collar ajustable de nylon para perros medianos",
+      "quantity": 2,
+      "unit_price": 500.00,
+      "subtotal": 1000.00,
+      "tax_rate": 22.00,
+      "tax_amount": 220.00,
+      "total": 1220.00,
+      "category": "Accesorios",
+      "partner_id": "PARTNER-VET-CENTRO",
+      "partner_commission_percentage": 15.00
+    },
+    {
+      "item_id": "ITEM-TEST-002",
+      "sku": "ALIMENTO-GATO-2KG",
+      "name": "Alimento Premium para Gatos 2kg",
+      "description": "Alimento balanceado premium para gatos adultos",
+      "quantity": 1,
+      "unit_price": 500.00,
+      "subtotal": 500.00,
+      "tax_rate": 22.00,
+      "tax_amount": 110.00,
+      "total": 610.00,
+      "category": "Alimentos",
+      "partner_id": "PARTNER-VET-CENTRO",
+      "partner_commission_percentage": 15.00
+    }
+  ],
+  "shipping": {
+    "method": "pickup",
+    "cost": 0
+  },
+  "partner": {
+    "partner_id": "PARTNER-VET-CENTRO",
+    "name": "Veterinaria Centro",
+    "email": "admin@vetcentro.com.uy",
+    "phone": "+598 2 123 4567",
+    "document_type": "RUT",
+    "document_number": "217654320018",
+    "commission_default": 15.00,
+    "billing_frequency": "quincenal",
+    "billing_day": 15,
+    "bank_account": "001234567890",
+    "bank_name": "BROU",
+    "account_type": "corriente"
+  },
+  "metadata": {
+    "source": "dogcatify_test",
+    "channel": "api_test",
+    "notes": "Orden de prueba simple con partner",
+    "test_mode": true
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "event": "order.created",
+  "timestamp": "2025-11-21T15:00:00Z",
+  "order": {
+    "order_id": "DOG-2025-TEST-002",
+    "order_number": "ORD-TEST-002",
+    "created_at": "2025-11-21T15:00:00Z",
+    "status": "completed",
+    "total": 610.00,
+    "subtotal": 500.00,
+    "tax": 110.00,
+    "shipping": 0,
+    "currency": "UYU",
+    "payment_method": "debit_card",
+    "payment_status": "paid"
+  },
+  "customer": {
+    "customer_id": "CUST-TEST-002",
+    "name": "María González",
+    "email": "maria.gonzalez@example.com",
+    "phone": "+598 94 876 543",
+    "document_type": "CI",
+    "document_number": "87654321",
+    "address": {
+      "street": "21 de Setiembre 2890",
+      "city": "Montevideo",
+      "state": "Montevideo",
+      "zip": "11600",
+      "country": "UY"
+    }
+  },
+  "items": [
+    {
+      "item_id": "ITEM-TEST-003",
+      "sku": "JUGUETE-PERRO-001",
+      "name": "Juguete Interactivo para Perros",
+      "description": "Juguete de goma resistente con sonido",
+      "quantity": 1,
+      "unit_price": 500.00,
+      "subtotal": 500.00,
+      "tax_rate": 22.00,
+      "tax_amount": 110.00,
+      "total": 610.00,
+      "category": "Juguetes"
+    }
+  ],
+  "shipping": {
+    "method": "pickup",
+    "cost": 0
+  },
+  "metadata": {
+    "source": "dogcatify_mobile_app",
+    "channel": "mobile",
+    "notes": "Venta directa sin partner - Retiro en tienda",
+    "test_mode": true
+  }
+}

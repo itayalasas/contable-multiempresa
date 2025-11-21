@@ -1,0 +1,107 @@
+{
+  "event": "order.created",
+  "timestamp": "2025-11-21T16:00:00Z",
+  "order": {
+    "order_id": "DOG-2025-TEST-003",
+    "order_number": "ORD-TEST-003",
+    "created_at": "2025-11-21T16:00:00Z",
+    "status": "completed",
+    "total": 3660.00,
+    "subtotal": 3000.00,
+    "tax": 660.00,
+    "shipping": 50.00,
+    "currency": "UYU",
+    "payment_method": "credit_card",
+    "payment_status": "paid"
+  },
+  "customer": {
+    "customer_id": "CUST-TEST-003",
+    "name": "Refugio Patitas Felices",
+    "email": "contacto@patitasfelices.org",
+    "phone": "+598 99 888 777",
+    "document_type": "RUT",
+    "document_number": "215678901234",
+    "address": {
+      "street": "Ruta 8 Km 28",
+      "city": "Canelones",
+      "state": "Canelones",
+      "zip": "90100",
+      "country": "UY"
+    }
+  },
+  "items": [
+    {
+      "item_id": "ITEM-TEST-004",
+      "sku": "ALIMENTO-PERRO-15KG",
+      "name": "Alimento para Perros 15kg",
+      "description": "Alimento balanceado para perros adultos",
+      "quantity": 3,
+      "unit_price": 650.00,
+      "subtotal": 1950.00,
+      "tax_rate": 22.00,
+      "tax_amount": 429.00,
+      "total": 2379.00,
+      "category": "Alimentos",
+      "partner_id": "PARTNER-AGROVETERINARIA",
+      "partner_commission_percentage": 12.00
+    },
+    {
+      "item_id": "ITEM-TEST-005",
+      "sku": "CAMA-PERRO-L",
+      "name": "Cama para Perro Grande",
+      "description": "Cama ortopédica lavable",
+      "quantity": 2,
+      "unit_price": 525.00,
+      "subtotal": 1050.00,
+      "tax_rate": 22.00,
+      "tax_amount": 231.00,
+      "total": 1281.00,
+      "category": "Accesorios",
+      "partner_id": "PARTNER-PETSHOP-NORTE",
+      "partner_commission_percentage": 18.00
+    }
+  ],
+  "shipping": {
+    "method": "express",
+    "carrier": "UES",
+    "tracking_number": "UES987654321UY",
+    "cost": 50.00
+  },
+  "partners": [
+    {
+      "partner_id": "PARTNER-AGROVETERINARIA",
+      "name": "Agroveterinaria del Este",
+      "email": "ventas@agrovet.com.uy",
+      "phone": "+598 2 345 6789",
+      "document_type": "RUT",
+      "document_number": "214567890123",
+      "commission_default": 12.00,
+      "billing_frequency": "mensual",
+      "billing_day": 1,
+      "bank_account": "002345678901",
+      "bank_name": "Santander",
+      "account_type": "corriente"
+    },
+    {
+      "partner_id": "PARTNER-PETSHOP-NORTE",
+      "name": "Pet Shop Norte",
+      "email": "info@petshopnorte.com",
+      "phone": "+598 2 987 6543",
+      "document_type": "RUT",
+      "document_number": "213456789012",
+      "commission_default": 18.00,
+      "billing_frequency": "quincenal",
+      "billing_day": 15,
+      "bank_account": "003456789012",
+      "bank_name": "BROU",
+      "account_type": "caja_ahorro"
+    }
+  ],
+  "metadata": {
+    "source": "dogcatify_web",
+    "channel": "b2b",
+    "notes": "Cliente institucional - Refugio de animales - Múltiples partners",
+    "test_mode": true,
+    "discount_applied": false
+  }
+}
