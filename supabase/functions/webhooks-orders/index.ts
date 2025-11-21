@@ -330,8 +330,8 @@ async function handleOrder(
       // Calcular valores si no vienen
       const itemSubtotal = item.subtotal || (item.quantity * item.unit_price);
       const itemDescuento = item.discount || 0;
-      const itemTaxRate = item.tax_rate || 22;
-      const itemTaxAmount = item.tax_amount || (itemSubtotal - itemDescuento) * (itemTaxRate / 100);
+      const itemTaxRate = item.tax_rate || 0.22; // Guardar como decimal 0.22 (22%)
+      const itemTaxAmount = item.tax_amount || (itemSubtotal - itemDescuento) * itemTaxRate;
       const itemTotal = item.total;
 
       // Crear item de factura
@@ -344,9 +344,9 @@ async function handleOrder(
           descripcion: item.description || item.name,
           cantidad: item.quantity,
           precio_unitario: item.unit_price.toFixed(2),
-          descuento_porcentaje: itemDescuento > 0 ? ((itemDescuento / itemSubtotal) * 100) : 0,
+          descuento_porcentaje: itemDescuento > 0 ? ((itemDescuento / itemSubtotal) * 100).toFixed(2) : 0,
           descuento_monto: itemDescuento.toFixed(2),
-          tasa_iva: itemTaxRate,
+          tasa_iva: itemTaxRate.toFixed(4),
           monto_iva: itemTaxAmount.toFixed(2),
           subtotal: itemSubtotal.toFixed(2),
           total: itemTotal.toFixed(2),
