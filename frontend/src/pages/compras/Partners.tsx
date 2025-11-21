@@ -40,6 +40,7 @@ export default function Partners() {
   const [comisionesResumen, setComisionesResumen] = useState<Record<string, ComisionResumen>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [partnerSeleccionado, setPartnerSeleccionado] = useState<Partner | null>(null);
@@ -82,10 +83,14 @@ export default function Partners() {
 
     if (error) {
       console.error('Error al cargar partners:', error);
+      if (error.code === 'PGRST205') {
+        setError('Las tablas de partners están siendo inicializadas. Por favor espera 1-2 minutos y recarga la página.');
+      }
       return;
     }
 
     setPartners(data || []);
+    setError(null);
   };
 
   const cargarComisionesResumen = async () => {
@@ -208,6 +213,48 @@ export default function Partners() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Partners y Aliados</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Gestiona tus partners, comisiones y facturación
+            </p>
+          </div>
+        </div>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <Clock className="w-8 h-8 text-yellow-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-yellow-900 mb-2">Sistema Inicializando</h3>
+              <p className="text-yellow-800 mb-4">{error}</p>
+              <p className="text-sm text-yellow-700 mb-4">
+                Las tablas de partners y comisiones han sido creadas recientemente y el caché de Supabase necesita actualizarse.
+              </p>
+              <div className="space-y-2 text-sm text-yellow-800">
+                <p><strong>Opciones:</strong></p>
+                <ol className="list-decimal list-inside space-y-1 ml-4">
+                  <li>Espera 1-2 minutos y recarga esta página (F5)</li>
+                  <li>O ve al Dashboard de Supabase → Settings → API → "Reload Schema Cache"</li>
+                </ol>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+              >
+                Recargar Página Ahora
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
