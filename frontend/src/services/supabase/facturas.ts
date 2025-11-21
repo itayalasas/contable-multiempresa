@@ -336,22 +336,35 @@ export async function enviarFacturaDGI(facturaId: string) {
   }
 
   console.log('📤 [enviarFacturaDGI] Invocando Edge Function auto-send-dgi...');
-  const { data, error } = await supabase.functions.invoke('auto-send-dgi', {
-    body: { facturaId }
-  });
 
-  if (error) {
-    console.error('❌ [enviarFacturaDGI] Error:', error);
-    throw new Error(error.message || 'Error al enviar factura a DGI');
+  try {
+    const { data, error } = await supabase.functions.invoke('auto-send-dgi', {
+      body: { facturaId }
+    });
+
+    console.log('📥 [enviarFacturaDGI] Respuesta recibida:', { data, error });
+
+    if (error) {
+      console.error('❌ [enviarFacturaDGI] Error de función:', error);
+      throw new Error(error.message || 'Error al invocar función de envío a DGI');
+    }
+
+    if (!data) {
+      console.error('❌ [enviarFacturaDGI] Sin datos en respuesta');
+      throw new Error('No se recibió respuesta de la función de envío');
+    }
+
+    if (!data.success) {
+      console.error('❌ [enviarFacturaDGI] Respuesta fallida:', data);
+      throw new Error(data.error || 'Error desconocido al enviar factura a DGI');
+    }
+
+    console.log('✅ [enviarFacturaDGI] Factura enviada exitosamente:', data);
+    return obtenerFacturaPorId(facturaId);
+  } catch (err: any) {
+    console.error('❌ [enviarFacturaDGI] Error capturado:', err);
+    throw err;
   }
-
-  if (!data || !data.success) {
-    console.error('❌ [enviarFacturaDGI] Respuesta fallida:', data);
-    throw new Error(data?.error || 'Error desconocido al enviar factura a DGI');
-  }
-
-  console.log('✅ [enviarFacturaDGI] Factura enviada exitosamente:', data);
-  return obtenerFacturaPorId(facturaId);
 }
 
 export async function obtenerEstadisticasFacturas(empresaId: string) {
