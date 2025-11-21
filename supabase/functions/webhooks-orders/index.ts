@@ -275,11 +275,13 @@ async function handleOrder(
       console.log('✅ [Order] Cliente creado:', clienteId);
     }
 
-    // 4. Obtener siguiente número de factura
+    // 4. Obtener siguiente número de factura (serie A por defecto)
+    const serie = 'A';
     const { data: ultimaFactura } = await supabase
       .from('facturas_venta')
       .select('numero_factura')
       .eq('empresa_id', payload.empresa_id)
+      .eq('serie', serie)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -288,7 +290,7 @@ async function handleOrder(
       ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
       : '00000001';
 
-    console.log('📝 [Order] Número factura:', siguienteNumero);
+    console.log('📝 [Order] Número factura:', `${serie}-${siguienteNumero}`);
 
     // 5. Calcular totales
     const subtotal = payload.order.subtotal;
@@ -303,6 +305,7 @@ async function handleOrder(
         empresa_id: payload.empresa_id,
         cliente_id: clienteId,
         numero_factura: siguienteNumero,
+        serie: serie,
         tipo_documento: 'e-ticket',
         fecha_emision: new Date().toISOString().split('T')[0],
         estado: payload.order.payment_status === 'paid' ? 'pagada' : 'pendiente',
