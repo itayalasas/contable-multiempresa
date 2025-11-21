@@ -523,6 +523,19 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
 
     const clienteNombre = cliente?.razon_social || 'Cliente';
 
+    // Buscar cualquier usuario activo para asignar como creador
+    const { data: usuario } = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('activo', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (!usuario) {
+      console.warn('⚠️ No hay usuarios activos, no se puede crear asiento');
+      return;
+    }
+
     const numeroAsiento = await generarNumeroAsiento(supabase, factura.empresa_id);
     const cuentaCobrarId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '1212');
     const cuentaVentasId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '7011');
@@ -538,7 +551,7 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
         descripcion: `Factura de Venta ${factura.numero_factura} - ${clienteNombre}`,
         referencia: `FACT-${factura.numero_factura}`,
         estado: 'confirmado',
-        creado_por: 'sistema',
+        creado_por: usuario.id,
         documento_soporte: {
           tipo: 'factura_venta',
           id: factura.id,
