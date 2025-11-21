@@ -292,11 +292,14 @@ async function handleOrder(
 
     console.log('📝 [Order] Número factura:', `${serie}-${siguienteNumero}`);
 
-    // 5. Calcular totales
-    const subtotal = payload.order.subtotal;
-    const descuento = payload.order.discount || 0;
-    const impuestos = payload.order.tax || 0;
-    const total = payload.order.total;
+    // 5. Calcular totales (convertir de centavos a unidades si es necesario)
+    const esEnCentavos = payload.order.total > 1000;
+    const divisor = esEnCentavos ? 100 : 1;
+
+    const subtotal = (payload.order.subtotal || 0) / divisor;
+    const descuento = (payload.order.discount || 0) / divisor;
+    const impuestos = (payload.order.tax || 0) / divisor;
+    const total = (payload.order.total || 0) / divisor;
 
     // 6. Crear factura
     const { data: factura, error: facturaError } = await supabase
@@ -347,12 +350,13 @@ async function handleOrder(
     for (let i = 0; i < payload.items.length; i++) {
       const item = payload.items[i];
 
-      // Calcular valores si no vienen
-      const itemSubtotal = item.subtotal || (item.quantity * item.unit_price);
-      const itemDescuento = item.discount || 0;
+      // Calcular valores (convertir de centavos si es necesario)
+      const itemUnitPrice = (item.unit_price || 0) / divisor;
+      const itemSubtotal = item.subtotal ? item.subtotal / divisor : (item.quantity * itemUnitPrice);
+      const itemDescuento = (item.discount || 0) / divisor;
       const itemTaxRate = item.tax_rate || 0.22; // Guardar como decimal 0.22 (22%)
-      const itemTaxAmount = item.tax_amount || (itemSubtotal - itemDescuento) * itemTaxRate;
-      const itemTotal = item.total;
+      const itemTaxAmount = item.tax_amount ? item.tax_amount / divisor : (itemSubtotal - itemDescuento) * itemTaxRate;
+      const itemTotal = (item.total || 0) / divisor;
 
       // Crear item de factura
       const { error: itemError } = await supabase
@@ -363,7 +367,7 @@ async function handleOrder(
           codigo: item.sku || item.item_id || `ITEM-${i + 1}`,
           descripcion: item.description || item.name,
           cantidad: item.quantity,
-          precio_unitario: item.unit_price.toFixed(2),
+          precio_unitario: itemUnitPrice.toFixed(2),
           descuento_porcentaje: itemDescuento > 0 ? ((itemDescuento / itemSubtotal) * 100).toFixed(2) : 0,
           descuento_monto: itemDescuento.toFixed(2),
           tasa_iva: itemTaxRate.toFixed(4),
@@ -472,8 +476,10 @@ async function procesarComisionPartner(
       console.log('✅ [Comision] Partner creado:', partnerId);
     }
 
-    // 2. Calcular comisión
-    const itemSubtotal = item.subtotal || (item.quantity * item.unit_price);
+    // 2. Calcular comisión (ya debe venir en unidades correctas desde handleOrder)
+    const esEnCentavos = item.total > 1000;
+    const divisor = esEnCentavos ? 100 : 1;
+    const itemSubtotal = (item.subtotal || (item.quantity * item.unit_price)) / divisor;
     const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
     const comisionMonto = itemSubtotal * (comisionPorcentaje / 100);
 
