@@ -196,7 +196,7 @@ export const periodosContablesService = {
       throw new Error('El periodo ya está cerrado');
     }
 
-    const { data: asientos, error: asientosError } = await supabase
+    const { data: asientosNoConfirmados, error: asientosError } = await supabase
       .from('asientos_contables')
       .select('id')
       .eq('empresa_id', periodo.empresa_id)
@@ -206,23 +206,22 @@ export const periodosContablesService = {
 
     if (asientosError) throw asientosError;
 
-    if (asientos && asientos.length > 0) {
-      throw new Error(`Hay ${asientos.length} asiento(s) no confirmado(s) en este periodo`);
+    if (asientosNoConfirmados && asientosNoConfirmados.length > 0) {
+      throw new Error(`Hay ${asientosNoConfirmados.length} asiento(s) no confirmado(s) en este periodo`);
     }
+
+    const { data: asientosConfirmados } = await supabase
+      .from('asientos_contables')
+      .select('id')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+      .eq('estado', 'confirmado');
 
     const { data: movimientos } = await supabase
       .from('movimientos_contables')
       .select('debito, credito')
-      .in('asiento_id',
-        (await supabase
-          .from('asientos_contables')
-          .select('id')
-          .eq('empresa_id', periodo.empresa_id)
-          .gte('fecha', periodo.fecha_inicio)
-          .lte('fecha', periodo.fecha_fin)
-          .eq('estado', 'confirmado')
-        ).data?.map(a => a.id) || []
-      );
+      .in('asiento_id', asientosConfirmados?.map(a => a.id) || []);
 
     let totalDebitos = 0;
     let totalCreditos = 0;
@@ -234,7 +233,7 @@ export const periodosContablesService = {
       });
     }
 
-    const cantidadAsientos = asientos ? asientos.length : 0;
+    const cantidadAsientos = asientosConfirmados ? asientosConfirmados.length : 0;
 
     const { error: updateError } = await supabase
       .from('periodos_contables')

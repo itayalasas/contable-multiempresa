@@ -44,6 +44,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
   const [motivo, setMotivo] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [showAjusteInfo, setShowAjusteInfo] = useState<string | null>(null);
+  const [cantidadAsientos, setCantidadAsientos] = useState(0);
 
   useEffect(() => {
     if (currentStep === 'validacion') {
@@ -62,6 +63,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         periodo.fecha_fin
       );
 
+      setCantidadAsientos(asientos.length);
       const asientosBorrador = asientos.filter(a => a.estado === 'borrador').length;
 
       let asientosDescuadrados = 0;
@@ -126,6 +128,13 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
   const handleCerrar = async () => {
     if (!usuario?.id) return;
 
+    if (!motivo || motivo.trim() === '') {
+      if (onError) {
+        onError('El motivo del cierre es obligatorio');
+      }
+      return;
+    }
+
     setLoading(true);
     try {
       const { periodosContablesService } = await import('../../services/supabase/periodosContables');
@@ -133,7 +142,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
       await periodosContablesService.cerrarPeriodo(
         periodo.id,
         usuario.id,
-        motivo || 'Cierre mensual regular',
+        motivo,
         observaciones || undefined
       );
 
@@ -349,7 +358,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
           </div>
           <div className="flex justify-between">
             <dt className="text-sm font-medium text-gray-700">Asientos:</dt>
-            <dd className="text-sm text-gray-900">{periodo.cantidad_asientos}</dd>
+            <dd className="text-sm text-gray-900">{cantidadAsientos}</dd>
           </div>
         </dl>
       </div>
@@ -357,15 +366,21 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Motivo del Cierre
+            Motivo del Cierre <span className="text-red-600">*</span>
           </label>
           <input
             type="text"
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
             placeholder="Ej: Cierre mensual regular"
+            required
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          {!motivo && (
+            <p className="mt-1 text-xs text-gray-500">
+              El motivo es obligatorio para cerrar el período
+            </p>
+          )}
         </div>
 
         <div>
@@ -652,8 +667,8 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
             {currentStep === 'confirmar' && (
               <button
                 onClick={handleCerrar}
-                disabled={loading}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                disabled={loading || !motivo || motivo.trim() === ''}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>
