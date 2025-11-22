@@ -43,6 +43,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
   const [motivo, setMotivo] = useState('');
   const [observaciones, setObservaciones] = useState('');
+  const [showAjusteInfo, setShowAjusteInfo] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentStep === 'validacion') {
@@ -252,75 +253,69 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
       </div>
 
       <div className="grid gap-3">
-        <a
-          href="/contabilidad/asientos-contables"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 text-left transition-colors"
+        <button
+          onClick={() => setShowAjusteInfo('depreciacion')}
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 text-left transition-colors"
         >
           <Calculator className="w-5 h-5 text-blue-600" />
           <div className="flex-1">
             <p className="font-medium text-gray-900">Depreciación de Activos</p>
             <p className="text-sm text-gray-600">Registrar depreciación mensual de activos fijos</p>
           </div>
-          <span className="text-xs text-gray-500">Abrir →</span>
-        </a>
+          <span className="text-xs text-blue-600 font-medium">Ver guía →</span>
+        </button>
 
-        <a
-          href="/contabilidad/asientos-contables"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-orange-300 text-left transition-colors"
+        <button
+          onClick={() => setShowAjusteInfo('provisiones')}
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 text-left transition-colors"
         >
           <FileText className="w-5 h-5 text-orange-600" />
           <div className="flex-1">
             <p className="font-medium text-gray-900">Provisiones</p>
             <p className="text-sm text-gray-600">Provisión de cuentas incobrables, vacaciones, etc.</p>
           </div>
-          <span className="text-xs text-gray-500">Abrir →</span>
-        </a>
+          <span className="text-xs text-orange-600 font-medium">Ver guía →</span>
+        </button>
 
-        <a
-          href="/contabilidad/asientos-contables"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-green-300 text-left transition-colors"
+        <button
+          onClick={() => setShowAjusteInfo('inventario')}
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 text-left transition-colors"
         >
           <TrendingUp className="w-5 h-5 text-green-600" />
           <div className="flex-1">
             <p className="font-medium text-gray-900">Ajuste de Inventario</p>
             <p className="text-sm text-gray-600">Ajustar inventario por diferencias físicas</p>
           </div>
-          <span className="text-xs text-gray-500">Abrir →</span>
-        </a>
+          <span className="text-xs text-green-600 font-medium">Ver guía →</span>
+        </button>
 
-        <a
-          href="/contabilidad/asientos-contables"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-purple-300 text-left transition-colors"
+        <button
+          onClick={() => setShowAjusteInfo('devengamientos')}
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-300 text-left transition-colors"
         >
           <Plus className="w-5 h-5 text-purple-600" />
           <div className="flex-1">
             <p className="font-medium text-gray-900">Devengamientos</p>
             <p className="text-sm text-gray-600">Gastos e ingresos devengados del período</p>
           </div>
-          <span className="text-xs text-gray-500">Abrir →</span>
-        </a>
+          <span className="text-xs text-purple-600 font-medium">Ver guía →</span>
+        </button>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
           <div className="flex-1">
-            <h4 className="font-semibold text-blue-900 mb-1">Información Importante</h4>
-            <p className="text-sm text-blue-700 mb-2">
-              Los asientos de ajuste deben crearse antes de cerrar el período. Una vez cerrado,
-              no podrás crear nuevos asientos sin reabrir el período.
-            </p>
-            <p className="text-sm text-blue-700">
-              <strong>Nota:</strong> Los enlaces se abren en nueva pestaña para que puedas crear los asientos
-              sin perder tu progreso en este wizard. Cuando termines, regresa aquí para continuar.
+            <h4 className="font-semibold text-blue-900 mb-2">¿Cómo Funciona?</h4>
+            <ol className="text-sm text-blue-700 space-y-2 list-decimal list-inside">
+              <li><strong>Haz clic en "Ver guía"</strong> de cualquier tipo de ajuste</li>
+              <li><strong>Lee el ejemplo práctico</strong> con cálculos y cuentas a usar</li>
+              <li><strong>Clic en "Ir a Crear Asiento"</strong> (se abre en nueva pestaña)</li>
+              <li><strong>Crea el asiento</strong> siguiendo los pasos mostrados</li>
+              <li><strong>Regresa aquí</strong> y continúa con el próximo ajuste o el cierre</li>
+            </ol>
+            <p className="text-sm text-blue-700 mt-3 font-medium">
+              Si no necesitas crear ajustes ahora, puedes continuar directamente al cierre.
             </p>
           </div>
         </div>
@@ -402,8 +397,181 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
     </div>
   );
 
+  const getAjusteContent = () => {
+    const content = {
+      depreciacion: {
+        title: 'Depreciación de Activos',
+        description: 'La depreciación distribuye el costo de un activo fijo a lo largo de su vida útil.',
+        steps: [
+          'Ve a Contabilidad → Asientos Contables',
+          'Clic en "Nuevo Asiento"',
+          'Fecha: último día del período (ej: 31/10/2025)',
+          'Descripción: "Depreciación mensual Octubre 2025"'
+        ],
+        example: {
+          concepto: 'Ejemplo: Edificio de $120,000 con vida útil de 20 años',
+          calculo: 'Depreciación mensual = $120,000 ÷ 20 años ÷ 12 meses = $500',
+          movimientos: [
+            { type: 'DEBE', cuenta: 'Depreciación del Período', monto: 500 },
+            { type: 'HABER', cuenta: 'Depreciación Acumulada - Edificios', monto: 500 }
+          ]
+        }
+      },
+      provisiones: {
+        title: 'Provisiones',
+        description: 'Reconoce gastos probables futuros relacionados con el período actual.',
+        steps: [
+          'Ve a Contabilidad → Asientos Contables',
+          'Clic en "Nuevo Asiento"',
+          'Fecha: último día del período',
+          'Descripción: "Provisión [tipo] Octubre 2025"'
+        ],
+        example: {
+          concepto: 'Ejemplo: Provisión del 2% sobre ventas de $50,000',
+          calculo: 'Provisión = $50,000 × 2% = $1,000',
+          movimientos: [
+            { type: 'DEBE', cuenta: 'Gastos por Cuentas Incobrables', monto: 1000 },
+            { type: 'HABER', cuenta: 'Provisión para Cuentas Incobrables', monto: 1000 }
+          ]
+        }
+      },
+      inventario: {
+        title: 'Ajuste de Inventario',
+        description: 'Corrige diferencias entre inventario contable e inventario físico.',
+        steps: [
+          'Ve a Contabilidad → Asientos Contables',
+          'Clic en "Nuevo Asiento"',
+          'Fecha: último día del período',
+          'Descripción: "Ajuste inventario físico Octubre 2025"'
+        ],
+        example: {
+          concepto: 'Ejemplo: Faltante de $200 detectado en conteo físico',
+          calculo: 'Diferencia = Contable ($5,000) - Físico ($4,800) = $200',
+          movimientos: [
+            { type: 'DEBE', cuenta: 'Pérdida por Faltante de Inventario', monto: 200 },
+            { type: 'HABER', cuenta: 'Inventario de Mercaderías', monto: 200 }
+          ]
+        }
+      },
+      devengamientos: {
+        title: 'Devengamientos',
+        description: 'Registra ingresos o gastos del período que aún no fueron pagados/cobrados.',
+        steps: [
+          'Ve a Contabilidad → Asientos Contables',
+          'Clic en "Nuevo Asiento"',
+          'Fecha: último día del período',
+          'Descripción: "Devengamiento [concepto] Octubre 2025"'
+        ],
+        example: {
+          concepto: 'Ejemplo: Sueldos de $3,000 ganados en octubre, se pagan en noviembre',
+          calculo: 'Sueldos devengados pero no pagados = $3,000',
+          movimientos: [
+            { type: 'DEBE', cuenta: 'Sueldos y Salarios', monto: 3000 },
+            { type: 'HABER', cuenta: 'Sueldos por Pagar', monto: 3000 }
+          ]
+        }
+      }
+    };
+    return showAjusteInfo ? content[showAjusteInfo as keyof typeof content] : null;
+  };
+
+  const ajusteContent = getAjusteContent();
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <>
+      {showAjusteInfo && ajusteContent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 border-b border-blue-800">
+              <h3 className="text-xl font-bold text-white">{ajusteContent.title}</h3>
+              <p className="text-blue-100 text-sm mt-1">{ajusteContent.description}</p>
+            </div>
+
+            <div className="px-6 py-6 space-y-6">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
+                  Pasos a Seguir
+                </h4>
+                <ol className="space-y-2">
+                  {ajusteContent.steps.map((step, idx) => (
+                    <li key={idx} className="flex gap-3 text-sm">
+                      <span className="text-blue-600 font-medium">{idx + 1}.</span>
+                      <span className="text-gray-700">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                  <span className="bg-green-100 text-green-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span>
+                  Ejemplo Práctico
+                </h4>
+                <p className="text-sm text-green-800 mb-2">{ajusteContent.example.concepto}</p>
+                <p className="text-sm text-green-700 font-mono bg-green-100 p-2 rounded">
+                  {ajusteContent.example.calculo}
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <span className="bg-purple-100 text-purple-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
+                  Movimientos del Asiento
+                </h4>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Tipo</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Cuenta</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {ajusteContent.example.movimientos.map((mov, idx) => (
+                        <tr key={idx} className={mov.type === 'DEBE' ? 'bg-red-50' : 'bg-green-50'}>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs font-semibold ${
+                              mov.type === 'DEBE' ? 'text-red-700' : 'text-green-700'
+                            }`}>
+                              {mov.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{mov.cuenta}</td>
+                          <td className="px-4 py-3 text-sm text-right font-mono">
+                            ${mov.monto.toLocaleString('es-UY', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between gap-4">
+              <button
+                onClick={() => setShowAjusteInfo(null)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Volver
+              </button>
+              <a
+                href="/contabilidad/asientos-contables"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Ir a Crear Asiento
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
           <h2 className="text-xl font-bold text-gray-900">Proceso de Cierre - {periodo.nombre}</h2>
@@ -504,5 +672,6 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         </div>
       </div>
     </div>
+    </>
   );
 }
