@@ -1,5 +1,6 @@
 import { supabase } from '../../config/supabase';
 import type { AsientoContable, MovimientoContable } from '../../types';
+import { periodosContablesService } from './periodosContables';
 
 export const asientosSupabaseService = {
   async getAsientosByEmpresa(empresaId: string, limit?: number): Promise<AsientoContable[]> {
@@ -95,6 +96,15 @@ export const asientosSupabaseService = {
   },
 
   async createAsiento(asiento: Omit<AsientoContable, 'id' | 'fechaCreacion'>): Promise<AsientoContable> {
+    const periodoAbierto = await periodosContablesService.validarFechaEnPeriodoAbierto(
+      asiento.empresaId,
+      asiento.fecha
+    );
+
+    if (!periodoAbierto) {
+      throw new Error('No se puede crear un asiento en un período cerrado. Por favor, selecciona una fecha en un período abierto.');
+    }
+
     const { data: asientoData, error: asientoError } = await supabase
       .from('asientos_contables')
       .insert({
@@ -113,7 +123,12 @@ export const asientosSupabaseService = {
       .select()
       .single();
 
-    if (asientoError) throw asientoError;
+    if (asientoError) {
+      if (asientoError.message.includes('periodo cerrado')) {
+        throw new Error('El período contable está cerrado. No se pueden crear asientos en este período.');
+      }
+      throw asientoError;
+    }
 
     const movimientos = asiento.movimientos.map(mov => ({
       asiento_id: asientoData.id,
@@ -166,6 +181,17 @@ export const asientosSupabaseService = {
   },
 
   async updateAsiento(asientoId: string, updates: Partial<AsientoContable>): Promise<void> {
+    if (updates.fecha && updates.empresaId) {
+      const periodoAbierto = await periodosContablesService.validarFechaEnPeriodoAbierto(
+        updates.empresaId,
+        updates.fecha
+      );
+
+      if (!periodoAbierto) {
+        throw new Error('No se puede modificar un asiento en un período cerrado.');
+      }
+    }
+
     const updateData: any = { fecha_modificacion: new Date().toISOString() };
 
     if (updates.fecha) updateData.fecha = updates.fecha;

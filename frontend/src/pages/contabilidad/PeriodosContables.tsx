@@ -98,10 +98,29 @@ export default function PeriodosContables() {
   };
 
   const handleCreateEjercicio = async () => {
-    if (!empresaActual?.id || !usuario?.id) return;
+    console.log('handleCreateEjercicio called');
+    console.log('empresaActual:', empresaActual);
+    console.log('usuario:', usuario);
+    console.log('formData:', formData);
+
+    if (!empresaActual?.id) {
+      showError('Error', 'No hay empresa seleccionada');
+      return;
+    }
+
+    if (!formData.fecha_inicio || !formData.fecha_fin) {
+      showError('Error', 'Debes completar las fechas de inicio y fin');
+      return;
+    }
+
+    if (formData.fecha_inicio >= formData.fecha_fin) {
+      showError('Error', 'La fecha de inicio debe ser anterior a la fecha de fin');
+      return;
+    }
 
     try {
-      await periodosContablesService.createEjercicioFiscal({
+      console.log('Creating ejercicio fiscal...');
+      const ejercicio = await periodosContablesService.createEjercicioFiscal({
         empresa_id: empresaActual.id,
         anio: formData.anio,
         fecha_inicio: formData.fecha_inicio,
@@ -111,6 +130,7 @@ export default function PeriodosContables() {
         moneda: 'UYU'
       });
 
+      console.log('Ejercicio created:', ejercicio);
       showSuccess('Ejercicio creado', 'El ejercicio fiscal y sus períodos mensuales han sido creados');
       setShowNuevoEjercicio(false);
       setFormData({
@@ -119,7 +139,7 @@ export default function PeriodosContables() {
         fecha_fin: `${new Date().getFullYear() + 1}-12-31`,
         descripcion: ''
       });
-      loadData();
+      await loadData();
     } catch (error: any) {
       console.error('Error creando ejercicio:', error);
       showError('Error', error.message || 'No se pudo crear el ejercicio fiscal');
