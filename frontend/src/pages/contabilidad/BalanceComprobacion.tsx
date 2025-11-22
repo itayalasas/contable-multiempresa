@@ -85,10 +85,25 @@ function BalanceComprobacion() {
     }
   };
 
+  // Exportar a CSV
+  const handleExportCSV = async () => {
+    if (!balanceData || !empresaActual) return;
+
+    setExporting(true);
+    try {
+      balanceComprobacionService.exportarCSV(balanceData, empresaActual.nombre);
+      showSuccess('Exportación exitosa', 'El archivo CSV ha sido descargado');
+    } catch (error) {
+      showError('Error en exportación', 'No se pudo exportar el archivo CSV');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Exportar a PDF
   const handleExportPDF = async () => {
     if (!balanceData || !empresaActual) return;
-    
+
     setExporting(true);
     try {
       balanceComprobacionService.exportarPDF(balanceData, empresaActual.nombre);
@@ -103,7 +118,7 @@ function BalanceComprobacion() {
   // Exportar a Excel
   const handleExportExcel = async () => {
     if (!balanceData || !empresaActual) return;
-    
+
     setExporting(true);
     try {
       balanceComprobacionService.exportarExcel(balanceData, empresaActual.nombre);
