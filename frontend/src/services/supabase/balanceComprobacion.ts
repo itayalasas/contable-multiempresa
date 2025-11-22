@@ -119,19 +119,43 @@ export const balanceComprobacionService = {
         const saldoInicial = saldosIniciales.get(cuenta.id) || 0;
         const movimientos = movimientosPeriodo.get(cuenta.id) || { debe: 0, haber: 0 };
 
-        let saldoFinal = saldoInicial;
+        let saldoInicialDebe = 0;
+        let saldoInicialHaber = 0;
+        let saldoFinalDebe = 0;
+        let saldoFinalHaber = 0;
+
         if (['ACTIVO', 'GASTO'].includes(cuenta.tipo)) {
-          saldoFinal += movimientos.debe - movimientos.haber;
+          const saldoFinal = saldoInicial + movimientos.debe - movimientos.haber;
+
+          if (saldoInicial > 0) {
+            saldoInicialDebe = saldoInicial;
+          } else if (saldoInicial < 0) {
+            saldoInicialHaber = Math.abs(saldoInicial);
+          }
+
+          if (saldoFinal > 0) {
+            saldoFinalDebe = saldoFinal;
+          } else if (saldoFinal < 0) {
+            saldoFinalHaber = Math.abs(saldoFinal);
+          }
         } else {
-          saldoFinal += movimientos.haber - movimientos.debe;
+          const saldoFinal = saldoInicial + movimientos.haber - movimientos.debe;
+
+          if (saldoInicial > 0) {
+            saldoInicialHaber = saldoInicial;
+          } else if (saldoInicial < 0) {
+            saldoInicialDebe = Math.abs(saldoInicial);
+          }
+
+          if (saldoFinal > 0) {
+            saldoFinalHaber = saldoFinal;
+          } else if (saldoFinal < 0) {
+            saldoFinalDebe = Math.abs(saldoFinal);
+          }
         }
 
-        const saldoInicialDebe = saldoInicial > 0 ? saldoInicial : 0;
-        const saldoInicialHaber = saldoInicial < 0 ? Math.abs(saldoInicial) : 0;
-        const saldoFinalDebe = saldoFinal > 0 ? saldoFinal : 0;
-        const saldoFinalHaber = saldoFinal < 0 ? Math.abs(saldoFinal) : 0;
-
-        if (saldoInicial !== 0 || movimientos.debe > 0 || movimientos.haber > 0 || saldoFinal !== 0) {
+        if (saldoInicial !== 0 || movimientos.debe > 0 || movimientos.haber > 0 ||
+            saldoFinalDebe !== 0 || saldoFinalHaber !== 0) {
           const item: BalanceComprobacionItem = {
             cuenta,
             saldoInicialDebe,
