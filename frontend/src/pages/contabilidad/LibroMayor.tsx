@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Book, 
-  Search, 
-  Calendar, 
-  Download, 
-  FileText, 
-  Building2, 
-  TrendingUp, 
+import {
+  Book,
+  Search,
+  Calendar,
+  Download,
+  FileText,
+  Building2,
+  TrendingUp,
   TrendingDown,
   Filter,
   Loader2,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useSesion } from '../../context/SesionContext';
 import { usePlanCuentas } from '../../hooks/usePlanCuentas';
-import { libroMayorService, LibroMayorData } from '../../services/firebase/libroMayor';
+import { libroMayorService, LibroMayorData } from '../../services/supabase/libroMayor';
 import { SearchableAccountSelector } from '../../components/common/SearchableAccountSelector';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
