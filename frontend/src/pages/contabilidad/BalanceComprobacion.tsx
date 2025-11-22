@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FileText, 
-  Download, 
-  Filter, 
-  Calendar, 
-  Building2, 
+import {
+  FileText,
+  Download,
+  Filter,
+  Calendar,
+  Building2,
   BarChart3,
   Loader2,
   AlertCircle,
@@ -16,7 +16,7 @@ import {
   Eye
 } from 'lucide-react';
 import { useSesion } from '../../context/SesionContext';
-import { balanceComprobacionService, BalanceComprobacionData } from '../../services/firebase/balanceComprobacion';
+import { balanceComprobacionService, BalanceComprobacionData } from '../../services/supabase/balanceComprobacion';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
 
