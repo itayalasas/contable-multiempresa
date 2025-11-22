@@ -688,6 +688,9 @@ export default function PeriodosContables() {
             showSuccess('Período cerrado', 'El período ha sido cerrado exitosamente');
             loadData();
           }}
+          onError={(message) => {
+            showError('Error al cerrar período', message);
+          }}
         />
       )}
 

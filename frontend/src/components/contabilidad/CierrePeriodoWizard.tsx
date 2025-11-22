@@ -20,6 +20,7 @@ interface CierrePeriodoWizardProps {
   periodo: PeriodoContable;
   onClose: () => void;
   onSuccess: () => void;
+  onError?: (message: string) => void;
 }
 
 interface ValidacionResult {
@@ -34,7 +35,7 @@ interface ValidacionResult {
 
 type Step = 'validacion' | 'ajustes' | 'confirmar' | 'cerrar';
 
-export function CierrePeriodoWizard({ periodo, onClose, onSuccess }: CierrePeriodoWizardProps) {
+export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: CierrePeriodoWizardProps) {
   const { empresaActual, usuario } = useSesion();
   const [currentStep, setCurrentStep] = useState<Step>('validacion');
   const [loading, setLoading] = useState(false);
@@ -138,7 +139,9 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess }: CierrePerio
       onSuccess();
     } catch (error: any) {
       console.error('Error cerrando período:', error);
-      alert(error.message || 'Error al cerrar el período');
+      if (onError) {
+        onError(error.message || 'Error al cerrar el período');
+      }
     } finally {
       setLoading(false);
     }
@@ -249,71 +252,75 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess }: CierrePerio
       </div>
 
       <div className="grid gap-3">
-        <button
-          onClick={() => {
-            alert('Ir a crear asiento de ajuste por depreciación');
-            window.location.href = '/contabilidad/asientos-contables';
-          }}
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left"
+        <a
+          href="/contabilidad/asientos-contables"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 text-left transition-colors"
         >
           <Calculator className="w-5 h-5 text-blue-600" />
-          <div>
+          <div className="flex-1">
             <p className="font-medium text-gray-900">Depreciación de Activos</p>
             <p className="text-sm text-gray-600">Registrar depreciación mensual de activos fijos</p>
           </div>
-        </button>
+          <span className="text-xs text-gray-500">Abrir →</span>
+        </a>
 
-        <button
-          onClick={() => {
-            alert('Ir a crear asiento de ajuste por provisiones');
-            window.location.href = '/contabilidad/asientos-contables';
-          }}
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left"
+        <a
+          href="/contabilidad/asientos-contables"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-orange-300 text-left transition-colors"
         >
           <FileText className="w-5 h-5 text-orange-600" />
-          <div>
+          <div className="flex-1">
             <p className="font-medium text-gray-900">Provisiones</p>
             <p className="text-sm text-gray-600">Provisión de cuentas incobrables, vacaciones, etc.</p>
           </div>
-        </button>
+          <span className="text-xs text-gray-500">Abrir →</span>
+        </a>
 
-        <button
-          onClick={() => {
-            alert('Ir a crear asiento de ajuste por inventario');
-            window.location.href = '/contabilidad/asientos-contables';
-          }}
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left"
+        <a
+          href="/contabilidad/asientos-contables"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-green-300 text-left transition-colors"
         >
           <TrendingUp className="w-5 h-5 text-green-600" />
-          <div>
+          <div className="flex-1">
             <p className="font-medium text-gray-900">Ajuste de Inventario</p>
             <p className="text-sm text-gray-600">Ajustar inventario por diferencias físicas</p>
           </div>
-        </button>
+          <span className="text-xs text-gray-500">Abrir →</span>
+        </a>
 
-        <button
-          onClick={() => {
-            alert('Ir a crear asiento de ajuste por devengamiento');
-            window.location.href = '/contabilidad/asientos-contables';
-          }}
-          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left"
+        <a
+          href="/contabilidad/asientos-contables"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-purple-300 text-left transition-colors"
         >
           <Plus className="w-5 h-5 text-purple-600" />
-          <div>
+          <div className="flex-1">
             <p className="font-medium text-gray-900">Devengamientos</p>
             <p className="text-sm text-gray-600">Gastos e ingresos devengados del período</p>
           </div>
-        </button>
+          <span className="text-xs text-gray-500">Abrir →</span>
+        </a>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
           <div className="flex-1">
-            <h4 className="font-semibold text-blue-900 mb-1">Información</h4>
-            <p className="text-sm text-blue-700">
+            <h4 className="font-semibold text-blue-900 mb-1">Información Importante</h4>
+            <p className="text-sm text-blue-700 mb-2">
               Los asientos de ajuste deben crearse antes de cerrar el período. Una vez cerrado,
               no podrás crear nuevos asientos sin reabrir el período.
+            </p>
+            <p className="text-sm text-blue-700">
+              <strong>Nota:</strong> Los enlaces se abren en nueva pestaña para que puedas crear los asientos
+              sin perder tu progreso en este wizard. Cuando termines, regresa aquí para continuar.
             </p>
           </div>
         </div>
