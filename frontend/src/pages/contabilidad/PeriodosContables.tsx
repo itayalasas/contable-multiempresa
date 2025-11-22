@@ -23,6 +23,7 @@ import {
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useModals } from '../../hooks/useModals';
+import { CierrePeriodoWizard } from '../../components/contabilidad/CierrePeriodoWizard';
 
 export default function PeriodosContables() {
   const { empresaActual, usuario } = useSesion();
@@ -37,6 +38,7 @@ export default function PeriodosContables() {
 
   const [showNuevoEjercicio, setShowNuevoEjercicio] = useState(false);
   const [showCerrarModal, setShowCerrarModal] = useState(false);
+  const [showCierreWizard, setShowCierreWizard] = useState(false);
   const [showReabrirModal, setShowReabrirModal] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
   const [selectedPeriodo, setSelectedPeriodo] = useState<PeriodoContable | null>(null);
@@ -425,9 +427,10 @@ export default function PeriodosContables() {
                         <button
                           onClick={() => {
                             setSelectedPeriodo(periodo);
-                            setShowCerrarModal(true);
+                            setShowCierreWizard(true);
                           }}
                           className="text-red-600 hover:text-red-900"
+                          title="Proceso de cierre"
                         >
                           <Lock className="h-4 w-4 inline" />
                         </button>
@@ -670,6 +673,22 @@ export default function PeriodosContables() {
             </button>
           </div>
         </div>
+      )}
+
+      {showCierreWizard && selectedPeriodo && (
+        <CierrePeriodoWizard
+          periodo={selectedPeriodo}
+          onClose={() => {
+            setShowCierreWizard(false);
+            setSelectedPeriodo(null);
+          }}
+          onSuccess={() => {
+            setShowCierreWizard(false);
+            setSelectedPeriodo(null);
+            showSuccess('Período cerrado', 'El período ha sido cerrado exitosamente');
+            loadData();
+          }}
+        />
       )}
 
       <NotificationModal

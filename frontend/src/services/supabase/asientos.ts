@@ -52,6 +52,55 @@ export const asientosSupabaseService = {
     }));
   },
 
+  async getAsientosByEmpresaFechas(
+    empresaId: string,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<AsientoContable[]> {
+    const { data, error } = await supabase
+      .from('asientos_contables')
+      .select(`
+        *,
+        movimientos_contables (*)
+      `)
+      .eq('empresa_id', empresaId)
+      .gte('fecha', fechaInicio)
+      .lte('fecha', fechaFin)
+      .order('fecha', { ascending: false })
+      .order('numero', { ascending: false });
+
+    if (error) throw error;
+
+    return data.map(asiento => ({
+      id: asiento.id,
+      numero: asiento.numero,
+      fecha: asiento.fecha,
+      descripcion: asiento.descripcion,
+      referencia: asiento.referencia,
+      estado: asiento.estado as 'borrador' | 'confirmado' | 'anulado',
+      movimientos: asiento.movimientos_contables.map((mov: any) => ({
+        id: mov.id,
+        cuentaId: mov.cuenta_id,
+        cuenta: mov.cuenta,
+        debito: mov.debito,
+        credito: mov.credito,
+        descripcion: mov.descripcion,
+        terceroId: mov.tercero_id,
+        tercero: mov.tercero,
+        documentoReferencia: mov.documento_referencia,
+        centroCosto: mov.centro_costo,
+      })),
+      empresaId: asiento.empresa_id,
+      paisId: asiento.pais_id,
+      creadoPor: asiento.creado_por,
+      fechaCreacion: asiento.fecha_creacion,
+      fechaModificacion: asiento.fecha_modificacion,
+      documentoSoporte: asiento.documento_soporte,
+      centroCosto: asiento.centro_costo,
+      proyecto: asiento.proyecto,
+    }));
+  },
+
   async getAsientoById(asientoId: string): Promise<AsientoContable | null> {
     const { data, error } = await supabase
       .from('asientos_contables')
