@@ -8,16 +8,27 @@ export const cuentasPorCobrarSupabaseService = {
       .select('*')
       .eq('empresa_id', empresaId)
       .eq('activo', true)
-      .order('nombre');
+      .order('razon_social');
 
     if (error) throw error;
 
     return data.map(cliente => ({
       ...cliente,
+      id: cliente.id,
+      nombre: cliente.razon_social,
+      razonSocial: cliente.razon_social,
+      tipoDocumento: cliente.tipo_documento_id,
+      numeroDocumento: cliente.numero_documento,
+      email: cliente.email || '',
+      telefono: cliente.telefono || '',
+      direccion: cliente.direccion || '',
+      contacto: cliente.nombre_comercial || '',
+      activo: cliente.activo,
       empresaId: cliente.empresa_id,
+      limiteCredito: cliente.limite_credito || 0,
+      diasCredito: cliente.dias_credito || 0,
+      observaciones: cliente.observaciones || '',
       fechaCreacion: new Date(cliente.fecha_creacion),
-      limiteCredito: cliente.limite_credito,
-      diasCredito: cliente.dias_credito,
     }));
   },
 
@@ -25,16 +36,16 @@ export const cuentasPorCobrarSupabaseService = {
     const { data, error } = await supabase
       .from('clientes')
       .insert({
-        nombre: cliente.nombre,
-        razon_social: cliente.razonSocial,
-        tipo_documento: cliente.tipoDocumento,
+        empresa_id: cliente.empresaId,
+        pais_id: null,
+        tipo_documento_id: cliente.tipoDocumento,
         numero_documento: cliente.numeroDocumento,
+        razon_social: cliente.razonSocial || cliente.nombre,
+        nombre_comercial: cliente.contacto,
         email: cliente.email,
         telefono: cliente.telefono,
         direccion: cliente.direccion,
-        contacto: cliente.contacto,
         activo: cliente.activo,
-        empresa_id: cliente.empresaId,
         limite_credito: cliente.limiteCredito,
         dias_credito: cliente.diasCredito,
         observaciones: cliente.observaciones,
@@ -46,10 +57,21 @@ export const cuentasPorCobrarSupabaseService = {
 
     return {
       ...data,
+      id: data.id,
+      nombre: data.razon_social,
+      razonSocial: data.razon_social,
+      tipoDocumento: data.tipo_documento_id,
+      numeroDocumento: data.numero_documento,
+      email: data.email || '',
+      telefono: data.telefono || '',
+      direccion: data.direccion || '',
+      contacto: data.nombre_comercial || '',
+      activo: data.activo,
       empresaId: data.empresa_id,
+      limiteCredito: data.limite_credito || 0,
+      diasCredito: data.dias_credito || 0,
+      observaciones: data.observaciones || '',
       fechaCreacion: new Date(data.fecha_creacion),
-      limiteCredito: data.limite_credito,
-      diasCredito: data.dias_credito,
     };
   },
 
