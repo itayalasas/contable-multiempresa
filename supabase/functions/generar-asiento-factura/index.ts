@@ -188,13 +188,18 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
 
     console.log('✅ Asiento creado:', asiento.id);
 
-    // Crear movimientos
+    // Crear movimientos contables
+    // IMPORTANTE: Calcular IVA como diferencia para evitar descuadres por redondeo
+    const total = parseFloat(factura.total);
+    const subtotal = parseFloat(factura.subtotal);
+    const iva = total - subtotal; // ✅ Calculado como diferencia para cuadrar perfectamente
+
     const movimientos = [
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaCobrarId,
         cuenta: '1212 - Cuentas por Cobrar - Comerciales',
-        debito: parseFloat(factura.total),
+        debito: total,
         credito: 0,
         descripcion: `Factura ${factura.numero_factura} - ${clienteNombre}`,
       },
@@ -203,7 +208,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         cuenta_id: cuentaVentasId,
         cuenta: '7011 - Ventas',
         debito: 0,
-        credito: parseFloat(factura.subtotal),
+        credito: subtotal,
         descripcion: `Factura ${factura.numero_factura} - ${clienteNombre}`,
       },
       {
@@ -211,7 +216,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         cuenta_id: cuentaIvaId,
         cuenta: '2113 - IVA por Pagar',
         debito: 0,
-        credito: parseFloat(factura.total_iva),
+        credito: iva, // ✅ Usa el IVA calculado como diferencia
         descripcion: `IVA Factura ${factura.numero_factura}`,
       },
     ];

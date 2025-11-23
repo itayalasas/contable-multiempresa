@@ -251,12 +251,42 @@ export const asientosSupabaseService = {
     if (updates.centroCosto !== undefined) updateData.centro_costo = updates.centroCosto;
     if (updates.proyecto !== undefined) updateData.proyecto = updates.proyecto;
 
+    // Actualizar asiento principal
     const { error } = await supabase
       .from('asientos_contables')
       .update(updateData)
       .eq('id', asientoId);
 
     if (error) throw error;
+
+    // Si se actualizan los movimientos, eliminar los anteriores y crear los nuevos
+    if (updates.movimientos && updates.movimientos.length > 0) {
+      // 1. Eliminar movimientos anteriores
+      const { error: deleteError } = await supabase
+        .from('movimientos_contables')
+        .delete()
+        .eq('asiento_id', asientoId);
+
+      if (deleteError) throw deleteError;
+
+      // 2. Crear nuevos movimientos
+      const movimientosData = updates.movimientos.map((mov) => ({
+        asiento_id: asientoId,
+        cuenta_id: mov.cuentaId,
+        debito: mov.debito || 0,
+        credito: mov.credito || 0,
+        descripcion: mov.descripcion || '',
+        tercero_id: mov.terceroId || null,
+        documento_referencia: mov.documentoReferencia || null,
+        centro_costo: mov.centroCosto || null,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('movimientos_contables')
+        .insert(movimientosData);
+
+      if (insertError) throw insertError;
+    }
   },
 
   async deleteAsiento(asientoId: string): Promise<void> {
