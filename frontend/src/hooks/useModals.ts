@@ -99,7 +99,7 @@ export const useModals = () => {
   };
 
   const showError = (title: string, message: string, autoClose: boolean = false) => {
-    showNotification({ title, message, type: 'error', autoClose });
+    showNotification({ title, message, type: 'error', autoClose: autoClose });
   };
 
   const showWarning = (title: string, message: string) => {

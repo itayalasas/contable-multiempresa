@@ -18,17 +18,20 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
   message,
   type = 'info',
   autoClose = true,
-  autoCloseDelay = 3000
+  autoCloseDelay
 }) => {
+  const defaultDelay = type === 'error' ? 10000 : 3000;
+  const finalDelay = autoCloseDelay ?? defaultDelay;
+
   useEffect(() => {
     if (isOpen && autoClose) {
       const timer = setTimeout(() => {
         onClose();
-      }, autoCloseDelay);
+      }, finalDelay);
 
       return () => clearTimeout(timer);
     }
-  }, [isOpen, autoClose, autoCloseDelay, onClose]);
+  }, [isOpen, autoClose, finalDelay, onClose]);
 
   if (!isOpen) return null;
 
@@ -117,7 +120,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                   }`}
                   style={{
                     width: '100%',
-                    animation: `progress-shrink ${autoCloseDelay}ms linear forwards`
+                    animation: `progress-shrink ${finalDelay}ms linear forwards`
                   }}
                 ></div>
               </div>
