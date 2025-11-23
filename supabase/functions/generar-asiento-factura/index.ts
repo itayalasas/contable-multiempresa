@@ -96,7 +96,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         })
         .eq('id', factura.id);
 
-      return;
+      throw new Error(errorMsg);
     }
 
     // Si hay período, guardar la referencia
@@ -154,7 +154,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         })
         .eq('id', factura.id);
 
-      return;
+      throw new Error(errorMsg);
     }
 
     // Usar el usuario Sistema para operaciones automáticas
