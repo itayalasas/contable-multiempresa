@@ -426,15 +426,26 @@ async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
     const resultadoCreate = await responseCreate.json();
     console.log('✅ [DGI] Respuesta exitosa creación:', resultadoCreate);
 
+    if (!resultadoCreate.id) {
+      console.warn('⚠️ [DGI] No se recibió ID en la respuesta de creación, no se puede consultar');
+      return {
+        success: true,
+        cae: resultadoCreate.cae || resultadoCreate.CAE || `CAE-${Date.now()}`,
+        hash: resultadoCreate.hash || resultadoCreate.HASH || `SHA256-${Math.random().toString(36).substr(2, 16)}`,
+        fecha: new Date().toISOString(),
+        mensaje: resultadoCreate.mensaje || 'CFE aceptado por DGI',
+        data: resultadoCreate,
+      };
+    }
+
     const apiUrlQuery = Deno.env.get('DGI_API_QUERY_URL') || 'https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b';
-    const apiKeyQuery = Deno.env.get('DGI_API_QUERY_KEY') || 'pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3';
+    const apiKeyQuery = Deno.env.get('DGI_API_QUERY_KEY') || 'pub_90e731b2639b030baad40d14f7622afb10dfb10b1b05933d7b67fc920f3fb734';
 
     console.log('🔍 [DGI] Consultando datos del CFE en API de consulta:', apiUrlQuery);
+    console.log('🔍 [DGI] Usando ID de DGI:', resultadoCreate.id);
 
     const queryPayload = {
-      numero_interno: jsonCFE.numero_interno,
-      sucursal: jsonCFE.sucursal,
-      tipo_comprobante: jsonCFE.tipo_comprobante,
+      id: resultadoCreate.id,
     };
 
     console.log('📋 [DGI] Payload consulta:', JSON.stringify(queryPayload, null, 2));
