@@ -44,6 +44,7 @@ interface SimpleWebhookPayload {
     tax_rate?: number;
     tax_amount?: number;
     discount?: number;
+    discount_percentage?: number;
     total: number;
     category?: string;
     partner?: {
@@ -199,6 +200,7 @@ async function handleOrder(
     let clienteId;
     let clienteExistente = null;
 
+    // 1. Buscar por customer_id si existe
     if (payload.customer.customer_id) {
       const { data: cliente } = await supabase
         .from('clientes')
@@ -214,6 +216,7 @@ async function handleOrder(
       }
     }
 
+    // 2. Si no se encontró, buscar por documento
     if (!clienteId && payload.customer.document_number) {
       const { data: cliente } = await supabase
         .from('clientes')
@@ -226,6 +229,22 @@ async function handleOrder(
         clienteExistente = cliente;
         clienteId = cliente.id;
         console.log('👤 [Order] Cliente encontrado por documento:', clienteId);
+      }
+    }
+
+    // 3. Si no se encontró, buscar por email (último recurso)
+    if (!clienteId && payload.customer.email) {
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('id')
+        .eq('empresa_id', payload.empresa_id)
+        .eq('email', payload.customer.email)
+        .maybeSingle();
+
+      if (cliente) {
+        clienteExistente = cliente;
+        clienteId = cliente.id;
+        console.log('👤 [Order] Cliente encontrado por email:', clienteId);
       }
     }
 
@@ -389,7 +408,21 @@ async function handleOrder(
 
       const itemUnitPrice = (item.unit_price || 0) / divisor;
       const itemSubtotal = item.subtotal ? item.subtotal / divisor : (item.quantity * itemUnitPrice);
-      const itemDescuento = (item.discount || 0) / divisor;
+
+      // Calcular descuento: puede venir como monto o como porcentaje
+      let itemDescuento = 0;
+      let itemDescuentoPorcentaje = 0;
+
+      if (item.discount && item.discount > 0) {
+        // Si viene descuento como monto
+        itemDescuento = item.discount / divisor;
+        itemDescuentoPorcentaje = itemSubtotal > 0 ? (itemDescuento / itemSubtotal) * 100 : 0;
+      } else if (item.discount_percentage && item.discount_percentage > 0) {
+        // Si viene descuento como porcentaje
+        itemDescuentoPorcentaje = item.discount_percentage;
+        itemDescuento = itemSubtotal * (itemDescuentoPorcentaje / 100);
+      }
+
       const itemTaxRate = item.tax_rate || 0.22;
       const itemTaxAmount = item.tax_amount ? item.tax_amount / divisor : (itemSubtotal - itemDescuento) * itemTaxRate;
       const itemTotal = (item.total || 0) / divisor;
@@ -403,7 +436,7 @@ async function handleOrder(
           descripcion: item.description || item.name,
           cantidad: item.quantity,
           precio_unitario: itemUnitPrice.toFixed(2),
-          descuento_porcentaje: itemDescuento > 0 ? ((itemDescuento / itemSubtotal) * 100).toFixed(2) : 0,
+          descuento_porcentaje: itemDescuentoPorcentaje.toFixed(2),
           descuento_monto: itemDescuento.toFixed(2),
           tasa_iva: itemTaxRate.toFixed(4),
           monto_iva: itemTaxAmount.toFixed(2),
