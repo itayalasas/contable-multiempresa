@@ -1,5 +1,8 @@
 import { supabase } from '../../config/supabase';
 
+// UUID del usuario sistema para operaciones automáticas
+const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 interface MovimientoAsiento {
   numero_linea: number;
   cuenta_id: string;
@@ -20,7 +23,7 @@ export async function generarAsientoFacturaVenta(
   totalIva: number,
   total: number,
   fechaEmision: string,
-  usuarioId: string
+  usuarioId?: string
 ) {
   try {
     console.log('🔄 [AsientosAutomaticos] Generando asiento para factura:', numeroFactura);
@@ -62,7 +65,7 @@ export async function generarAsientoFacturaVenta(
       descripcion: `Factura de Venta ${numeroFactura} - ${clienteNombre}`,
       referencia: `FACT-${numeroFactura}`,
       estado: 'confirmado',
-      creado_por: usuarioId,
+      creado_por: usuarioId || SISTEMA_USER_ID,
       documento_soporte: {
         tipo: 'factura_venta',
         id: facturaId,
@@ -169,7 +172,7 @@ export async function generarAsientoPagoFacturaVenta(
   montoPago: number,
   fechaPago: string,
   tipoPago: string,
-  usuarioId: string
+  usuarioId?: string
 ) {
   try {
     console.log('🔄 [AsientosAutomaticos] Generando asiento de pago para factura:', numeroFactura);
@@ -205,7 +208,7 @@ export async function generarAsientoPagoFacturaVenta(
       descripcion: `Cobro Factura ${numeroFactura}`,
       referencia: `COBRO-${numeroFactura}`,
       estado: 'confirmado',
-      creado_por: usuarioId,
+      creado_por: usuarioId || SISTEMA_USER_ID,
       documento_soporte: {
         tipo: 'pago_factura',
         id: facturaId,

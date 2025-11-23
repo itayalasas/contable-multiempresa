@@ -243,7 +243,7 @@ export async function crearFactura(input: CrearFacturaInput) {
       totalIva,
       total,
       factura.fecha_emision,
-      factura.creado_por || 'sistema'
+      factura.creado_por || undefined
     );
 
     console.log('✅ [crearFactura] Asiento contable generado exitosamente');
@@ -314,7 +314,7 @@ export async function marcarFacturaComoPagada(
       parseFloat(factura.total),
       new Date().toISOString().split('T')[0],
       tipoPago,
-      usuarioId || factura.creado_por || 'sistema'
+      usuarioId || factura.creado_por || undefined
     );
 
     console.log('✅ [marcarFacturaComoPagada] Asiento de pago generado');
