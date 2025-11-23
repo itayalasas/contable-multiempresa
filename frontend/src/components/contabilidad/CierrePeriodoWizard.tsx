@@ -146,6 +146,20 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         errores.push(`Hay ${cantidadFacturasConError} factura(s) con errores en la contabilización`);
       }
 
+      // Validar comisiones pendientes
+      const { data: comisionesPendientes } = await supabase
+        .from('comisiones_partners')
+        .select('id')
+        .eq('empresa_id', empresaActual.id)
+        .gte('fecha', periodo.fecha_inicio)
+        .lte('fecha', periodo.fecha_fin)
+        .eq('estado', 'pendiente');
+
+      const cantidadComisionesPendientes = comisionesPendientes?.length || 0;
+      if (cantidadComisionesPendientes > 0) {
+        errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar. Ve a Compras > Comisiones Partners.`);
+      }
+
       setValidacion({
         valido: errores.length === 0,
         errores,

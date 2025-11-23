@@ -47,29 +47,38 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
       .update({ asiento_intentos: (factura.asiento_intentos || 0) + 1 })
       .eq('id', factura.id);
 
-    // Validar si el período está cerrado
-    const { data: periodoCerrado } = await supabase
+    // Obtener período contable correspondiente a la fecha
+    const { data: periodo } = await supabase
       .from('periodos_contables')
       .select('id, nombre, estado')
       .eq('empresa_id', factura.empresa_id)
       .lte('fecha_inicio', factura.fecha_emision)
       .gte('fecha_fin', factura.fecha_emision)
-      .eq('estado', 'cerrado')
       .maybeSingle();
 
-    if (periodoCerrado) {
-      const errorMsg = `No se puede generar asiento: el período ${periodoCerrado.nombre} está cerrado. Debe reabrir el período para contabilizar esta factura.`;
+    // Validar si el período está cerrado
+    if (periodo && periodo.estado === 'cerrado') {
+      const errorMsg = `El período contable ${periodo.nombre} está cerrado. Para contabilizar esta factura, ve a Contabilidad > Períodos Contables y reabre el período.`;
       console.warn('⚠️', errorMsg);
 
       await supabase
         .from('facturas_venta')
         .update({
           asiento_generado: false,
-          asiento_error: errorMsg
+          asiento_error: errorMsg,
+          periodo_contable_id: periodo.id
         })
         .eq('id', factura.id);
 
       return;
+    }
+
+    // Si hay período, guardar la referencia
+    if (periodo) {
+      await supabase
+        .from('facturas_venta')
+        .update({ periodo_contable_id: periodo.id })
+        .eq('id', factura.id);
     }
 
     // Obtener datos del cliente

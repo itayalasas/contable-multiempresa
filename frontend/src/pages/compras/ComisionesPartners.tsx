@@ -89,6 +89,7 @@ export default function ComisionesPartners() {
         facturas_venta!comisiones_partners_factura_venta_id_fkey!inner(numero_factura)
       `)
       .eq('empresa_id', empresaActual.id)
+      .eq('ocultar_en_listados', false)
       .order('fecha', { ascending: false })
       .limit(200);
 

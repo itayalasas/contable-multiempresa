@@ -257,6 +257,26 @@ export const periodosContablesService = {
 
     console.log('Todas las facturas están contabilizadas correctamente');
 
+    // Validar comisiones pendientes
+    console.log('Validando comisiones pendientes...');
+    const { data: comisionesPendientes } = await supabase
+      .from('comisiones_partners')
+      .select('id, partner_id, monto_comision, estado')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+      .eq('estado', 'pendiente');
+
+    if (comisionesPendientes && comisionesPendientes.length > 0) {
+      throw new Error(
+        `Hay ${comisionesPendientes.length} comisión(es) pendiente(s) de facturar. ` +
+        'Todas las comisiones deben estar facturadas antes de cerrar el período. ' +
+        'Ve a Compras > Comisiones Partners y genera las facturas pendientes.'
+      );
+    }
+
+    console.log('Todas las comisiones están facturadas correctamente');
+
     const { data: asientosNoConfirmados, error: asientosError } = await supabase
       .from('asientos_contables')
       .select('id')
@@ -296,6 +316,7 @@ export const periodosContablesService = {
 
     const cantidadAsientos = asientosConfirmados ? asientosConfirmados.length : 0;
 
+    // Actualizar el período
     const { error: updateError } = await supabase
       .from('periodos_contables')
       .update({
@@ -311,6 +332,44 @@ export const periodosContablesService = {
       .eq('id', periodoId);
 
     if (updateError) throw updateError;
+
+    // Ocultar facturas de venta del período cerrado
+    console.log('Ocultando facturas de venta del período...');
+    await supabase
+      .from('facturas_venta')
+      .update({
+        ocultar_en_listados: true,
+        periodo_contable_id: periodoId
+      })
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha_emision', periodo.fecha_inicio)
+      .lte('fecha_emision', periodo.fecha_fin);
+
+    // Ocultar facturas de compra del período cerrado
+    console.log('Ocultando facturas de compra del período...');
+    await supabase
+      .from('facturas_compra')
+      .update({
+        ocultar_en_listados: true,
+        periodo_contable_id: periodoId
+      })
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha_emision', periodo.fecha_inicio)
+      .lte('fecha_emision', periodo.fecha_fin);
+
+    // Ocultar comisiones del período cerrado
+    console.log('Ocultando comisiones del período...');
+    await supabase
+      .from('comisiones_partners')
+      .update({
+        ocultar_en_listados: true,
+        periodo_contable_id: periodoId
+      })
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin);
+
+    console.log('✅ Registros del período ocultados correctamente');
 
     const { error: cierreError } = await supabase
       .from('cierres_contables')
@@ -372,6 +431,29 @@ export const periodosContablesService = {
       .eq('id', periodoId);
 
     if (updateError) throw updateError;
+
+    // Mostrar facturas de venta del período reabierto
+    console.log('Mostrando facturas de venta del período...');
+    await supabase
+      .from('facturas_venta')
+      .update({ ocultar_en_listados: false })
+      .eq('periodo_contable_id', periodoId);
+
+    // Mostrar facturas de compra del período reabierto
+    console.log('Mostrando facturas de compra del período...');
+    await supabase
+      .from('facturas_compra')
+      .update({ ocultar_en_listados: false })
+      .eq('periodo_contable_id', periodoId);
+
+    // Mostrar comisiones del período reabierto
+    console.log('Mostrando comisiones del período...');
+    await supabase
+      .from('comisiones_partners')
+      .update({ ocultar_en_listados: false })
+      .eq('periodo_contable_id', periodoId);
+
+    console.log('✅ Registros del período mostrados correctamente');
 
     const { error: cierreError } = await supabase
       .from('cierres_contables')

@@ -86,6 +86,7 @@ export async function obtenerFacturas(empresaId: string) {
       cliente:clientes(razon_social, numero_documento, email)
     `)
     .eq('empresa_id', empresaId)
+    .eq('ocultar_en_listados', false)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -375,7 +376,8 @@ export async function obtenerEstadisticasFacturas(empresaId: string) {
   const { data: facturas } = await supabase
     .from('facturas_venta')
     .select('estado, total, fecha_emision')
-    .eq('empresa_id', empresaId);
+    .eq('empresa_id', empresaId)
+    .eq('ocultar_en_listados', false);
 
   if (!facturas) return null;
 
