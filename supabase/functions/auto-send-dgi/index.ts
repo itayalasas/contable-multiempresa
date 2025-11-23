@@ -241,7 +241,15 @@ function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, t
 }
 
 function generarETicket(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string, empresa: any): any {
-  const formaPago = factura.estado === 'pagada' ? 1 : 2;
+  const esFacturaWebhook = factura.metadata?.order_id || factura.metadata?.evento_id;
+  const formaPago = esFacturaWebhook ? 1 : (factura.estado === 'pagada' ? 1 : 2);
+
+  if (esFacturaWebhook) {
+    console.log('💳 [DGI] e-Ticket desde webhook detectado, usando forma_pago: 1 (contado)');
+  } else {
+    console.log('💳 [DGI] e-Ticket manual, forma_pago basada en estado:', formaPago === 1 ? 'contado' : 'crédito');
+  }
+
   const fechaEmision = factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString());
 
   const itemsDGI = items.map((item) => {
