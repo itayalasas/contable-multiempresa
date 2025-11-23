@@ -463,6 +463,53 @@ export default function Facturas() {
     }
   };
 
+  const handleRegenerarAsientosMasivo = async () => {
+    const facturasSinAsiento = facturas.filter(f => !f.asiento_generado || f.asiento_error);
+
+    if (facturasSinAsiento.length === 0) {
+      mostrarNotificacion('info', 'Sin pendientes', 'Todas las facturas ya tienen su asiento contable generado');
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `¿Deseas generar asientos contables para ${facturasSinAsiento.length} factura(s)?\n\n` +
+      `Esto puede tomar unos momentos.`
+    );
+
+    if (!confirmar) return;
+
+    setRegenerandoAsiento('masivo');
+    let exitosos = 0;
+    let fallidos = 0;
+
+    for (const factura of facturasSinAsiento) {
+      try {
+        await regenerarAsientoContable(factura.id);
+        exitosos++;
+      } catch (error: any) {
+        console.error(`❌ Error regenerando asiento para ${factura.numero_factura}:`, error);
+        fallidos++;
+      }
+    }
+
+    setRegenerandoAsiento(null);
+    cargarFacturas();
+
+    if (fallidos === 0) {
+      mostrarNotificacion(
+        'success',
+        'Asientos Generados',
+        `Se generaron ${exitosos} asiento(s) contable(s) correctamente`
+      );
+    } else {
+      mostrarNotificacion(
+        'warning',
+        'Proceso Completado con Errores',
+        `Exitosos: ${exitosos}, Fallidos: ${fallidos}. Revisa las facturas con error individualmente.`
+      );
+    }
+  };
+
   const mostrarNotificacion = (
     type: 'success' | 'error' | 'warning' | 'info',
     title: string,
@@ -520,12 +567,38 @@ export default function Facturas() {
             Gestión de facturas electrónicas y documentos de venta
           </p>
         </div>
-        <button
-          onClick={handleNuevaFactura}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Nueva Factura
-        </button>
+        <div className="flex gap-2">
+          {/* Botón para regenerar asientos faltantes */}
+          {facturas.some(f => !f.asiento_generado || f.asiento_error) && (
+            <button
+              onClick={handleRegenerarAsientosMasivo}
+              disabled={regenerandoAsiento !== null}
+              className="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Generar asientos contables para facturas sin contabilizar"
+            >
+              <svg
+                className={`w-5 h-5 ${regenerandoAsiento ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              Generar Asientos Faltantes
+            </button>
+          )}
+          <button
+            onClick={handleNuevaFactura}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Nueva Factura
+          </button>
+        </div>
       </div>
 
       {estadisticas && (
@@ -750,13 +823,19 @@ export default function Facturas() {
                           </svg>
                         </button>
 
-                        {/* Regenerar asiento - solo si falló */}
-                        {factura.asiento_error && (
+                        {/* Regenerar asiento - si falló o si no se ha generado */}
+                        {(factura.asiento_error || !factura.asiento_generado) && (
                           <button
                             onClick={() => handleRegenerarAsiento(factura)}
                             disabled={regenerandoAsiento === factura.id}
                             className="relative text-amber-600 hover:text-amber-900 group disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={regenerandoAsiento === factura.id ? 'Regenerando asiento...' : `Regenerar asiento contable - ${factura.asiento_error}`}
+                            title={
+                              regenerandoAsiento === factura.id
+                                ? 'Generando asiento...'
+                                : factura.asiento_error
+                                  ? `Regenerar asiento contable - ${factura.asiento_error}`
+                                  : 'Generar asiento contable'
+                            }
                           >
                             <svg
                               className={`w-5 h-5 ${regenerandoAsiento === factura.id ? 'animate-spin' : ''}`}
@@ -773,7 +852,7 @@ export default function Facturas() {
                             </svg>
                             {regenerandoAsiento !== factura.id && (
                               <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10">
-                                Error: {factura.asiento_error}
+                                {factura.asiento_error ? `Error: ${factura.asiento_error}` : 'Asiento contable no generado. Click para generar.'}
                               </div>
                             )}
                           </button>

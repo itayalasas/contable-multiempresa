@@ -108,29 +108,32 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
       const { data: facturasVentaSinAsiento } = await supabase
         .from('facturas_venta')
-        .select('id')
+        .select('id, numero_factura, estado, total')
         .eq('empresa_id', empresaActual.id)
         .gte('fecha_emision', periodo.fecha_inicio)
         .lte('fecha_emision', periodo.fecha_fin)
-        .eq('estado', 'emitida')
+        .neq('estado', 'anulada')
         .or('asiento_generado.is.null,asiento_generado.eq.false');
 
       const facturasVentaSinContabilizar = facturasVentaSinAsiento?.length || 0;
       if (facturasVentaSinContabilizar > 0) {
-        errores.push(`Hay ${facturasVentaSinContabilizar} factura(s) de venta sin contabilizar`);
+        const totalSinContabilizar = facturasVentaSinAsiento?.reduce((sum, f) => sum + parseFloat(f.total || '0'), 0) || 0;
+        errores.push(`Hay ${facturasVentaSinContabilizar} factura(s) de venta sin contabilizar por $${totalSinContabilizar.toFixed(2)}`);
       }
 
       const { data: facturasCompraSinAsiento } = await supabase
         .from('facturas_compra')
-        .select('id')
+        .select('id, numero_factura, total')
         .eq('empresa_id', empresaActual.id)
         .gte('fecha_emision', periodo.fecha_inicio)
         .lte('fecha_emision', periodo.fecha_fin)
+        .neq('estado', 'anulada')
         .or('asiento_generado.is.null,asiento_generado.eq.false');
 
       const facturasCompraSinContabilizar = facturasCompraSinAsiento?.length || 0;
       if (facturasCompraSinContabilizar > 0) {
-        errores.push(`Hay ${facturasCompraSinContabilizar} factura(s) de compra sin contabilizar`);
+        const totalSinContabilizar = facturasCompraSinAsiento?.reduce((sum, f) => sum + parseFloat(f.total || '0'), 0) || 0;
+        errores.push(`Hay ${facturasCompraSinContabilizar} factura(s) de compra sin contabilizar por $${totalSinContabilizar.toFixed(2)}`);
       }
 
       const { data: facturasConError } = await supabase
@@ -146,18 +149,25 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         errores.push(`Hay ${cantidadFacturasConError} factura(s) con errores en la contabilización`);
       }
 
-      // Validar comisiones pendientes
-      const { data: comisionesPendientes } = await supabase
-        .from('comisiones_partners')
-        .select('id')
-        .eq('empresa_id', empresaActual.id)
-        .gte('fecha', periodo.fecha_inicio)
-        .lte('fecha', periodo.fecha_fin)
-        .eq('estado', 'pendiente');
+      // Validar comisiones pendientes (solo si la tabla existe)
+      try {
+        const { data: comisionesPendientes } = await supabase
+          .from('comisiones_partners')
+          .select('id')
+          .eq('empresa_id', empresaActual.id)
+          .gte('fecha', periodo.fecha_inicio)
+          .lte('fecha', periodo.fecha_fin)
+          .eq('estado', 'pendiente');
 
-      const cantidadComisionesPendientes = comisionesPendientes?.length || 0;
-      if (cantidadComisionesPendientes > 0) {
-        errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar. Ve a Compras > Comisiones Partners.`);
+        const cantidadComisionesPendientes = comisionesPendientes?.length || 0;
+        if (cantidadComisionesPendientes > 0) {
+          errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar. Ve a Compras > Comisiones Partners.`);
+        }
+      } catch (error: any) {
+        // Ignorar si la tabla no existe
+        if (!error.message?.includes('does not exist')) {
+          console.warn('Error validando comisiones:', error);
+        }
       }
 
       setValidacion({
