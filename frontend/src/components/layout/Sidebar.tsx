@@ -23,12 +23,14 @@ import {
   Target,
   Plug,
   Shield,
-  TrendingUp
+  TrendingUp,
+  ChevronRight
 } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isMobile: boolean;
 }
 
 const menuItems = [
@@ -65,10 +67,7 @@ const menuItems = [
     submenu: [
       { title: 'Proveedores', icon: Users, path: '/compras/proveedores' },
       { title: 'Partners', icon: Users, path: '/compras/partners' },
-      { title: 'Comisiones', icon: DollarSign, path: '/compras/comisiones' },
-      { title: 'Facturas de Compra', icon: Receipt, path: '/compras/facturas' },
-      { title: 'Notas de Crédito', icon: FileText, path: '/compras/notas-credito' },
-      { title: 'Órdenes de Compra', icon: FileBarChart, path: '/compras/ordenes' }
+      { title: 'Comisiones', icon: DollarSign, path: '/compras/comisiones' }
     ]
   },
   {
@@ -85,19 +84,14 @@ const menuItems = [
     title: 'Análisis',
     icon: TrendingUp,
     submenu: [
-      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo' },
-      { title: 'Segmentos de Negocio', icon: PieChart, path: '/analisis/segmentos' },
-      { title: 'Presupuestos', icon: BarChart3, path: '/analisis/presupuestos' }
+      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo' }
     ]
   },
   {
     title: 'Reportes',
     icon: PieChart,
     submenu: [
-      { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general' },
-      { title: 'Estado de Resultados', icon: BarChart3, path: '/reportes/estado-resultados' },
-      { title: 'Flujo de Efectivo', icon: ArrowLeftRight, path: '/reportes/flujo-efectivo' },
-      { title: 'Por Centro de Costo', icon: Target, path: '/reportes/centros-costo' }
+      { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general' }
     ]
   },
   {
@@ -116,7 +110,7 @@ const menuItems = [
   }
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) => {
   const [expandedMenu, setExpandedMenu] = React.useState<string | null>('Contabilidad');
 
   const toggleSubmenu = (title: string) => {
@@ -125,25 +119,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Overlay para móvil */}
-      {isOpen && (
+      {isOpen && isMobile && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
-      {/* Sidebar - FIJO en desktop, overlay en móvil */}
       <aside
         className={`
-          w-64 bg-white border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:relative lg:flex lg:flex-col
-          fixed lg:static h-full lg:h-auto
+          fixed lg:static h-full z-50
+          w-64 bg-white border-r border-gray-200
+          transition-all duration-300 ease-in-out
+          flex flex-col
+          ${isMobile
+            ? isOpen
+              ? 'translate-x-0 shadow-2xl'
+              : '-translate-x-full'
+            : 'translate-x-0'
+          }
         `}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-200 lg:hidden">
-          <h2 className="text-lg font-semibold text-gray-900">Menú</h2>
+          <div className="flex items-center space-x-2">
+            <Building2 className="h-6 w-6 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Menú</h2>
+          </div>
           <button
             onClick={onClose}
             className="p-2 rounded-md hover:bg-gray-100 transition-colors"
@@ -152,67 +153,77 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
           {menuItems.map((item) => (
             <div key={item.title}>
               {item.submenu ? (
                 <div>
                   <button
                     onClick={() => toggleSubmenu(item.title)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-2.5 text-gray-700 rounded-lg hover:bg-gray-100 transition-all duration-200 group"
                   >
                     <div className="flex items-center space-x-3">
-                      <item.icon className="h-5 w-5" />
-                      <span className="font-medium">{item.title}</span>
+                      <item.icon className="h-5 w-5 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                      <span className="font-medium text-sm">{item.title}</span>
                     </div>
-                    <span className={`transform transition-transform ${
-                      expandedMenu === item.title ? 'rotate-90' : ''
-                    }`}>
-                      ▶
-                    </span>
+                    <ChevronRight
+                      className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+                        expandedMenu === item.title ? 'rotate-90' : ''
+                      }`}
+                    />
                   </button>
-                  
-                  {expandedMenu === item.title && (
-                    <div className="ml-4 mt-2 space-y-1">
+
+                  <div className={`
+                    overflow-hidden transition-all duration-300 ease-in-out
+                    ${expandedMenu === item.title ? 'max-h-[500px] opacity-100 mt-1' : 'max-h-0 opacity-0'}
+                  `}>
+                    <div className="ml-3 pl-3 border-l-2 border-gray-200 space-y-1">
                       {item.submenu.map((subItem) => (
                         <NavLink
                           key={subItem.path}
                           to={subItem.path}
                           className={({ isActive }) =>
-                            `flex items-center space-x-3 px-3 py-2 text-sm rounded-md transition-colors ${
+                            `flex items-center space-x-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                               isActive
-                                ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700'
-                                : 'text-gray-600 hover:bg-gray-100'
+                                ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                             }`
                           }
-                          onClick={() => window.innerWidth < 1024 && onClose()}
+                          onClick={() => isMobile && onClose()}
                         >
-                          <subItem.icon className="h-4 w-4" />
-                          <span>{subItem.title}</span>
+                          <subItem.icon className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{subItem.title}</span>
                         </NavLink>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
               ) : (
                 <NavLink
                   to={item.path}
                   className={({ isActive }) =>
-                    `flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
+                    `flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
                       isActive
-                        ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700'
+                        ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
                         : 'text-gray-700 hover:bg-gray-100'
                     }`
                   }
-                  onClick={() => window.innerWidth < 1024 && onClose()}
+                  onClick={() => isMobile && onClose()}
                 >
-                  <item.icon className="h-5 w-5" />
-                  <span className="font-medium">{item.title}</span>
+                  <item.icon className="h-5 w-5 flex-shrink-0" />
+                  <span className="font-medium text-sm truncate">{item.title}</span>
                 </NavLink>
               )}
             </div>
           ))}
         </nav>
+
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <div className="text-xs text-gray-500 text-center">
+            <p className="font-medium">ContaEmpresa</p>
+            <p className="mt-1">v2.0.0</p>
+          </div>
+        </div>
       </aside>
     </>
   );

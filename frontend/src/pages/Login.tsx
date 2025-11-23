@@ -19,67 +19,67 @@ export const Login: React.FC = () => {
         <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-cyan-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
       </div>
 
-      <div className="relative min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-6xl w-full grid lg:grid-cols-2 gap-8 items-center">
-          <div className="text-white space-y-8 lg:pr-12">
-            <div className="inline-flex items-center space-x-3 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-              <Sparkles className="h-5 w-5 text-cyan-400" />
-              <span className="text-sm font-medium">Plataforma de Gestión Empresarial</span>
+      <div className="relative min-h-screen flex items-center justify-center p-4 md:p-8">
+        <div className="max-w-6xl w-full grid lg:grid-cols-2 gap-6 md:gap-8 items-center">
+          <div className="text-white space-y-6 md:space-y-8 lg:pr-12 order-2 lg:order-1">
+            <div className="inline-flex items-center space-x-2 md:space-x-3 bg-white/10 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-white/20">
+              <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-cyan-400" />
+              <span className="text-xs md:text-sm font-medium">Plataforma de Gestión Empresarial</span>
             </div>
 
             <div>
-              <h1 className="text-5xl lg:text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold mb-3 md:mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">
                 ContaEmpresa
               </h1>
-              <p className="text-xl text-blue-100 mb-8">
+              <p className="text-base sm:text-lg md:text-xl text-blue-100 mb-6 md:mb-8">
                 La solución integral para la gestión contable y financiera de tu empresa
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-start space-x-4 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/10 hover:bg-white/10 transition-all">
-                <div className="bg-gradient-to-br from-blue-500 to-cyan-500 p-3 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-white" />
+            <div className="grid grid-cols-1 gap-3 md:gap-4">
+              <div className="flex items-start space-x-3 md:space-x-4 bg-white/5 backdrop-blur-sm p-3 md:p-4 rounded-lg md:rounded-xl border border-white/10 hover:bg-white/10 transition-all">
+                <div className="bg-gradient-to-br from-blue-500 to-cyan-500 p-2 md:p-3 rounded-lg flex-shrink-0">
+                  <BarChart3 className="h-5 w-5 md:h-6 md:w-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Control Financiero Total</h3>
-                  <p className="text-sm text-blue-200">Gestiona contabilidad, cuentas por cobrar y pagar en tiempo real</p>
+                  <h3 className="font-semibold text-white mb-1 text-sm md:text-base">Control Financiero Total</h3>
+                  <p className="text-xs md:text-sm text-blue-200">Gestiona contabilidad, cuentas por cobrar y pagar en tiempo real</p>
                 </div>
               </div>
 
-              <div className="flex items-start space-x-4 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/10 hover:bg-white/10 transition-all">
-                <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-3 rounded-lg">
-                  <TrendingUp className="h-6 w-6 text-white" />
+              <div className="flex items-start space-x-3 md:space-x-4 bg-white/5 backdrop-blur-sm p-3 md:p-4 rounded-lg md:rounded-xl border border-white/10 hover:bg-white/10 transition-all">
+                <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-2 md:p-3 rounded-lg flex-shrink-0">
+                  <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Reportes Inteligentes</h3>
-                  <p className="text-sm text-blue-200">Toma decisiones informadas con reportes financieros automatizados</p>
+                  <h3 className="font-semibold text-white mb-1 text-sm md:text-base">Reportes Inteligentes</h3>
+                  <p className="text-xs md:text-sm text-blue-200">Toma decisiones informadas con reportes financieros automatizados</p>
                 </div>
               </div>
 
-              <div className="flex items-start space-x-4 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/10 hover:bg-white/10 transition-all">
-                <div className="bg-gradient-to-br from-cyan-500 to-blue-500 p-3 rounded-lg">
-                  <Users className="h-6 w-6 text-white" />
+              <div className="flex items-start space-x-3 md:space-x-4 bg-white/5 backdrop-blur-sm p-3 md:p-4 rounded-lg md:rounded-xl border border-white/10 hover:bg-white/10 transition-all">
+                <div className="bg-gradient-to-br from-cyan-500 to-blue-500 p-2 md:p-3 rounded-lg flex-shrink-0">
+                  <Users className="h-5 w-5 md:h-6 md:w-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Multi-Empresa</h3>
-                  <p className="text-sm text-blue-200">Administra múltiples empresas desde una sola plataforma</p>
+                  <h3 className="font-semibold text-white mb-1 text-sm md:text-base">Multi-Empresa</h3>
+                  <p className="text-xs md:text-sm text-blue-200">Administra múltiples empresas desde una sola plataforma</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="lg:pl-12">
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-8 text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
-                  <Building2 className="h-8 w-8 text-blue-600" />
+          <div className="lg:pl-12 order-1 lg:order-2">
+            <div className="bg-white/95 backdrop-blur-xl rounded-xl md:rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-6 md:p-8 text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 md:w-16 md:h-16 bg-white rounded-full mb-3 md:mb-4">
+                  <Building2 className="h-7 w-7 md:h-8 md:w-8 text-blue-600" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Bienvenido</h2>
-                <p className="text-blue-100">Inicia sesión para continuar</p>
+                <h2 className="text-xl md:text-2xl font-bold text-white mb-2">Bienvenido</h2>
+                <p className="text-sm md:text-base text-blue-100">Inicia sesión para continuar</p>
               </div>
 
-              <div className="p-8 space-y-6">
+              <div className="p-6 md:p-8 space-y-4 md:space-y-6">
                 {error && (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                     <div className="flex items-center space-x-2">
@@ -150,7 +150,7 @@ export const Login: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-center mt-6 text-sm text-blue-200">
+            <div className="text-center mt-4 md:mt-6 text-xs md:text-sm text-blue-200">
               <p>© 2024 ContaEmpresa. Todos los derechos reservados.</p>
             </div>
           </div>
