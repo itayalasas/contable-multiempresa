@@ -10,8 +10,8 @@ interface ClienteModalProps {
 }
 
 export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
-  const { empresaActual } = useSesion();
-  const { tiposDocumento, tiposPago, loading: loadingNomencladores } = useNomencladores();
+  const { empresaActual, paisActual } = useSesion();
+  const { tiposDocumentoIdentidad, formasPago, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
 
   const [formData, setFormData] = useState({
     tipo_persona: 'fisica' as 'fisica' | 'juridica',
@@ -223,8 +223,8 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
                 required
               >
                 <option value="">Seleccionar...</option>
-                {tiposDocumento.map((tipo) => (
-                  <option key={tipo.codigo} value={tipo.codigo}>
+                {tiposDocumentoIdentidad.map((tipo) => (
+                  <option key={tipo.id} value={tipo.codigo}>
                     {tipo.nombre}
                   </option>
                 ))}

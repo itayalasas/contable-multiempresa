@@ -10,8 +10,8 @@ interface ProveedorModalProps {
 }
 
 export default function ProveedorModal({ proveedor, onClose }: ProveedorModalProps) {
-  const { empresaActual } = useSesion();
-  const { tiposDocumento, loading: loadingNomencladores } = useNomencladores();
+  const { empresaActual, paisActual } = useSesion();
+  const { tiposDocumentoIdentidad, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
 
   const [formData, setFormData] = useState({
     tipo_persona: 'juridica' as 'fisica' | 'juridica',
@@ -223,8 +223,8 @@ export default function ProveedorModal({ proveedor, onClose }: ProveedorModalPro
                 required
               >
                 <option value="">Seleccionar...</option>
-                {tiposDocumento.map((tipo) => (
-                  <option key={tipo.codigo} value={tipo.codigo}>
+                {tiposDocumentoIdentidad.map((tipo) => (
+                  <option key={tipo.id} value={tipo.codigo}>
                     {tipo.nombre}
                   </option>
                 ))}
