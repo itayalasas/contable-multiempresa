@@ -81,25 +81,73 @@ Deno.serve(async (req: Request) => {
       throw new Error('No se encontraron items de la factura');
     }
 
-    const { data: cliente, error: clienteError } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('id', factura.cliente_id)
-      .single();
-
-    if (clienteError || !cliente) {
-      throw new Error('Cliente no encontrado');
-    }
-
+    let cliente: any;
     let tipoDocumento = 'CI';
-    if (cliente.tipo_documento_id) {
-      const { data: tipoDoc } = await supabase
-        .from('tipo_documento_identidad')
-        .select('codigo')
-        .eq('id', cliente.tipo_documento_id)
-        .maybeSingle();
-      if (tipoDoc) {
-        tipoDocumento = tipoDoc.codigo;
+
+    const esFacturaComision = factura.metadata?.tipo === 'factura_comisiones_partner' && factura.metadata?.partner_id;
+
+    if (esFacturaComision) {
+      console.log('🔄 [AutoSendDGI] Factura de comisión detectada, obteniendo datos actualizados del partner...');
+
+      const { data: partner, error: partnerError } = await supabase
+        .from('partners_aliados')
+        .select('*')
+        .eq('id', factura.metadata.partner_id)
+        .single();
+
+      if (partnerError || !partner) {
+        console.error('❌ [AutoSendDGI] Partner no encontrado, usando datos del cliente');
+        const { data: clienteFallback, error: clienteError } = await supabase
+          .from('clientes')
+          .select('*')
+          .eq('id', factura.cliente_id)
+          .single();
+
+        if (clienteError || !clienteFallback) {
+          throw new Error('Cliente no encontrado');
+        }
+        cliente = clienteFallback;
+      } else {
+        console.log('✅ [AutoSendDGI] Datos del partner obtenidos:', partner.razon_social);
+
+        cliente = {
+          razon_social: partner.razon_social,
+          numero_documento: partner.documento,
+          email: partner.email,
+          telefono: partner.telefono,
+          direccion: partner.direccion || 'Sin dirección',
+          ciudad: partner.ciudad || 'Montevideo',
+          departamento: partner.departamento || 'Montevideo',
+        };
+        tipoDocumento = partner.tipo_documento || 'RUT';
+
+        console.log('📋 [AutoSendDGI] Cliente construido desde partner:', {
+          razon_social: cliente.razon_social,
+          documento: cliente.numero_documento,
+          tipo_documento: tipoDocumento
+        });
+      }
+    } else {
+      const { data: clienteData, error: clienteError } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', factura.cliente_id)
+        .single();
+
+      if (clienteError || !clienteData) {
+        throw new Error('Cliente no encontrado');
+      }
+      cliente = clienteData;
+
+      if (cliente.tipo_documento_id) {
+        const { data: tipoDoc } = await supabase
+          .from('tipo_documento_identidad')
+          .select('codigo')
+          .eq('id', cliente.tipo_documento_id)
+          .maybeSingle();
+        if (tipoDoc) {
+          tipoDocumento = tipoDoc.codigo;
+        }
       }
     }
 
@@ -124,7 +172,6 @@ Deno.serve(async (req: Request) => {
     const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo, empresa);
     const resultadoDGI = await enviarADGI(jsonCFE, config);
 
-    // Extraer datos del CFE de la respuesta
     const dgiData = resultadoDGI.data || {};
 
     const updateData: any = {
@@ -135,7 +182,6 @@ Deno.serve(async (req: Request) => {
       dgi_response: resultadoDGI,
     };
 
-    // Actualizar datos del CFE si están disponibles
     if (dgiData.serie) {
       updateData.dgi_serie = dgiData.serie;
     }
