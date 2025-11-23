@@ -63,6 +63,18 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
       throw new Error('La empresa no tiene un pais_id configurado');
     }
 
+    const { data: ivaBasico } = await supabase
+      .from('impuestos_configuracion')
+      .select('tasa, id')
+      .eq('pais_id', empresa.pais_id)
+      .eq('tipo', 'IVA')
+      .eq('codigo', 'IVA_BASICO')
+      .eq('activo', true)
+      .maybeSingle();
+
+    const tasaIVA = ivaBasico?.tasa ? parseFloat(ivaBasico.tasa) / 100 : 0.22;
+    console.log('Tasa IVA configurada para comisiones:', (tasaIVA * 100) + '%');
+
     const { data: partners, error: partnersError } = await supabase
       .from('partners_aliados')
       .select('id, partner_id_externo, razon_social, documento, email')
@@ -99,7 +111,10 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
         const fechaInicio = comisiones[0].fecha;
         const fechaFin = comisiones[comisiones.length - 1].fecha;
 
-        console.log('Total:', totalComisiones.toFixed(2), comisiones.length, 'comisiones');
+        const montoIVA = totalComisiones * tasaIVA;
+        const totalConIVA = totalComisiones + montoIVA;
+
+        console.log('Total comisiones:', totalComisiones.toFixed(2), '+ IVA (' + (tasaIVA * 100) + '%):', montoIVA.toFixed(2), '= Total:', totalConIVA.toFixed(2));
 
         const { data: partnerCompleto } = await supabase
           .from('partners_aliados')
@@ -198,9 +213,9 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
             estado: 'pendiente',
             dgi_enviada: false,
             subtotal: totalComisiones,
-            total_iva: 0,
+            total_iva: montoIVA,
             descuento: 0,
-            total: totalComisiones,
+            total: totalConIVA,
             moneda: 'UYU',
             tipo_cambio: 1,
             observaciones: 'Comisiones periodo ' + fechaInicio + ' a ' + fechaFin,
@@ -209,6 +224,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
               partner_id: partner.id,
               partner_id_externo: partnerCompleto.partner_id_externo,
               partner_razon_social: partnerCompleto.razon_social,
+              tasa_iva_aplicada: tasaIVA,
             },
           })
           .select()
@@ -225,10 +241,10 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           precio_unitario: totalComisiones / comisiones.length,
           descuento_porcentaje: 0,
           descuento_monto: 0,
-          tasa_iva: 0,
-          monto_iva: 0,
+          tasa_iva: tasaIVA,
+          monto_iva: montoIVA,
           subtotal: totalComisiones,
-          total: totalComisiones,
+          total: totalConIVA,
         }];
 
         const { error: itemsError } = await supabase
@@ -269,7 +285,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           console.error('Error al invocar generacion de asiento:', asientoErr.message);
         }
 
-        console.log('Factura', factura.numero_factura, 'creada:', totalComisiones.toFixed(2));
+        console.log('Factura', factura.numero_factura, 'creada: Subtotal:', totalComisiones.toFixed(2), '+ IVA:', montoIVA.toFixed(2), '= Total:', totalConIVA.toFixed(2));
 
         facturasGeneradas++;
         comisionesProcesadas += comisiones.length;
