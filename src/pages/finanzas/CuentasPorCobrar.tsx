@@ -104,9 +104,9 @@ function CuentasPorCobrar() {
 
   // Filtrado de facturas
   const facturasFiltradas = facturas.filter(factura => {
-    const matchesSearch = factura.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         factura.cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         factura.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (factura.numero?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                         (factura.cliente?.nombre?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                         (factura.descripcion?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     const matchesEstado = !selectedEstado || factura.estado === selectedEstado;
     const matchesCliente = !selectedCliente || factura.clienteId === selectedCliente;
     
