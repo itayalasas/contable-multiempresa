@@ -333,6 +333,11 @@ async function handleOrder(
     const impuestos = (payload.order.tax || 0) / divisor;
     const total = (payload.order.total || 0) / divisor;
 
+    const estadosPagados = ['paid', 'approved', 'completed', 'confirmed'];
+    const estaPagada = estadosPagados.includes(payload.order.payment_status?.toLowerCase() || '');
+
+    console.log(`💳 [Order] Payment status recibido: "${payload.order.payment_status}" → Estado factura: "${estaPagada ? 'pagada' : 'pendiente'}"`);
+
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -342,7 +347,7 @@ async function handleOrder(
         serie: serie,
         tipo_documento: 'e-ticket',
         fecha_emision: new Date().toISOString().split('T')[0],
-        estado: payload.order.payment_status === 'paid' ? 'pagada' : 'pendiente',
+        estado: estaPagada ? 'pagada' : 'pendiente',
         subtotal: subtotal.toFixed(2),
         descuento: descuento.toFixed(2),
         total_iva: impuestos.toFixed(2),
@@ -354,6 +359,9 @@ async function handleOrder(
           order_id: payload.order.order_id,
           order_number: payload.order.order_number,
           payment_method: payload.order.payment_method,
+          payment_status: payload.order.payment_status,
+          forma_pago: estaPagada ? 'contado' : null,
+          fecha_pago: estaPagada ? new Date().toISOString() : null,
           customer_id: payload.customer.customer_id,
           evento_id: eventoId,
           ...payload.metadata,
