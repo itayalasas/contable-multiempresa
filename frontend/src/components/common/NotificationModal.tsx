@@ -93,9 +93,9 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
               <h3 className={`text-lg font-semibold ${config.titleColor} mb-2`}>
                 {title}
               </h3>
-              <pre className={`${config.messageColor} text-xs leading-relaxed whitespace-pre-wrap font-mono max-h-96 overflow-y-auto`}>
+              <div className={`${config.messageColor} text-sm leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto`}>
                 {message}
-              </pre>
+              </div>
             </div>
             <button
               onClick={onClose}

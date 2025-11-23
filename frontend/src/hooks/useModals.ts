@@ -98,8 +98,8 @@ export const useModals = () => {
     showNotification({ title, message, type: 'success' });
   };
 
-  const showError = (title: string, message: string) => {
-    showNotification({ title, message, type: 'error', autoClose: false });
+  const showError = (title: string, message: string, autoClose: boolean = false) => {
+    showNotification({ title, message, type: 'error', autoClose });
   };
 
   const showWarning = (title: string, message: string) => {
