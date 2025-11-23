@@ -40,7 +40,8 @@ interface ValidacionResult {
 type Step = 'validacion' | 'ajustes' | 'confirmar' | 'cerrar';
 
 export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: CierrePeriodoWizardProps) {
-  const { empresaActual, usuario } = useSesion();
+  const { empresaActual, sesion } = useSesion();
+  const usuario = sesion?.usuario;
   const [currentStep, setCurrentStep] = useState<Step>('validacion');
   const [loading, setLoading] = useState(false);
   const [validacion, setValidacion] = useState<ValidacionResult | null>(null);
