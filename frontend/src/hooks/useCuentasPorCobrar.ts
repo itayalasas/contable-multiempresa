@@ -11,24 +11,70 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
 
   // Calcular resumen desde las facturas
   const calcularResumen = useCallback((facturas: FacturaPorCobrar[]): ResumenCuentasPorCobrar => {
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
     const totalPorCobrar = facturas.reduce((sum, f) => sum + f.saldoPendiente, 0);
     const totalVencido = facturas
       .filter(f => f.estado === 'VENCIDA')
       .reduce((sum, f) => sum + f.saldoPendiente, 0);
-    const totalParcial = facturas
-      .filter(f => f.estado === 'PARCIAL')
-      .reduce((sum, f) => sum + f.saldoPendiente, 0);
-    const totalPendiente = facturas
-      .filter(f => f.estado === 'PENDIENTE')
+    const totalPorVencer = facturas
+      .filter(f => f.estado === 'PENDIENTE' || f.estado === 'PARCIAL')
       .reduce((sum, f) => sum + f.saldoPendiente, 0);
 
+    const facturasVencidas = facturas.filter(f => f.estado === 'VENCIDA').length;
+    const facturasPendientes = facturas.filter(f => f.estado === 'PENDIENTE' || f.estado === 'PARCIAL').length;
+    const facturasDelMes = facturas.filter(f => new Date(f.fechaEmision) >= inicioMes).length;
+
+    // Calcular rangos de vencimiento
+    const vencimiento0a30 = facturas.filter(f => {
+      const diasVencidos = Math.floor((hoy.getTime() - new Date(f.fechaVencimiento).getTime()) / (1000 * 60 * 60 * 24));
+      return diasVencidos >= 0 && diasVencidos <= 30 && f.saldoPendiente > 0;
+    }).reduce((sum, f) => sum + f.saldoPendiente, 0);
+
+    const vencimiento31a60 = facturas.filter(f => {
+      const diasVencidos = Math.floor((hoy.getTime() - new Date(f.fechaVencimiento).getTime()) / (1000 * 60 * 60 * 24));
+      return diasVencidos > 30 && diasVencidos <= 60 && f.saldoPendiente > 0;
+    }).reduce((sum, f) => sum + f.saldoPendiente, 0);
+
+    const vencimiento61a90 = facturas.filter(f => {
+      const diasVencidos = Math.floor((hoy.getTime() - new Date(f.fechaVencimiento).getTime()) / (1000 * 60 * 60 * 24));
+      return diasVencidos > 60 && diasVencidos <= 90 && f.saldoPendiente > 0;
+    }).reduce((sum, f) => sum + f.saldoPendiente, 0);
+
+    const vencimientoMas90 = facturas.filter(f => {
+      const diasVencidos = Math.floor((hoy.getTime() - new Date(f.fechaVencimiento).getTime()) / (1000 * 60 * 60 * 24));
+      return diasVencidos > 90 && f.saldoPendiente > 0;
+    }).reduce((sum, f) => sum + f.saldoPendiente, 0);
+
+    // Calcular promedio de cobranza (días entre emisión y pago completo)
+    const facturasPagadas = facturas.filter(f => f.estado === 'PAGADA' && f.fechaModificacion);
+    const promedioCobranza = facturasPagadas.length > 0
+      ? Math.round(facturasPagadas.reduce((sum, f) => {
+          const diasCobranza = Math.floor((new Date(f.fechaModificacion!).getTime() - new Date(f.fechaEmision).getTime()) / (1000 * 60 * 60 * 24));
+          return sum + diasCobranza;
+        }, 0) / facturasPagadas.length)
+      : 0;
+
+    // Clientes con deuda
+    const clientesUnicos = new Set(facturas.filter(f => f.saldoPendiente > 0).map(f => f.clienteId));
+    const clientesConDeuda = clientesUnicos.size;
+
     return {
+      totalFacturas: facturas.length,
       totalPorCobrar,
       totalVencido,
-      totalParcial,
-      totalPendiente,
-      cantidadFacturas: facturas.length,
-      cantidadVencidas: facturas.filter(f => f.estado === 'VENCIDA').length,
+      totalPorVencer,
+      facturasPendientes,
+      facturasVencidas,
+      facturasDelMes,
+      promedioCobranza,
+      vencimiento0a30,
+      vencimiento31a60,
+      vencimiento61a90,
+      vencimientoMas90,
+      clientesConDeuda,
+      clientesMayorDeuda: [],
     };
   }, []);
 
