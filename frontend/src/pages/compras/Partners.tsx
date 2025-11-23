@@ -3,6 +3,7 @@ import { Users, Plus, Search, Edit2, Trash2, DollarSign, Calendar, CheckCircle, 
 import { useSesion } from '../../context/SesionContext';
 import { supabase } from '../../config/supabase';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { PartnerModal } from '../../components/compras/PartnerModal';
 
 interface Partner {
   id: string;
@@ -96,16 +97,33 @@ export default function Partners() {
   const cargarComisionesResumen = async () => {
     if (!empresaActual) return;
 
-    const { data, error } = await supabase
+    const { data: periodoActual } = await supabase
+      .from('periodos_contables')
+      .select('fecha_inicio, fecha_fin')
+      .eq('empresa_id', empresaActual.id)
+      .eq('estado', 'abierto')
+      .order('fecha_inicio', { ascending: false })
+      .maybeSingle();
+
+    let query = supabase
       .from('comisiones_partners')
       .select(`
         partner_id,
         comision_monto,
         estado_comision,
         estado_pago,
+        fecha,
         partners_aliados!inner(razon_social)
       `)
       .eq('empresa_id', empresaActual.id);
+
+    if (periodoActual) {
+      query = query
+        .gte('fecha', periodoActual.fecha_inicio)
+        .lte('fecha', periodoActual.fecha_fin);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error al cargar comisiones:', error);
@@ -199,6 +217,42 @@ export default function Partners() {
     await cargarDatos();
   };
 
+  const handleGuardarPartner = async (partnerData: Partial<Partner>) => {
+    if (!empresaActual) return;
+
+    const dataToSave = {
+      ...partnerData,
+      empresa_id: empresaActual.id,
+    };
+
+    if (partnerSeleccionado) {
+      const { error } = await supabase
+        .from('partners_aliados')
+        .update(dataToSave)
+        .eq('id', partnerSeleccionado.id);
+
+      if (error) {
+        console.error('Error al actualizar partner:', error);
+        alert('Error al actualizar partner: ' + error.message);
+        throw error;
+      }
+    } else {
+      const { error } = await supabase
+        .from('partners_aliados')
+        .insert([dataToSave]);
+
+      if (error) {
+        console.error('Error al crear partner:', error);
+        alert('Error al crear partner: ' + error.message);
+        throw error;
+      }
+    }
+
+    await cargarDatos();
+    setShowModal(false);
+    setPartnerSeleccionado(null);
+  };
+
   const formatFrecuencia = (freq: string) => {
     const map: Record<string, string> = {
       semanal: 'Semanal',
@@ -268,6 +322,16 @@ export default function Partners() {
             Gestiona tus partners, comisiones y facturación
           </p>
         </div>
+        <button
+          onClick={() => {
+            setPartnerSeleccionado(null);
+            setShowModal(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          Nuevo Partner
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -476,6 +540,19 @@ export default function Partners() {
           message={`¿Estás seguro de que deseas eliminar a ${partnerAEliminar.razon_social}?`}
           confirmText="Eliminar"
           cancelText="Cancelar"
+        />
+      )}
+
+      {showModal && empresaActual && (
+        <PartnerModal
+          isOpen={showModal}
+          onClose={() => {
+            setShowModal(false);
+            setPartnerSeleccionado(null);
+          }}
+          onSave={handleGuardarPartner}
+          partner={partnerSeleccionado}
+          empresaId={empresaActual.id}
         />
       )}
     </div>
