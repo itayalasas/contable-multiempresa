@@ -21,7 +21,6 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Usar service role key para bypass RLS (sistema usa Auth0, no Supabase Auth)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('Iniciando generacion de facturas a partners...');
@@ -102,32 +101,60 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
 
         console.log('Total:', totalComisiones.toFixed(2), comisiones.length, 'comisiones');
 
+        const { data: partnerCompleto } = await supabase
+          .from('partners_aliados')
+          .select('*')
+          .eq('id', partner.id)
+          .single();
+
+        if (!partnerCompleto) throw new Error('Partner no encontrado');
+
         let clienteId;
         const { data: clienteExistente } = await supabase
           .from('clientes')
           .select('id')
           .eq('empresa_id', empresaId)
-          .eq('numero_documento', partner.documento)
+          .eq('numero_documento', partnerCompleto.documento)
+          .maybeSingle();
+
+        const { data: tipoDoc } = await supabase
+          .from('tipo_documento_identidad')
+          .select('id')
+          .eq('codigo', partnerCompleto.tipo_documento || 'RUT')
           .maybeSingle();
 
         if (clienteExistente) {
           clienteId = clienteExistente.id;
-        } else {
-          const { data: tipoDoc } = await supabase
-            .from('tipo_documento_identidad')
-            .select('id')
-            .eq('codigo', 'RUT')
-            .maybeSingle();
 
+          const { error: updateError } = await supabase
+            .from('clientes')
+            .update({
+              razon_social: partnerCompleto.razon_social,
+              tipo_documento_id: tipoDoc?.id,
+              numero_documento: partnerCompleto.documento,
+              email: partnerCompleto.email,
+              telefono: partnerCompleto.telefono,
+              direccion: partnerCompleto.direccion,
+            })
+            .eq('id', clienteId);
+
+          if (updateError) {
+            console.error('Error actualizando cliente desde partner:', updateError);
+          } else {
+            console.log('Cliente actualizado con datos del partner:', partnerCompleto.razon_social);
+          }
+        } else {
           const { data: nuevoCliente, error: clienteError } = await supabase
             .from('clientes')
             .insert({
               empresa_id: empresaId,
               pais_id: empresa.pais_id,
-              razon_social: partner.razon_social,
+              razon_social: partnerCompleto.razon_social,
               tipo_documento_id: tipoDoc?.id,
-              numero_documento: partner.documento,
-              email: partner.email,
+              numero_documento: partnerCompleto.documento,
+              email: partnerCompleto.email,
+              telefono: partnerCompleto.telefono,
+              direccion: partnerCompleto.direccion,
               activo: true,
             })
             .select()
@@ -135,6 +162,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
 
           if (clienteError) throw clienteError;
           clienteId = nuevoCliente.id;
+          console.log('Nuevo cliente creado desde partner:', partnerCompleto.razon_social);
         }
 
         const { data: ultimaFacturaComision } = await supabase
@@ -176,7 +204,12 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
             moneda: 'UYU',
             tipo_cambio: 1,
             observaciones: 'Comisiones periodo ' + fechaInicio + ' a ' + fechaFin,
-            metadata: { tipo: 'factura_comisiones_partner', partner_id: partner.id },
+            metadata: {
+              tipo: 'factura_comisiones_partner',
+              partner_id: partner.id,
+              partner_id_externo: partnerCompleto.partner_id_externo,
+              partner_razon_social: partnerCompleto.razon_social,
+            },
           })
           .select()
           .single();
