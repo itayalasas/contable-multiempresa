@@ -152,35 +152,54 @@ export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factur
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cant.</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">P. Unit.</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Subtotal</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Descuento</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">IVA</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {factura.items?.map((item: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm">{idx + 1}</td>
-                      <td className="px-4 py-3 text-sm">{item.descripcion}</td>
-                      <td className="px-4 py-3 text-sm text-center">{item.cantidad}</td>
-                      <td className="px-4 py-3 text-sm text-right font-mono">
-                        ${parseFloat(item.precio_unitario).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-mono">
-                        ${parseFloat(item.subtotal || 0).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right">
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          {(item.tasa_iva * 100).toFixed(0)}%
-                        </span>
-                        <div className="font-mono">${parseFloat(item.monto_iva || 0).toFixed(2)}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-mono font-semibold">
-                        ${parseFloat(item.total || 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  )) || (
+                  {factura.items?.map((item: any, idx: number) => {
+                    const descuentoPorcentaje = parseFloat(item.descuento_porcentaje || 0);
+                    const descuentoMonto = parseFloat(item.descuento_monto || 0);
+                    const tieneDescuento = descuentoPorcentaje > 0 || descuentoMonto > 0;
+
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">{idx + 1}</td>
+                        <td className="px-4 py-3 text-sm">{item.descripcion}</td>
+                        <td className="px-4 py-3 text-sm text-center">{item.cantidad}</td>
+                        <td className="px-4 py-3 text-sm text-right font-mono">
+                          ${parseFloat(item.precio_unitario).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-mono">
+                          ${parseFloat(item.subtotal || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          {tieneDescuento ? (
+                            <>
+                              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                                {descuentoPorcentaje.toFixed(2)}%
+                              </span>
+                              <div className="font-mono text-orange-600">-${descuentoMonto.toFixed(2)}</div>
+                            </>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                            {(parseFloat(item.tasa_iva || 0) * 100).toFixed(0)}%
+                          </span>
+                          <div className="font-mono">${parseFloat(item.monto_iva || 0).toFixed(2)}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-mono font-semibold">
+                          ${parseFloat(item.total || 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  }) || (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                         Sin items registrados
                       </td>
                     </tr>
@@ -201,6 +220,12 @@ export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factur
                 <span>Subtotal:</span>
                 <span className="font-mono font-medium">${parseFloat(factura.subtotal).toFixed(2)}</span>
               </div>
+              {factura.descuento && parseFloat(factura.descuento) > 0 && (
+                <div className="flex justify-between text-orange-700">
+                  <span>Descuento:</span>
+                  <span className="font-mono font-medium">-${parseFloat(factura.descuento).toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-gray-700">
                 <span>IVA:</span>
                 <span className="font-mono font-medium">${parseFloat(factura.total_iva).toFixed(2)}</span>
