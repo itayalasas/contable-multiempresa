@@ -183,12 +183,23 @@ export default function PeriodosContables() {
   };
 
   const handleReabrirPeriodo = async () => {
-    if (!selectedPeriodo || !usuario?.id) return;
+    console.log('🔵 handleReabrirPeriodo - INICIO');
+    console.log('🔵 selectedPeriodo:', selectedPeriodo);
+    console.log('🔵 usuario:', usuario);
+    console.log('🔵 cierreData:', cierreData);
+
+    if (!selectedPeriodo || !usuario?.id) {
+      console.log('❌ Validación falló - selectedPeriodo o usuario.id no están definidos');
+      return;
+    }
 
     if (!cierreData.motivo || cierreData.motivo.trim() === '') {
+      console.log('❌ Motivo vacío');
       showError('Error', 'El motivo de reapertura es obligatorio');
       return;
     }
+
+    console.log('✅ Validaciones pasadas, llamando a reabrirPeriodo...');
 
     try {
       await periodosContablesService.reabrirPeriodo(
@@ -197,6 +208,8 @@ export default function PeriodosContables() {
         cierreData.motivo,
         cierreData.observaciones || undefined
       );
+
+      console.log('✅ Período reabierto exitosamente');
 
       showSuccess(
         'Período procesado',
@@ -207,7 +220,7 @@ export default function PeriodosContables() {
       setSelectedPeriodo(null);
       loadData();
     } catch (error: any) {
-      console.error('Error reabriendo período:', error);
+      console.error('❌ Error reabriendo período:', error);
       showError('Error', error.message || 'No se pudo reabrir el período');
     }
   };
@@ -649,7 +662,10 @@ export default function PeriodosContables() {
             </div>
             <div className="flex gap-3 mt-6">
               <button
-                onClick={handleReabrirPeriodo}
+                onClick={(e) => {
+                  console.log('🟢 BOTÓN REABRIR CLICKEADO', e);
+                  handleReabrirPeriodo();
+                }}
                 className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
               >
                 Reabrir Período
