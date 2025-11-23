@@ -206,15 +206,15 @@ export const periodosContablesService = {
     console.log('Validando facturas de venta...');
     const { data: facturasVentaSinAsiento } = await supabase
       .from('facturas_venta')
-      .select('id, numero, fecha, cliente_nombre')
+      .select('id, numero_factura, fecha_emision')
       .eq('empresa_id', periodo.empresa_id)
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
+      .gte('fecha_emision', periodo.fecha_inicio)
+      .lte('fecha_emision', periodo.fecha_fin)
       .eq('estado', 'emitida')
       .or('asiento_generado.is.null,asiento_generado.eq.false');
 
     if (facturasVentaSinAsiento && facturasVentaSinAsiento.length > 0) {
-      const numeros = facturasVentaSinAsiento.map(f => f.numero).join(', ');
+      const numeros = facturasVentaSinAsiento.map(f => f.numero_factura).join(', ');
       throw new Error(
         `Hay ${facturasVentaSinAsiento.length} factura(s) de venta sin contabilizar: ${numeros}. ` +
         'Todas las facturas deben tener su asiento contable generado antes de cerrar el período.'
@@ -224,14 +224,14 @@ export const periodosContablesService = {
     console.log('Validando facturas con errores...');
     const { data: facturasConError } = await supabase
       .from('facturas_venta')
-      .select('id, numero, fecha, asiento_error')
+      .select('id, numero_factura, fecha_emision, asiento_error')
       .eq('empresa_id', periodo.empresa_id)
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
+      .gte('fecha_emision', periodo.fecha_inicio)
+      .lte('fecha_emision', periodo.fecha_fin)
       .not('asiento_error', 'is', null);
 
     if (facturasConError && facturasConError.length > 0) {
-      const errores = facturasConError.map(f => `${f.numero}: ${f.asiento_error}`).join('; ');
+      const errores = facturasConError.map(f => `${f.numero_factura}: ${f.asiento_error}`).join('; ');
       throw new Error(
         `Hay ${facturasConError.length} factura(s) con errores en la contabilización: ${errores}. ` +
         'Corrige los errores antes de cerrar el período.'
@@ -241,14 +241,14 @@ export const periodosContablesService = {
     console.log('Validando facturas de compra...');
     const { data: facturasCompraSinAsiento } = await supabase
       .from('facturas_compra')
-      .select('id, numero, fecha, proveedor_nombre')
+      .select('id, numero_factura, fecha_emision')
       .eq('empresa_id', periodo.empresa_id)
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
+      .gte('fecha_emision', periodo.fecha_inicio)
+      .lte('fecha_emision', periodo.fecha_fin)
       .or('asiento_generado.is.null,asiento_generado.eq.false');
 
     if (facturasCompraSinAsiento && facturasCompraSinAsiento.length > 0) {
-      const numeros = facturasCompraSinAsiento.map(f => f.numero).join(', ');
+      const numeros = facturasCompraSinAsiento.map(f => f.numero_factura).join(', ');
       throw new Error(
         `Hay ${facturasCompraSinAsiento.length} factura(s) de compra sin contabilizar: ${numeros}. ` +
         'Todas las facturas deben estar contabilizadas antes de cerrar el período.'

@@ -109,8 +109,8 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         .from('facturas_venta')
         .select('id')
         .eq('empresa_id', empresaActual.id)
-        .gte('fecha', periodo.fecha_inicio)
-        .lte('fecha', periodo.fecha_fin)
+        .gte('fecha_emision', periodo.fecha_inicio)
+        .lte('fecha_emision', periodo.fecha_fin)
         .eq('estado', 'emitida')
         .or('asiento_generado.is.null,asiento_generado.eq.false');
 
@@ -123,8 +123,8 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         .from('facturas_compra')
         .select('id')
         .eq('empresa_id', empresaActual.id)
-        .gte('fecha', periodo.fecha_inicio)
-        .lte('fecha', periodo.fecha_fin)
+        .gte('fecha_emision', periodo.fecha_inicio)
+        .lte('fecha_emision', periodo.fecha_fin)
         .or('asiento_generado.is.null,asiento_generado.eq.false');
 
       const facturasCompraSinContabilizar = facturasCompraSinAsiento?.length || 0;
@@ -136,8 +136,8 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         .from('facturas_venta')
         .select('id')
         .eq('empresa_id', empresaActual.id)
-        .gte('fecha', periodo.fecha_inicio)
-        .lte('fecha', periodo.fecha_fin)
+        .gte('fecha_emision', periodo.fecha_inicio)
+        .lte('fecha_emision', periodo.fecha_fin)
         .not('asiento_error', 'is', null);
 
       const cantidadFacturasConError = facturasConError?.length || 0;
