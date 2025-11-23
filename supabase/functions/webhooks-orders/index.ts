@@ -292,8 +292,10 @@ async function handleOrder(
 
     console.log('📝 [Order] Número factura:', `${serie}-${siguienteNumero}`);
 
-    // 5. Calcular totales (convertir de centavos a unidades si es necesario)
-    const esEnCentavos = payload.order.total > 1000;
+    // 5. Calcular totales
+    // IMPORTANTE: Los valores deben venir ya en el formato correcto (no en centavos)
+    // Si el sistema externo envía en centavos, debe incluir "amounts_in_cents": true en metadata
+    const esEnCentavos = payload.metadata?.amounts_in_cents === true || payload.order.amounts_in_cents === true;
     const divisor = esEnCentavos ? 100 : 1;
 
     const subtotal = (payload.order.subtotal || 0) / divisor;

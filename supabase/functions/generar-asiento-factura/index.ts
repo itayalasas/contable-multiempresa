@@ -41,6 +41,37 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
   try {
     console.log('📝 [Asiento] Generando para factura:', factura.numero_factura);
 
+    // Incrementar contador de intentos
+    await supabase
+      .from('facturas_venta')
+      .update({ asiento_intentos: (factura.asiento_intentos || 0) + 1 })
+      .eq('id', factura.id);
+
+    // Validar si el período está cerrado
+    const { data: periodoCerrado } = await supabase
+      .from('periodos_contables')
+      .select('id, nombre, estado')
+      .eq('empresa_id', factura.empresa_id)
+      .lte('fecha_inicio', factura.fecha_emision)
+      .gte('fecha_fin', factura.fecha_emision)
+      .eq('estado', 'cerrado')
+      .maybeSingle();
+
+    if (periodoCerrado) {
+      const errorMsg = `No se puede generar asiento: el período ${periodoCerrado.nombre} está cerrado. Debe reabrir el período para contabilizar esta factura.`;
+      console.warn('⚠️', errorMsg);
+
+      await supabase
+        .from('facturas_venta')
+        .update({
+          asiento_generado: false,
+          asiento_error: errorMsg
+        })
+        .eq('id', factura.id);
+
+      return;
+    }
+
     // Obtener datos del cliente
     const { data: cliente } = await supabase
       .from('clientes')
@@ -61,12 +92,6 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
       console.error('❌ Empresa no encontrada');
       return;
     }
-
-    // Incrementar contador de intentos
-    await supabase
-      .from('facturas_venta')
-      .update({ asiento_intentos: (factura.asiento_intentos || 0) + 1 })
-      .eq('id', factura.id);
 
     // Generar número de asiento
     const numeroAsiento = await generarNumeroAsiento(supabase, factura.empresa_id);
@@ -198,7 +223,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         asiento_generado: false,
         asiento_error: errorMsg.substring(0, 500)
       })
-      .eq('id', new_record.id);
+      .eq('id', factura.id);
   }
 }
 

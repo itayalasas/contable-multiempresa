@@ -124,15 +124,35 @@ Deno.serve(async (req: Request) => {
     const jsonCFE = generarJSONCFE(factura, items, cliente, config, tipoDocumento, paisCodigo, empresa);
     const resultadoDGI = await enviarADGI(jsonCFE, config);
 
+    // Extraer datos del CFE de la respuesta
+    const dgiData = resultadoDGI.data || {};
+
+    const updateData: any = {
+      dgi_enviada: true,
+      dgi_cae: resultadoDGI.cae,
+      dgi_fecha_envio: new Date().toISOString(),
+      dgi_hash: resultadoDGI.hash,
+      dgi_response: resultadoDGI,
+    };
+
+    // Actualizar datos del CFE si están disponibles
+    if (dgiData.serie) {
+      updateData.dgi_serie = dgiData.serie;
+    }
+    if (dgiData.numero || dgiData.nro) {
+      updateData.dgi_numero = parseInt(dgiData.numero || dgiData.nro);
+    }
+    if (dgiData.cae || dgiData.CAE) {
+      updateData.dgi_cae_numero = dgiData.cae || dgiData.CAE;
+      updateData.dgi_cae_serie = dgiData.cae_serie || dgiData.serie || config.codigo_sucursal;
+    }
+    if (dgiData.vencimiento_cae || dgiData.fecha_vencimiento) {
+      updateData.dgi_cae_vencimiento = dgiData.vencimiento_cae || dgiData.fecha_vencimiento;
+    }
+
     const { error: updateError } = await supabase
       .from('facturas_venta')
-      .update({
-        dgi_enviada: true,
-        dgi_cae: resultadoDGI.cae,
-        dgi_fecha_envio: new Date().toISOString(),
-        dgi_hash: resultadoDGI.hash,
-        dgi_response: resultadoDGI,
-      })
+      .update(updateData)
       .eq('id', facturaId);
 
     if (updateError) {
