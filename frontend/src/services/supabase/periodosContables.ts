@@ -432,26 +432,36 @@ export const periodosContablesService = {
 
     if (updateError) throw updateError;
 
-    // Mostrar facturas de venta del período reabierto
-    console.log('Mostrando facturas de venta del período...');
-    await supabase
-      .from('facturas_venta')
-      .update({ ocultar_en_listados: false })
-      .eq('periodo_contable_id', periodoId);
+    // Usar función de base de datos para mostrar todos los registros
+    console.log('Mostrando todos los registros del período...');
+    const { data: resultado, error: mostrarError } = await supabase
+      .rpc('mostrar_registros_periodo', { periodo_id_param: periodoId });
 
-    // Mostrar facturas de compra del período reabierto
-    console.log('Mostrando facturas de compra del período...');
-    await supabase
-      .from('facturas_compra')
-      .update({ ocultar_en_listados: false })
-      .eq('periodo_contable_id', periodoId);
-
-    // Mostrar comisiones del período reabierto
-    console.log('Mostrando comisiones del período...');
-    await supabase
-      .from('comisiones_partners')
-      .update({ ocultar_en_listados: false })
-      .eq('periodo_contable_id', periodoId);
+    if (mostrarError) {
+      console.error('Error mostrando registros:', mostrarError);
+      // Fallback: intentar actualizar manualmente
+      await Promise.all([
+        supabase
+          .from('facturas_venta')
+          .update({ ocultar_en_listados: false })
+          .eq('periodo_contable_id', periodoId),
+        supabase
+          .from('facturas_compra')
+          .update({ ocultar_en_listados: false })
+          .eq('periodo_contable_id', periodoId),
+        supabase
+          .from('comisiones_partners')
+          .update({ ocultar_en_listados: false })
+          .eq('periodo_contable_id', periodoId)
+      ]);
+    } else if (resultado && resultado.length > 0) {
+      const stats = resultado[0];
+      console.log('✅ Registros mostrados:', {
+        facturas_venta: stats.facturas_venta_actualizadas,
+        facturas_compra: stats.facturas_compra_actualizadas,
+        comisiones: stats.comisiones_actualizadas
+      });
+    }
 
     console.log('✅ Registros del período mostrados correctamente');
 

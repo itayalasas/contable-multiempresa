@@ -20,6 +20,7 @@ import {
   PeriodoContable,
   CierreContable
 } from '../../services/supabase/periodosContables';
+import { supabase } from '../../config/supabase';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useModals } from '../../hooks/useModals';
@@ -225,6 +226,35 @@ export default function PeriodosContables() {
     }
   };
 
+  const handleSincronizarVisibilidad = async () => {
+    if (!empresaActual?.id) return;
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('sincronizar_visibilidad_registros');
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const stats = data[0];
+        showSuccess(
+          'Sincronización completa',
+          `Se procesaron ${stats.periodos_procesados} períodos y se actualizaron ${stats.registros_actualizados} registros.`
+        );
+      } else {
+        showSuccess('Sincronización completa', 'Todos los registros están sincronizados.');
+      }
+
+      loadData();
+    } catch (error: any) {
+      console.error('Error sincronizando:', error);
+      showError('Error', error.message || 'No se pudo sincronizar la visibilidad');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
       case 'abierto':
@@ -363,10 +393,23 @@ export default function PeriodosContables() {
 
       {periodos.length > 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">
               Períodos Fiscales - {ejercicios.find(e => e.id === selectedEjercicio)?.anio}
             </h2>
+            <button
+              onClick={handleSincronizarVisibilidad}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+              title="Sincronizar visibilidad de facturas y comisiones según el estado de los períodos"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+              Sincronizar Visibilidad
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
