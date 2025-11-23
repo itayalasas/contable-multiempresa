@@ -206,17 +206,18 @@ export const periodosContablesService = {
     console.log('Validando facturas de venta...');
     const { data: facturasVentaSinAsiento } = await supabase
       .from('facturas_venta')
-      .select('id, numero_factura, fecha_emision')
+      .select('id, numero_factura, fecha_emision, estado, total')
       .eq('empresa_id', periodo.empresa_id)
       .gte('fecha_emision', periodo.fecha_inicio)
       .lte('fecha_emision', periodo.fecha_fin)
-      .eq('estado', 'emitida')
+      .neq('estado', 'anulada')
       .or('asiento_generado.is.null,asiento_generado.eq.false');
 
     if (facturasVentaSinAsiento && facturasVentaSinAsiento.length > 0) {
-      const numeros = facturasVentaSinAsiento.map(f => f.numero_factura).join(', ');
+      const numeros = facturasVentaSinAsiento.map(f => `${f.numero_factura} (${f.estado})`).join(', ');
+      const totalSinContabilizar = facturasVentaSinAsiento.reduce((sum, f) => sum + parseFloat(f.total || '0'), 0);
       throw new Error(
-        `Hay ${facturasVentaSinAsiento.length} factura(s) de venta sin contabilizar: ${numeros}. ` +
+        `Hay ${facturasVentaSinAsiento.length} factura(s) de venta sin contabilizar por un total de $${totalSinContabilizar.toFixed(2)}: ${numeros}. ` +
         'Todas las facturas deben tener su asiento contable generado antes de cerrar el período.'
       );
     }
@@ -256,6 +257,54 @@ export const periodosContablesService = {
     }
 
     console.log('Todas las facturas están contabilizadas correctamente');
+
+    // Validar que los totales cuadren entre facturas y asientos
+    console.log('Validando cuadratura de totales...');
+
+    // Obtener total de facturas de venta del período
+    const { data: totalFacturasVenta } = await supabase
+      .from('facturas_venta')
+      .select('total')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha_emision', periodo.fecha_inicio)
+      .lte('fecha_emision', periodo.fecha_fin)
+      .neq('estado', 'anulada');
+
+    const sumaFacturasVenta = totalFacturasVenta?.reduce((sum, f) => sum + parseFloat(f.total || '0'), 0) || 0;
+
+    // Obtener asientos confirmados del período
+    const { data: asientosConfirmados } = await supabase
+      .from('asientos_contables')
+      .select('id')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+      .eq('estado', 'confirmado');
+
+    const { data: movimientos } = await supabase
+      .from('movimientos_contables')
+      .select('debito, credito')
+      .in('asiento_id', asientosConfirmados?.map(a => a.id) || []);
+
+    const totalDebitos = movimientos?.reduce((sum, m) => sum + parseFloat(m.debito || '0'), 0) || 0;
+    const totalCreditos = movimientos?.reduce((sum, m) => sum + parseFloat(m.credito || '0'), 0) || 0;
+
+    console.log('📊 Cuadratura:', {
+      facturas_venta: sumaFacturasVenta.toFixed(2),
+      asientos_debitos: totalDebitos.toFixed(2),
+      asientos_creditos: totalCreditos.toFixed(2),
+    });
+
+    // Verificar que débitos = créditos (cuadratura básica)
+    const diferencia = Math.abs(totalDebitos - totalCreditos);
+    if (diferencia > 0.01) {
+      throw new Error(
+        `Los asientos contables no cuadran. Débitos: $${totalDebitos.toFixed(2)}, Créditos: $${totalCreditos.toFixed(2)}. ` +
+        `Diferencia: $${diferencia.toFixed(2)}. Revisa y corrige los asientos antes de cerrar.`
+      );
+    }
+
+    console.log('✅ Cuadratura de asientos correcta (débitos = créditos)');
 
     // Validar comisiones pendientes usando la función de validación
     console.log('Validando comisiones pendientes...');
@@ -304,9 +353,10 @@ export const periodosContablesService = {
 
     console.log('✅ Todas las comisiones están procesadas correctamente');
 
+    // Validar que no hay asientos sin confirmar
     const { data: asientosNoConfirmados, error: asientosError } = await supabase
       .from('asientos_contables')
-      .select('id')
+      .select('id, numero, descripcion')
       .eq('empresa_id', periodo.empresa_id)
       .gte('fecha', periodo.fecha_inicio)
       .lte('fecha', periodo.fecha_fin)
@@ -315,32 +365,14 @@ export const periodosContablesService = {
     if (asientosError) throw asientosError;
 
     if (asientosNoConfirmados && asientosNoConfirmados.length > 0) {
-      throw new Error(`Hay ${asientosNoConfirmados.length} asiento(s) no confirmado(s) en este periodo`);
+      const numeros = asientosNoConfirmados.map(a => a.numero).join(', ');
+      throw new Error(
+        `Hay ${asientosNoConfirmados.length} asiento(s) no confirmado(s) en este período: ${numeros}. ` +
+        'Todos los asientos deben estar confirmados antes de cerrar.'
+      );
     }
 
-    const { data: asientosConfirmados } = await supabase
-      .from('asientos_contables')
-      .select('id')
-      .eq('empresa_id', periodo.empresa_id)
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-      .eq('estado', 'confirmado');
-
-    const { data: movimientos } = await supabase
-      .from('movimientos_contables')
-      .select('debito, credito')
-      .in('asiento_id', asientosConfirmados?.map(a => a.id) || []);
-
-    let totalDebitos = 0;
-    let totalCreditos = 0;
-
-    if (movimientos) {
-      movimientos.forEach(mov => {
-        totalDebitos += parseFloat(mov.debito) || 0;
-        totalCreditos += parseFloat(mov.credito) || 0;
-      });
-    }
-
+    // Reutilizar los totales ya calculados en la validación de cuadratura
     const cantidadAsientos = asientosConfirmados ? asientosConfirmados.length : 0;
 
     // Actualizar el período
