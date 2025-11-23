@@ -414,23 +414,25 @@ export const periodosContablesService = {
       throw new Error('No se puede reabrir un periodo con cierre definitivo');
     }
 
-    if (periodo.estado === 'abierto') {
-      throw new Error('El periodo ya está abierto');
+    // Si el período ya está abierto, solo sincronizamos los registros
+    const yaEstabaAbierto = periodo.estado === 'abierto';
+
+    if (!yaEstabaAbierto) {
+      // Solo actualizar el período si estaba cerrado
+      const { error: updateError } = await supabase
+        .from('periodos_contables')
+        .update({
+          estado: 'abierto',
+          permite_asientos: true,
+          fecha_reapertura: new Date().toISOString(),
+          reabierto_por: usuarioId,
+          motivo_reapertura: motivo,
+          fecha_modificacion: new Date().toISOString()
+        })
+        .eq('id', periodoId);
+
+      if (updateError) throw updateError;
     }
-
-    const { error: updateError } = await supabase
-      .from('periodos_contables')
-      .update({
-        estado: 'abierto',
-        permite_asientos: true,
-        fecha_reapertura: new Date().toISOString(),
-        reabierto_por: usuarioId,
-        motivo_reapertura: motivo,
-        fecha_modificacion: new Date().toISOString()
-      })
-      .eq('id', periodoId);
-
-    if (updateError) throw updateError;
 
     // Usar función de base de datos para mostrar todos los registros
     console.log('Mostrando todos los registros del período...');
@@ -465,21 +467,26 @@ export const periodosContablesService = {
 
     console.log('✅ Registros del período mostrados correctamente');
 
-    const { error: cierreError } = await supabase
-      .from('cierres_contables')
-      .insert({
-        periodo_id: periodoId,
-        empresa_id: periodo.empresa_id,
-        tipo_cierre: 'PERIODO',
-        accion: 'REAPERTURA',
-        usuario_id: usuarioId,
-        motivo: motivo,
-        observaciones: observaciones,
-        estado_anterior: periodo.estado,
-        estado_nuevo: 'abierto'
-      });
+    // Registrar en historial solo si realmente se reabrió el período
+    if (!yaEstabaAbierto) {
+      const { error: cierreError } = await supabase
+        .from('cierres_contables')
+        .insert({
+          periodo_id: periodoId,
+          empresa_id: periodo.empresa_id,
+          tipo_cierre: 'PERIODO',
+          accion: 'REAPERTURA',
+          usuario_id: usuarioId,
+          motivo: motivo,
+          observaciones: observaciones,
+          estado_anterior: periodo.estado,
+          estado_nuevo: 'abierto'
+        });
 
-    if (cierreError) throw cierreError;
+      if (cierreError) throw cierreError;
+    } else {
+      console.log('ℹ️ Período ya estaba abierto, solo se sincronizaron los registros');
+    }
   },
 
   async cerrarEjercicio(

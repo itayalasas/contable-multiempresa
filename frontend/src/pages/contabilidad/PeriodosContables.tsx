@@ -198,7 +198,10 @@ export default function PeriodosContables() {
         cierreData.observaciones || undefined
       );
 
-      showSuccess('Período reabierto', 'El período contable ha sido reabierto');
+      showSuccess(
+        'Período procesado',
+        'El período contable está abierto y todos los registros han sido sincronizados correctamente.'
+      );
       setShowReabrirModal(false);
       setCierreData({ motivo: '', observaciones: '' });
       setSelectedPeriodo(null);
