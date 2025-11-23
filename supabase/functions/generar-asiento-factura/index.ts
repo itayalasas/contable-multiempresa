@@ -16,18 +16,44 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { type, record } = await req.json();
+    const body = await req.json();
 
-    console.log('🔄 [AsientoAutomatico] Procesando:', type, record.id);
+    // Detectar si es una llamada manual o un trigger automático
+    if (body.factura_id) {
+      // Llamada manual: { factura_id: string, manual: boolean }
+      console.log('🔄 [AsientoManual] Regenerando asiento para factura:', body.factura_id);
 
-    if (type === 'INSERT' && record.table === 'facturas_venta') {
-      await generarAsientoFacturaVenta(supabase, record);
+      const { data: factura, error: facturaError } = await supabase
+        .from('facturas_venta')
+        .select('*')
+        .eq('id', body.factura_id)
+        .single();
+
+      if (facturaError) {
+        console.error('❌ [AsientoManual] Error obteniendo factura:', facturaError);
+        throw new Error(`No se pudo obtener la factura: ${facturaError.message}`);
+      }
+
+      await generarAsientoFacturaVenta(supabase, factura);
+
+      return new Response(
+        JSON.stringify({ success: true, message: 'Asiento regenerado exitosamente' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } else {
+      // Trigger automático: { type: string, record: object }
+      const { type, record } = body;
+      console.log('🔄 [AsientoAutomatico] Procesando:', type, record.id);
+
+      if (type === 'INSERT' && record.table === 'facturas_venta') {
+        await generarAsientoFacturaVenta(supabase, record);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     console.error('❌ [AsientoAutomatico] Error:', error);
     return new Response(
