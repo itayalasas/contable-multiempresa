@@ -87,7 +87,6 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validar webhook secret (opcional)
     const providedSecret = req.headers.get('X-Webhook-Secret');
     if (providedSecret && providedSecret !== webhookSecret) {
       return new Response(
@@ -100,7 +99,6 @@ Deno.serve(async (req: Request) => {
 
     console.log('🔔 [Webhook] Recibido:', payload.event, payload.order.order_id);
 
-    // Registrar el evento
     const { data: evento, error: eventoError } = await supabase
       .from('eventos_externos')
       .insert({
@@ -121,11 +119,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Procesar el evento
     const result = await handleOrder(supabase, payload, evento.id);
 
     if (result.success) {
-      // Marcar evento como procesado
       await supabase
         .from('eventos_externos')
         .update({
@@ -142,7 +138,6 @@ Deno.serve(async (req: Request) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // Registrar error
       await supabase
         .from('eventos_externos')
         .update({
@@ -175,7 +170,6 @@ async function handleOrder(
   try {
     console.log('🔄 [Order] Procesando orden:', payload.order.order_id);
 
-    // 1. Verificar si la orden ya fue procesada
     const { data: ordenExistente } = await supabase
       .from('facturas_venta')
       .select('id, numero_factura')
@@ -192,7 +186,6 @@ async function handleOrder(
       };
     }
 
-    // 2. Obtener empresa y país
     const { data: empresa } = await supabase
       .from('empresas')
       .select('id, pais_id')
@@ -203,25 +196,64 @@ async function handleOrder(
       return { success: false, error: 'Empresa no encontrada' };
     }
 
-    // 3. Buscar o crear cliente
     let clienteId;
-    
-    // Buscar por documento si existe
-    if (payload.customer.document_number) {
-      const { data: clienteExistente } = await supabase
+    let clienteExistente = null;
+
+    if (payload.customer.customer_id) {
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('id')
+        .eq('empresa_id', payload.empresa_id)
+        .eq('metadata->>customer_id_externo', payload.customer.customer_id)
+        .maybeSingle();
+
+      if (cliente) {
+        clienteExistente = cliente;
+        clienteId = cliente.id;
+        console.log('👤 [Order] Cliente encontrado por customer_id externo:', clienteId);
+      }
+    }
+
+    if (!clienteId && payload.customer.document_number) {
+      const { data: cliente } = await supabase
         .from('clientes')
         .select('id')
         .eq('empresa_id', payload.empresa_id)
         .eq('numero_documento', payload.customer.document_number)
         .maybeSingle();
 
-      if (clienteExistente) {
-        clienteId = clienteExistente.id;
-        console.log('👤 [Order] Cliente existente:', clienteId);
+      if (cliente) {
+        clienteExistente = cliente;
+        clienteId = cliente.id;
+        console.log('👤 [Order] Cliente encontrado por documento:', clienteId);
       }
     }
 
-    // Si no existe, crear nuevo cliente
+    if (clienteId) {
+      const clienteUpdateData: any = {
+        razon_social: payload.customer.name,
+        email: payload.customer.email,
+        telefono: payload.customer.phone,
+      };
+
+      if (payload.customer.customer_id) {
+        clienteUpdateData.metadata = {
+          customer_id_externo: payload.customer.customer_id
+        };
+      }
+
+      const { error: updateError } = await supabase
+        .from('clientes')
+        .update(clienteUpdateData)
+        .eq('id', clienteId);
+
+      if (updateError) {
+        console.error('⚠️ [Order] Error actualizando cliente:', updateError);
+      } else {
+        console.log('✅ [Order] Cliente actualizado con datos de la orden');
+      }
+    }
+
     if (!clienteId) {
       const clienteData: any = {
         empresa_id: payload.empresa_id,
@@ -230,27 +262,29 @@ async function handleOrder(
         email: payload.customer.email,
         telefono: payload.customer.phone,
         activo: true,
+        metadata: {},
       };
 
-      // Agregar documento solo si existe
+      if (payload.customer.customer_id) {
+        clienteData.metadata.customer_id_externo = payload.customer.customer_id;
+      }
+
       if (payload.customer.document_number) {
         clienteData.numero_documento = payload.customer.document_number;
       }
       if (payload.customer.document_type) {
-        // Buscar tipo_documento_id
         const { data: tipoDoc } = await supabase
-          .from('tipos_documento')
+          .from('tipo_documento_identidad')
           .select('id')
           .eq('pais_id', empresa.pais_id)
-          .ilike('nombre', payload.customer.document_type)
+          .ilike('codigo', payload.customer.document_type)
           .maybeSingle();
-        
+
         if (tipoDoc) {
           clienteData.tipo_documento_id = tipoDoc.id;
         }
       }
 
-      // Agregar dirección si existe
       if (payload.customer.address) {
         if (typeof payload.customer.address === 'string') {
           clienteData.direccion = payload.customer.address;
@@ -275,7 +309,6 @@ async function handleOrder(
       console.log('✅ [Order] Cliente creado:', clienteId);
     }
 
-    // 4. Obtener siguiente número de factura (serie A por defecto)
     const serie = 'A';
     const { data: ultimaFactura } = await supabase
       .from('facturas_venta')
@@ -292,9 +325,6 @@ async function handleOrder(
 
     console.log('📝 [Order] Número factura:', `${serie}-${siguienteNumero}`);
 
-    // 5. Calcular totales
-    // IMPORTANTE: Los valores deben venir ya en el formato correcto (no en centavos)
-    // Si el sistema externo envía en centavos, debe incluir "amounts_in_cents": true en metadata
     const esEnCentavos = payload.metadata?.amounts_in_cents === true || payload.order.amounts_in_cents === true;
     const divisor = esEnCentavos ? 100 : 1;
 
@@ -303,7 +333,6 @@ async function handleOrder(
     const impuestos = (payload.order.tax || 0) / divisor;
     const total = (payload.order.total || 0) / divisor;
 
-    // 6. Crear factura
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -339,28 +368,24 @@ async function handleOrder(
 
     console.log('✅ [Order] Factura creada:', factura.id);
 
-    // 7. Generar asiento contable
     try {
       await generarAsientoContable(supabase, factura, empresa.pais_id);
     } catch (error) {
       console.warn('⚠️ [Order] Error generando asiento contable:', error);
     }
 
-    // 8. Crear items de factura
     const comisionesCreadas = [];
 
     for (let i = 0; i < payload.items.length; i++) {
       const item = payload.items[i];
 
-      // Calcular valores (convertir de centavos si es necesario)
       const itemUnitPrice = (item.unit_price || 0) / divisor;
       const itemSubtotal = item.subtotal ? item.subtotal / divisor : (item.quantity * itemUnitPrice);
       const itemDescuento = (item.discount || 0) / divisor;
-      const itemTaxRate = item.tax_rate || 0.22; // Guardar como decimal 0.22 (22%)
+      const itemTaxRate = item.tax_rate || 0.22;
       const itemTaxAmount = item.tax_amount ? item.tax_amount / divisor : (itemSubtotal - itemDescuento) * itemTaxRate;
       const itemTotal = (item.total || 0) / divisor;
 
-      // Crear item de factura
       const { error: itemError } = await supabase
         .from('facturas_venta_items')
         .insert({
@@ -391,7 +416,6 @@ async function handleOrder(
 
       console.log(`✅ [Order] Item ${i + 1} creado`);
 
-      // Si tiene partner, procesar comisión
       if (item.partner) {
         const comisionResult = await procesarComisionPartner(
           supabase,
@@ -439,7 +463,6 @@ async function procesarComisionPartner(
   try {
     console.log('🤝 [Comision] Procesando partner:', partnerData.partner_id);
 
-    // 1. Buscar o crear partner
     let partnerId;
     const { data: partnerExistente } = await supabase
       .from('partners_aliados')
@@ -452,7 +475,6 @@ async function procesarComisionPartner(
       partnerId = partnerExistente.id;
       console.log('🤝 [Comision] Partner existente:', partnerId);
     } else {
-      // Crear nuevo partner
       const { data: nuevoPartner, error: partnerError } = await supabase
         .from('partners_aliados')
         .insert({
@@ -478,14 +500,12 @@ async function procesarComisionPartner(
       console.log('✅ [Comision] Partner creado:', partnerId);
     }
 
-    // 2. Calcular comisión (ya debe venir en unidades correctas desde handleOrder)
     const esEnCentavos = item.total > 1000;
     const divisor = esEnCentavos ? 100 : 1;
     const itemSubtotal = (item.subtotal || (item.quantity * item.unit_price)) / divisor;
     const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
     const comisionMonto = itemSubtotal * (comisionPorcentaje / 100);
 
-    // 3. Registrar comisión
     const { data: comision, error: comisionError } = await supabase
       .from('comisiones_partners')
       .insert({
@@ -526,7 +546,6 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
   try {
     console.log('📝 [Asiento] Generando para factura:', factura.numero_factura);
 
-    // Incrementar contador de intentos
     await supabase
       .from('facturas_venta')
       .update({ asiento_intentos: (factura.asiento_intentos || 0) + 1 })
@@ -539,10 +558,7 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
       .maybeSingle();
 
     const clienteNombre = cliente?.razon_social || 'Cliente';
-
-    // Usar el usuario Sistema para operaciones automáticas
     const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
-
     const numeroAsiento = await generarNumeroAsiento(supabase, factura.empresa_id);
     const cuentaCobrarId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '1212');
     const cuentaVentasId = await obtenerCuentaIdAsiento(supabase, factura.empresa_id, '7011');
@@ -557,7 +573,6 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
       const errorMsg = `Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`;
       console.error('❌ [Asiento]', errorMsg);
 
-      // Guardar error en la factura
       await supabase
         .from('facturas_venta')
         .update({
@@ -627,7 +642,6 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
       throw movError;
     }
 
-    // Marcar como exitoso
     await supabase
       .from('facturas_venta')
       .update({
@@ -641,13 +655,12 @@ async function generarAsientoContable(supabase: any, factura: any, paisId: strin
   } catch (error) {
     console.error('❌ [Asiento] Error:', error);
 
-    // Guardar el error en la factura
     const errorMsg = error.message || JSON.stringify(error);
     await supabase
       .from('facturas_venta')
       .update({
         asiento_generado: false,
-        asiento_error: errorMsg.substring(0, 500) // Limitar tamaño
+        asiento_error: errorMsg.substring(0, 500)
       })
       .eq('id', factura.id);
   }
