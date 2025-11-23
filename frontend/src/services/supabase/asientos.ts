@@ -269,14 +269,30 @@ export const asientosSupabaseService = {
 
       if (deleteError) throw deleteError;
 
-      // 2. Crear nuevos movimientos
+      // 2. Obtener información de las cuentas para el campo "cuenta"
+      const cuentaIds = updates.movimientos.map(m => m.cuentaId);
+      const { data: cuentas, error: cuentasError } = await supabase
+        .from('plan_cuentas')
+        .select('id, codigo, nombre')
+        .in('id', cuentaIds);
+
+      if (cuentasError) throw cuentasError;
+
+      // Crear un mapa de cuenta_id -> nombre completo
+      const cuentasMap = new Map(
+        cuentas?.map(c => [c.id, `${c.codigo} - ${c.nombre}`]) || []
+      );
+
+      // 3. Crear nuevos movimientos
       const movimientosData = updates.movimientos.map((mov) => ({
         asiento_id: asientoId,
         cuenta_id: mov.cuentaId,
+        cuenta: mov.cuenta || cuentasMap.get(mov.cuentaId) || '', // Usar cuenta del map si no viene en mov
         debito: mov.debito || 0,
         credito: mov.credito || 0,
         descripcion: mov.descripcion || '',
         tercero_id: mov.terceroId || null,
+        tercero: mov.tercero || null,
         documento_referencia: mov.documentoReferencia || null,
         centro_costo: mov.centroCosto || null,
       }));
