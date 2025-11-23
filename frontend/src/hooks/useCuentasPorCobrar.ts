@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FacturaPorCobrar, Cliente, PagoFactura, ResumenCuentasPorCobrar } from '../types/cuentasPorCobrar';
-import { cuentasPorCobrarService } from '../services/firebase/cuentasPorCobrar';
+import { cuentasPorCobrarSupabaseService as cuentasPorCobrarService } from '../services/supabase/cuentasPorCobrar';
 
 export const useCuentasPorCobrar = (empresaId: string | undefined) => {
   const [facturas, setFacturas] = useState<FacturaPorCobrar[]>([]);
@@ -9,34 +9,56 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Calcular resumen desde las facturas
+  const calcularResumen = useCallback((facturas: FacturaPorCobrar[]): ResumenCuentasPorCobrar => {
+    const totalPorCobrar = facturas.reduce((sum, f) => sum + f.saldoPendiente, 0);
+    const totalVencido = facturas
+      .filter(f => f.estado === 'VENCIDA')
+      .reduce((sum, f) => sum + f.saldoPendiente, 0);
+    const totalParcial = facturas
+      .filter(f => f.estado === 'PARCIAL')
+      .reduce((sum, f) => sum + f.saldoPendiente, 0);
+    const totalPendiente = facturas
+      .filter(f => f.estado === 'PENDIENTE')
+      .reduce((sum, f) => sum + f.saldoPendiente, 0);
+
+    return {
+      totalPorCobrar,
+      totalVencido,
+      totalParcial,
+      totalPendiente,
+      cantidadFacturas: facturas.length,
+      cantidadVencidas: facturas.filter(f => f.estado === 'VENCIDA').length,
+    };
+  }, []);
+
   // Cargar datos inicialmente
   const cargarDatos = useCallback(async () => {
     if (!empresaId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log('🔄 Cargando datos de cuentas por cobrar...');
-      
-      const [facturasData, clientesData, resumenData] = await Promise.all([
+
+      const [facturasData, clientesData] = await Promise.all([
         cuentasPorCobrarService.getFacturas(empresaId),
-        cuentasPorCobrarService.getClientes(empresaId),
-        cuentasPorCobrarService.getResumen(empresaId)
+        cuentasPorCobrarService.getClientes(empresaId)
       ]);
-      
+
       console.log(`✅ Datos cargados: ${facturasData.length} facturas, ${clientesData.length} clientes`);
-      
+
       setFacturas(facturasData);
       setClientes(clientesData);
-      setResumen(resumenData);
+      setResumen(calcularResumen(facturasData));
     } catch (err) {
       console.error('❌ Error al cargar cuentas por cobrar:', err);
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setLoading(false);
     }
-  }, [empresaId]);
+  }, [empresaId, calcularResumen]);
 
   // Cargar datos cuando cambie la empresa
   useEffect(() => {
@@ -45,93 +67,17 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
 
   // Crear factura con actualización optimista
   const crearFactura = useCallback(async (nuevaFactura: Omit<FacturaPorCobrar, 'id' | 'fechaCreacion' | 'fechaModificacion'>) => {
-    if (!empresaId) throw new Error('No hay empresa seleccionada');
-
-    const tempId = `temp_${Date.now()}`;
-    const facturaOptimista: FacturaPorCobrar = {
-      ...nuevaFactura,
-      id: tempId,
-      fechaCreacion: new Date().toISOString(),
-      fechaModificacion: new Date().toISOString()
-    };
-
-    // Actualización optimista
-    setFacturas(prev => [facturaOptimista, ...prev]);
-
-    try {
-      const realId = await cuentasPorCobrarService.crearFactura(empresaId, nuevaFactura);
-      
-      // Actualizar con el ID real
-      setFacturas(prev => prev.map(factura => 
-        factura.id === tempId 
-          ? { ...factura, id: realId }
-          : factura
-      ));
-
-      // Actualizar resumen sin recargar toda la página
-      const nuevoResumen = await cuentasPorCobrarService.getResumen(empresaId);
-      setResumen(nuevoResumen);
-
-      return realId;
-    } catch (error) {
-      // Revertir si hay error
-      setFacturas(prev => prev.filter(factura => factura.id !== tempId));
-      throw error;
-    }
+    throw new Error('Las facturas deben crearse desde el módulo de Facturas de Venta');
   }, [empresaId]);
 
   // Actualizar factura
   const actualizarFactura = useCallback(async (facturaId: string, datos: Partial<FacturaPorCobrar>) => {
-    if (!empresaId) throw new Error('No hay empresa seleccionada');
-
-    const facturaAnterior = facturas.find(f => f.id === facturaId);
-    if (!facturaAnterior) throw new Error('Factura no encontrada');
-
-    // Actualización optimista
-    setFacturas(prev => prev.map(factura => 
-      factura.id === facturaId 
-        ? { ...factura, ...datos, fechaModificacion: new Date().toISOString() }
-        : factura
-    ));
-
-    try {
-      await cuentasPorCobrarService.actualizarFactura(empresaId, facturaId, datos);
-      
-      // Actualizar resumen sin recargar toda la página
-      const nuevoResumen = await cuentasPorCobrarService.getResumen(empresaId);
-      setResumen(nuevoResumen);
-    } catch (error) {
-      // Revertir si hay error
-      setFacturas(prev => prev.map(factura => 
-        factura.id === facturaId ? facturaAnterior : factura
-      ));
-      throw error;
-    }
+    throw new Error('Las facturas deben modificarse desde el módulo de Facturas de Venta');
   }, [empresaId, facturas]);
 
   // Eliminar factura
   const eliminarFactura = useCallback(async (facturaId: string) => {
-    if (!empresaId) throw new Error('No hay empresa seleccionada');
-
-    const facturaEliminada = facturas.find(f => f.id === facturaId);
-    if (!facturaEliminada) throw new Error('Factura no encontrada');
-
-    // Actualización optimista
-    setFacturas(prev => prev.filter(factura => factura.id !== facturaId));
-
-    try {
-      await cuentasPorCobrarService.eliminarFactura(empresaId, facturaId);
-      
-      // Actualizar resumen sin recargar toda la página
-      const nuevoResumen = await cuentasPorCobrarService.getResumen(empresaId);
-      setResumen(nuevoResumen);
-    } catch (error) {
-      // Revertir si hay error
-      setFacturas(prev => [...prev, facturaEliminada].sort((a, b) => 
-        new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime()
-      ));
-      throw error;
-    }
+    throw new Error('Las facturas deben eliminarse desde el módulo de Facturas de Venta');
   }, [empresaId, facturas]);
 
   // Registrar pago
@@ -166,11 +112,10 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
     ));
 
     try {
-      await cuentasPorCobrarService.registrarPago(empresaId, facturaId, pago);
-      
-      // Actualizar resumen sin recargar toda la página
-      const nuevoResumen = await cuentasPorCobrarService.getResumen(empresaId);
-      setResumen(nuevoResumen);
+      await cuentasPorCobrarService.registrarPago(pago);
+
+      // Recargar datos para obtener el estado actualizado
+      await cargarDatos();
     } catch (error) {
       // Revertir si hay error
       setFacturas(prev => prev.map(factura => 
@@ -178,7 +123,7 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
       ));
       throw error;
     }
-  }, [empresaId, facturas]);
+  }, [empresaId, facturas, cargarDatos]);
 
   // Crear cliente
   const crearCliente = useCallback(async (nuevoCliente: Omit<Cliente, 'id' | 'fechaCreacion'>) => {
@@ -196,16 +141,16 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
     setClientes(prev => [clienteOptimista, ...prev]);
 
     try {
-      const realId = await cuentasPorCobrarService.crearCliente(empresaId, nuevoCliente);
-      
-      // Actualizar con el ID real
-      setClientes(prev => prev.map(cliente => 
-        cliente.id === tempId 
-          ? { ...cliente, id: realId }
+      const clienteCreado = await cuentasPorCobrarService.createCliente(nuevoCliente);
+
+      // Actualizar con el cliente real
+      setClientes(prev => prev.map(cliente =>
+        cliente.id === tempId
+          ? clienteCreado
           : cliente
       ));
 
-      return realId;
+      return clienteCreado.id;
     } catch (error) {
       // Revertir si hay error
       setClientes(prev => prev.filter(cliente => cliente.id !== tempId));
