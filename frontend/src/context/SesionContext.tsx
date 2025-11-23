@@ -6,17 +6,18 @@ import { PaisesService } from '../services/paises/paisesService';
 
 interface SesionContextType {
   sesion: SesionUsuario | null;
+  usuario: Usuario | null;
   empresaActual: Empresa | null;
   paisActual: Pais | null;
   empresasDisponibles: Empresa[];
   cargando: boolean;
   error: string | null;
-  
+
   // Acciones
   seleccionarEmpresa: (empresa: Empresa) => Promise<void>;
   actualizarConfiguracion: (config: Partial<ConfiguracionSesion>) => void;
   refrescarSesion: () => Promise<void>;
-  
+
   // Utilidades
   formatearMoneda: (cantidad: number) => string;
   formatearFecha: (fecha: Date) => string;
@@ -240,6 +241,7 @@ export const SesionProvider: React.FC<SesionProviderProps> = ({ children }) => {
 
   const value: SesionContextType = {
     sesion,
+    usuario: sesion?.usuario || null,
     empresaActual,
     paisActual,
     empresasDisponibles,
