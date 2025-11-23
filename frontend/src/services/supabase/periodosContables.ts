@@ -183,18 +183,79 @@ export const periodosContablesService = {
     motivo?: string,
     observaciones?: string
   ): Promise<void> {
+    console.log('cerrarPeriodo - Inicio', { periodoId, usuarioId });
+
     const { data: periodo, error: periodoError } = await supabase
       .from('periodos_contables')
       .select('*')
       .eq('id', periodoId)
       .single();
 
-    if (periodoError) throw periodoError;
+    if (periodoError) {
+      console.error('Error obteniendo período:', periodoError);
+      throw periodoError;
+    }
     if (!periodo) throw new Error('Periodo no encontrado');
+
+    console.log('Período obtenido:', periodo);
 
     if (periodo.estado === 'cerrado' || periodo.estado === 'cerrado_definitivo') {
       throw new Error('El periodo ya está cerrado');
     }
+
+    console.log('Validando facturas de venta...');
+    const { data: facturasVentaSinAsiento } = await supabase
+      .from('facturas_venta')
+      .select('id, numero, fecha, cliente_nombre')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+      .eq('estado', 'emitida')
+      .or('asiento_generado.is.null,asiento_generado.eq.false');
+
+    if (facturasVentaSinAsiento && facturasVentaSinAsiento.length > 0) {
+      const numeros = facturasVentaSinAsiento.map(f => f.numero).join(', ');
+      throw new Error(
+        `Hay ${facturasVentaSinAsiento.length} factura(s) de venta sin contabilizar: ${numeros}. ` +
+        'Todas las facturas deben tener su asiento contable generado antes de cerrar el período.'
+      );
+    }
+
+    console.log('Validando facturas con errores...');
+    const { data: facturasConError } = await supabase
+      .from('facturas_venta')
+      .select('id, numero, fecha, asiento_error')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+      .not('asiento_error', 'is', null);
+
+    if (facturasConError && facturasConError.length > 0) {
+      const errores = facturasConError.map(f => `${f.numero}: ${f.asiento_error}`).join('; ');
+      throw new Error(
+        `Hay ${facturasConError.length} factura(s) con errores en la contabilización: ${errores}. ` +
+        'Corrige los errores antes de cerrar el período.'
+      );
+    }
+
+    console.log('Validando facturas de compra...');
+    const { data: facturasCompraSinAsiento } = await supabase
+      .from('facturas_compra')
+      .select('id, numero, fecha, proveedor_nombre')
+      .eq('empresa_id', periodo.empresa_id)
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+      .or('asiento_generado.is.null,asiento_generado.eq.false');
+
+    if (facturasCompraSinAsiento && facturasCompraSinAsiento.length > 0) {
+      const numeros = facturasCompraSinAsiento.map(f => f.numero).join(', ');
+      throw new Error(
+        `Hay ${facturasCompraSinAsiento.length} factura(s) de compra sin contabilizar: ${numeros}. ` +
+        'Todas las facturas deben estar contabilizadas antes de cerrar el período.'
+      );
+    }
+
+    console.log('Todas las facturas están contabilizadas correctamente');
 
     const { data: asientosNoConfirmados, error: asientosError } = await supabase
       .from('asientos_contables')

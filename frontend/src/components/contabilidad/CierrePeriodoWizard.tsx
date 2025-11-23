@@ -14,6 +14,7 @@ import {
 import { PeriodoContable } from '../../services/supabase/periodosContables';
 import { asientosSupabaseService } from '../../services/supabase/asientos';
 import { balanceComprobacionService } from '../../services/supabase/balanceComprobacion';
+import { supabase } from '../../config/supabase';
 import { useSesion } from '../../context/SesionContext';
 
 interface CierrePeriodoWizardProps {
@@ -31,6 +32,9 @@ interface ValidacionResult {
   asientosDescuadrados: number;
   totalDebitos: number;
   totalCreditos: number;
+  facturasVentaSinContabilizar?: number;
+  facturasCompraSinContabilizar?: number;
+  facturasConError?: number;
 }
 
 type Step = 'validacion' | 'ajustes' | 'confirmar' | 'cerrar';
@@ -101,6 +105,46 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         advertencias.push('No hay asientos registrados en este período');
       }
 
+      const { data: facturasVentaSinAsiento } = await supabase
+        .from('facturas_venta')
+        .select('id')
+        .eq('empresa_id', empresaActual.id)
+        .gte('fecha', periodo.fecha_inicio)
+        .lte('fecha', periodo.fecha_fin)
+        .eq('estado', 'emitida')
+        .or('asiento_generado.is.null,asiento_generado.eq.false');
+
+      const facturasVentaSinContabilizar = facturasVentaSinAsiento?.length || 0;
+      if (facturasVentaSinContabilizar > 0) {
+        errores.push(`Hay ${facturasVentaSinContabilizar} factura(s) de venta sin contabilizar`);
+      }
+
+      const { data: facturasCompraSinAsiento } = await supabase
+        .from('facturas_compra')
+        .select('id')
+        .eq('empresa_id', empresaActual.id)
+        .gte('fecha', periodo.fecha_inicio)
+        .lte('fecha', periodo.fecha_fin)
+        .or('asiento_generado.is.null,asiento_generado.eq.false');
+
+      const facturasCompraSinContabilizar = facturasCompraSinAsiento?.length || 0;
+      if (facturasCompraSinContabilizar > 0) {
+        errores.push(`Hay ${facturasCompraSinContabilizar} factura(s) de compra sin contabilizar`);
+      }
+
+      const { data: facturasConError } = await supabase
+        .from('facturas_venta')
+        .select('id')
+        .eq('empresa_id', empresaActual.id)
+        .gte('fecha', periodo.fecha_inicio)
+        .lte('fecha', periodo.fecha_fin)
+        .not('asiento_error', 'is', null);
+
+      const cantidadFacturasConError = facturasConError?.length || 0;
+      if (cantidadFacturasConError > 0) {
+        errores.push(`Hay ${cantidadFacturasConError} factura(s) con errores en la contabilización`);
+      }
+
       setValidacion({
         valido: errores.length === 0,
         errores,
@@ -108,7 +152,10 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         asientosBorrador,
         asientosDescuadrados,
         totalDebitos,
-        totalCreditos
+        totalCreditos,
+        facturasVentaSinContabilizar,
+        facturasCompraSinContabilizar,
+        facturasConError: cantidadFacturasConError
       });
     } catch (error) {
       console.error('Error validando período:', error);
@@ -126,9 +173,18 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
   };
 
   const handleCerrar = async () => {
-    if (!usuario?.id) return;
+    console.log('handleCerrar iniciado', { usuario, motivo, periodo });
+
+    if (!usuario?.id) {
+      console.error('No hay usuario autenticado');
+      if (onError) {
+        onError('Usuario no autenticado');
+      }
+      return;
+    }
 
     if (!motivo || motivo.trim() === '') {
+      console.error('Motivo vacío');
       if (onError) {
         onError('El motivo del cierre es obligatorio');
       }
@@ -136,8 +192,17 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
     }
 
     setLoading(true);
+    console.log('Iniciando cierre de período...');
+
     try {
       const { periodosContablesService } = await import('../../services/supabase/periodosContables');
+
+      console.log('Llamando a cerrarPeriodo con:', {
+        periodoId: periodo.id,
+        usuarioId: usuario.id,
+        motivo,
+        observaciones
+      });
 
       await periodosContablesService.cerrarPeriodo(
         periodo.id,
@@ -146,6 +211,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         observaciones || undefined
       );
 
+      console.log('Período cerrado exitosamente');
       onSuccess();
     } catch (error: any) {
       console.error('Error cerrando período:', error);
