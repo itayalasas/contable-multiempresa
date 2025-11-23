@@ -465,7 +465,8 @@ async function handleOrder(
           factura.id,
           payload.order.order_id,
           item,
-          item.partner
+          item.partner,
+          esEnCentavos
         );
 
         if (comisionResult.success) {
@@ -499,7 +500,8 @@ async function procesarComisionPartner(
   facturaId: string,
   orderId: string,
   item: any,
-  partnerData: any
+  partnerData: any,
+  esEnCentavos: boolean = false
 ) {
   try {
     console.log('🤝 [Comision] Procesando partner:', partnerData.partner_id);
@@ -541,11 +543,12 @@ async function procesarComisionPartner(
       console.log('✅ [Comision] Partner creado:', partnerId);
     }
 
-    const esEnCentavos = item.total > 1000;
     const divisor = esEnCentavos ? 100 : 1;
     const itemSubtotal = (item.subtotal || (item.quantity * item.unit_price)) / divisor;
     const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
     const comisionMonto = itemSubtotal * (comisionPorcentaje / 100);
+
+    console.log(`💰 [Comision] Subtotal: ${itemSubtotal.toFixed(2)}, Porcentaje: ${comisionPorcentaje}%, Monto: ${comisionMonto.toFixed(2)}`);
 
     const { data: comision, error: comisionError } = await supabase
       .from('comisiones_partners')
@@ -556,9 +559,9 @@ async function procesarComisionPartner(
         order_id: orderId,
         item_codigo: item.sku || item.item_id,
         fecha: new Date().toISOString().split('T')[0],
-        subtotal_venta: itemSubtotal,
+        subtotal_venta: itemSubtotal.toFixed(2),
         comision_porcentaje: comisionPorcentaje,
-        comision_monto: comisionMonto,
+        comision_monto: comisionMonto.toFixed(2),
         estado_comision: 'pendiente',
         estado_pago: 'pendiente',
         descripcion: item.description || item.name,
