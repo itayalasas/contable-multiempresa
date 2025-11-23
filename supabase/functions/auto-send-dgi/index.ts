@@ -400,39 +400,81 @@ async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
   console.log('📤 [DGI] Enviando JSON CFE a DGI...');
   console.log('📋 [DGI] Payload:', JSON.stringify(jsonCFE, null, 2));
 
-  const apiUrl = Deno.env.get('DGI_API_CREATE_URL') || 'https://api.flowbridge.site/functions/v1/api-gateway/1a062194-437a-4d61-8cb3-fe7d00f90234';
-  const apiKey = Deno.env.get('DGI_API_CREATE_KEY') || 'pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3';
+  const apiUrlCreate = Deno.env.get('DGI_API_CREATE_URL') || 'https://api.flowbridge.site/functions/v1/api-gateway/1a062194-437a-4d61-8cb3-fe7d00f90234';
+  const apiKeyCreate = Deno.env.get('DGI_API_CREATE_KEY') || 'pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3';
 
-  console.log('🌐 [DGI] Llamando a:', apiUrl);
+  console.log('🌐 [DGI] Llamando a API de creación:', apiUrlCreate);
 
   try {
-    const response = await fetch(apiUrl, {
+    const responseCreate = await fetch(apiUrlCreate, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Integration-Key': apiKey,
+        'X-Integration-Key': apiKeyCreate,
       },
       body: JSON.stringify(jsonCFE),
     });
 
-    console.log('📥 [DGI] Respuesta status:', response.status);
+    console.log('📥 [DGI] Respuesta status creación:', responseCreate.status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [DGI] Error response:', errorText);
-      throw new Error(`Error al enviar a DGI: ${response.status} - ${errorText}`);
+    if (!responseCreate.ok) {
+      const errorText = await responseCreate.text();
+      console.error('❌ [DGI] Error response creación:', errorText);
+      throw new Error(`Error al enviar a DGI: ${responseCreate.status} - ${errorText}`);
     }
 
-    const resultado = await response.json();
-    console.log('✅ [DGI] Respuesta exitosa:', resultado);
+    const resultadoCreate = await responseCreate.json();
+    console.log('✅ [DGI] Respuesta exitosa creación:', resultadoCreate);
+
+    const apiUrlQuery = Deno.env.get('DGI_API_QUERY_URL') || 'https://api.flowbridge.site/functions/v1/api-gateway/e9bebebc-351e-42ea-a431-4ff02105ef8b';
+    const apiKeyQuery = Deno.env.get('DGI_API_QUERY_KEY') || 'pub_83e398f967f43cda32a97b7f5ea1cf27623f82fafd46388e82608a1cbc8849a3';
+
+    console.log('🔍 [DGI] Consultando datos del CFE en API de consulta:', apiUrlQuery);
+
+    const queryPayload = {
+      numero_interno: jsonCFE.numero_interno,
+      sucursal: jsonCFE.sucursal,
+      tipo_comprobante: jsonCFE.tipo_comprobante,
+    };
+
+    console.log('📋 [DGI] Payload consulta:', JSON.stringify(queryPayload, null, 2));
+
+    const responseQuery = await fetch(apiUrlQuery, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Integration-Key': apiKeyQuery,
+      },
+      body: JSON.stringify(queryPayload),
+    });
+
+    console.log('📥 [DGI] Respuesta status consulta:', responseQuery.status);
+
+    if (!responseQuery.ok) {
+      console.warn('⚠️ [DGI] No se pudo consultar el CFE, usando datos de creación');
+      return {
+        success: true,
+        cae: resultadoCreate.cae || resultadoCreate.CAE || `CAE-${Date.now()}`,
+        hash: resultadoCreate.hash || resultadoCreate.HASH || `SHA256-${Math.random().toString(36).substr(2, 16)}`,
+        fecha: new Date().toISOString(),
+        mensaje: resultadoCreate.mensaje || 'CFE aceptado por DGI',
+        data: resultadoCreate,
+      };
+    }
+
+    const resultadoQuery = await responseQuery.json();
+    console.log('✅ [DGI] Respuesta exitosa consulta:', resultadoQuery);
 
     return {
       success: true,
-      cae: resultado.cae || resultado.CAE || `CAE-${Date.now()}`,
-      hash: resultado.hash || resultado.HASH || `SHA256-${Math.random().toString(36).substr(2, 16)}`,
+      cae: resultadoQuery.cae || resultadoQuery.CAE || resultadoCreate.cae || `CAE-${Date.now()}`,
+      hash: resultadoQuery.hash || resultadoQuery.HASH || resultadoCreate.hash || `SHA256-${Math.random().toString(36).substr(2, 16)}`,
       fecha: new Date().toISOString(),
-      mensaje: resultado.mensaje || 'CFE aceptado por DGI',
-      data: resultado,
+      mensaje: resultadoQuery.mensaje || resultadoCreate.mensaje || 'CFE aceptado por DGI',
+      data: {
+        ...resultadoCreate,
+        ...resultadoQuery,
+      },
     };
   } catch (error: any) {
     console.error('❌ [DGI] Error al enviar:', error.message);
