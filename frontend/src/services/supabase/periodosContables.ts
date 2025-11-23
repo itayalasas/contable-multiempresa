@@ -257,25 +257,52 @@ export const periodosContablesService = {
 
     console.log('Todas las facturas están contabilizadas correctamente');
 
-    // Validar comisiones pendientes
+    // Validar comisiones pendientes usando la función de validación
     console.log('Validando comisiones pendientes...');
-    const { data: comisionesPendientes } = await supabase
-      .from('comisiones_partners')
-      .select('id, partner_id, monto_comision, estado')
-      .eq('empresa_id', periodo.empresa_id)
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-      .eq('estado', 'pendiente');
+    const { data: validacionComisiones, error: validacionError } = await supabase
+      .rpc('tiene_comisiones_pendientes_en_periodo', {
+        p_empresa_id: periodo.empresa_id,
+        p_fecha_inicio: periodo.fecha_inicio,
+        p_fecha_fin: periodo.fecha_fin
+      });
 
-    if (comisionesPendientes && comisionesPendientes.length > 0) {
-      throw new Error(
-        `Hay ${comisionesPendientes.length} comisión(es) pendiente(s) de facturar. ` +
-        'Todas las comisiones deben estar facturadas antes de cerrar el período. ' +
-        'Ve a Compras > Comisiones Partners y genera las facturas pendientes.'
-      );
+    if (validacionError) {
+      console.error('Error validando comisiones:', validacionError);
+      throw new Error('Error al validar comisiones: ' + validacionError.message);
     }
 
-    console.log('Todas las comisiones están facturadas correctamente');
+    if (validacionComisiones && validacionComisiones.length > 0) {
+      const resultado = validacionComisiones[0];
+
+      if (resultado.hay_pendientes) {
+        const detalles: string[] = [];
+
+        if (resultado.cantidad_pendientes > 0) {
+          detalles.push(
+            `${resultado.cantidad_pendientes} comisión(es) pendiente(s) de facturar`
+          );
+        }
+
+        if (resultado.cantidad_facturadas_sin_pagar > 0) {
+          detalles.push(
+            `${resultado.cantidad_facturadas_sin_pagar} comisión(es) facturada(s) sin pagar`
+          );
+        }
+
+        if (resultado.cantidad_sin_asiento > 0) {
+          detalles.push(
+            `${resultado.cantidad_sin_asiento} factura(s) de comisión sin asiento contable`
+          );
+        }
+
+        throw new Error(
+          `No se puede cerrar el período: ${detalles.join(', ')}. ` +
+          'Ve a Compras > Comisiones Partners para resolver estos pendientes.'
+        );
+      }
+    }
+
+    console.log('✅ Todas las comisiones están procesadas correctamente');
 
     const { data: asientosNoConfirmados, error: asientosError } = await supabase
       .from('asientos_contables')
