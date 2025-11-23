@@ -158,13 +158,19 @@ export const useCuentasPorCobrar = (empresaId: string | undefined) => {
     ));
 
     try {
-      await cuentasPorCobrarService.registrarPago(pago);
+      // Construir objeto de pago completo con facturaId
+      const pagoCompleto = {
+        ...pago,
+        facturaId
+      };
+
+      await cuentasPorCobrarService.registrarPago(pagoCompleto);
 
       // Recargar datos para obtener el estado actualizado
       await cargarDatos();
     } catch (error) {
       // Revertir si hay error
-      setFacturas(prev => prev.map(factura => 
+      setFacturas(prev => prev.map(factura =>
         factura.id === facturaId ? facturaOriginal : factura
       ));
       throw error;
