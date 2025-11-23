@@ -261,12 +261,13 @@ function generarETicket(factura: any, items: any[], cliente: any, config: any, t
     };
     if (item.codigo) { itemDGI.codigo = item.codigo; }
 
-    if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
-      itemDGI.descuento_tipo = '$';
-      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
-    } else if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
+    // Priorizar porcentaje de descuento sobre monto (normalmente se usa %)
+    if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
       itemDGI.descuento_tipo = '%';
       itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
+    } else if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
+      itemDGI.descuento_tipo = '$';
+      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
     } else {
       itemDGI.descuento_tipo = '';
       itemDGI.descuento_cantidad = 0;
@@ -320,13 +321,19 @@ function generarEFactura(factura: any, items: any[], cliente: any, config: any, 
       indicador_facturacion: determinarIndicadorFacturacion(item.tasa_iva),
     };
     if (item.codigo) { itemDGI.codigo = item.codigo; }
-    if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
-      itemDGI.descuento_tipo = '$';
-      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
-    } else if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
+
+    // Priorizar porcentaje de descuento sobre monto
+    if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
       itemDGI.descuento_tipo = '%';
       itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
+    } else if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
+      itemDGI.descuento_tipo = '$';
+      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
+    } else {
+      itemDGI.descuento_tipo = '';
+      itemDGI.descuento_cantidad = 0;
     }
+
     return itemDGI;
   });
 
