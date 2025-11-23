@@ -55,12 +55,8 @@ export const cuentasPorCobrarSupabaseService = {
 
   async getFacturas(empresaId: string): Promise<FacturaPorCobrar[]> {
     const { data, error } = await supabase
-      .from('facturas_por_cobrar')
-      .select(`
-        *,
-        cliente:clientes (*),
-        items_factura_cobrar (*)
-      `)
+      .from('v_cuentas_por_cobrar')
+      .select('*')
       .eq('empresa_id', empresaId)
       .order('fecha_emision', { ascending: false });
 
@@ -68,46 +64,53 @@ export const cuentasPorCobrarSupabaseService = {
 
     return data.map(factura => ({
       id: factura.id,
-      numero: factura.numero,
+      numero: factura.numero_documento,
       tipoDocumento: factura.tipo_documento as any,
       clienteId: factura.cliente_id,
       cliente: {
-        ...factura.cliente,
-        empresaId: factura.cliente.empresa_id,
-        fechaCreacion: new Date(factura.cliente.fecha_creacion),
-        limiteCredito: factura.cliente.limite_credito,
-        diasCredito: factura.cliente.dias_credito,
+        id: factura.cliente_id,
+        nombre: factura.cliente_nombre,
+        razonSocial: factura.cliente_nombre,
+        numeroDocumento: factura.cliente_documento,
+        tipoDocumento: 'RUT',
+        email: '',
+        telefono: '',
+        direccion: '',
+        contacto: '',
+        activo: true,
+        empresaId: factura.empresa_id,
+        limiteCredito: 0,
+        diasCredito: 0,
+        observaciones: '',
+        fechaCreacion: new Date(factura.fecha_creacion),
       },
       fechaEmision: factura.fecha_emision,
       fechaVencimiento: factura.fecha_vencimiento,
-      descripcion: factura.descripcion,
+      descripcion: factura.observaciones || '',
       montoSubtotal: factura.monto_subtotal,
       montoImpuestos: factura.monto_impuestos,
       montoTotal: factura.monto_total,
       montoPagado: factura.monto_pagado,
       saldoPendiente: factura.saldo_pendiente,
-      estado: factura.estado as any,
+      estado: factura.estado_cxc as any,
       moneda: factura.moneda,
-      items: factura.items_factura_cobrar.map((item: any) => ({
-        id: item.id,
-        descripcion: item.descripcion,
-        cantidad: item.cantidad,
-        precioUnitario: item.precio_unitario,
-        descuento: item.descuento,
-        impuesto: item.impuesto,
-        total: item.total,
-      })),
-      observaciones: factura.observaciones,
-      referencia: factura.referencia,
-      condicionesPago: factura.condiciones_pago,
+      items: [],
+      observaciones: factura.observaciones || '',
+      referencia: factura.serie + '-' + factura.numero_documento,
+      condicionesPago: null,
       empresaId: factura.empresa_id,
-      creadoPor: factura.creado_por,
+      creadoPor: factura.created_by || '',
       fechaCreacion: factura.fecha_creacion,
       fechaModificacion: factura.fecha_modificacion,
     }));
   },
 
   async createFactura(factura: Omit<FacturaPorCobrar, 'id' | 'cliente' | 'fechaCreacion'>): Promise<FacturaPorCobrar> {
+    throw new Error('Las cuentas por cobrar se generan automáticamente desde facturas de venta. Use el módulo de Facturas.');
+
+    /*
+    // Esta función está deshabilitada porque las cuentas por cobrar
+    // se generan automáticamente desde la tabla facturas_venta
     const { data: facturaData, error: facturaError } = await supabase
       .from('facturas_por_cobrar')
       .insert({
@@ -183,53 +186,40 @@ export const cuentasPorCobrarSupabaseService = {
       fechaCreacion: facturaData.fecha_creacion,
       fechaModificacion: facturaData.fecha_modificacion,
     };
+    */
   },
 
   async registrarPago(pago: Omit<PagoFactura, 'id' | 'fechaCreacion'>): Promise<void> {
-    const { error } = await supabase
-      .from('pagos_factura')
-      .insert({
-        factura_id: pago.facturaId,
-        fecha_pago: pago.fechaPago,
-        monto: pago.monto,
-        tipo_pago: pago.tipoPago,
-        referencia: pago.referencia,
-        observaciones: pago.observaciones,
-        creado_por: pago.creadoPor,
-      });
-
-    if (error) throw error;
-
-    const { data: factura } = await supabase
-      .from('facturas_por_cobrar')
-      .select('monto_pagado, monto_total')
+    // Registrar pago actualizando el estado de la factura de venta
+    const { data: factura, error: facturaError } = await supabase
+      .from('facturas_venta')
+      .select('total, estado')
       .eq('id', pago.facturaId)
-      .single();
+      .maybeSingle();
 
-    if (factura) {
-      const nuevoMontoPagado = factura.monto_pagado + pago.monto;
-      const nuevoSaldo = factura.monto_total - nuevoMontoPagado;
-      let nuevoEstado = 'PENDIENTE';
+    if (facturaError) throw facturaError;
+    if (!factura) throw new Error('Factura no encontrada');
 
-      if (nuevoSaldo === 0) {
-        nuevoEstado = 'PAGADA';
-      } else if (nuevoMontoPagado > 0) {
-        nuevoEstado = 'PARCIAL';
-      }
+    // Actualizar el estado de la factura a "pagada"
+    const { error: updateError } = await supabase
+      .from('facturas_venta')
+      .update({
+        estado: 'pagada',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', pago.facturaId);
 
-      await supabase
-        .from('facturas_por_cobrar')
-        .update({
-          monto_pagado: nuevoMontoPagado,
-          saldo_pendiente: nuevoSaldo,
-          estado: nuevoEstado,
-          fecha_modificacion: new Date().toISOString(),
-        })
-        .eq('id', pago.facturaId);
-    }
+    if (updateError) throw updateError;
+
+    console.log(`✅ Pago registrado para factura ${pago.facturaId}: $${pago.monto}`);
   },
 
   async getPagos(facturaId: string): Promise<PagoFactura[]> {
+    // Por ahora retornamos un array vacío ya que los pagos se registran
+    // directamente actualizando el estado de la factura
+    return [];
+
+    /*
     const { data, error } = await supabase
       .from('pagos_factura')
       .select('*')
@@ -249,5 +239,6 @@ export const cuentasPorCobrarSupabaseService = {
       creadoPor: pago.creado_por,
       fechaCreacion: pago.fecha_creacion,
     }));
+    */
   },
 };
