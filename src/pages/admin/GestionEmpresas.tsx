@@ -31,6 +31,7 @@ import { useModals } from '../../hooks/useModals';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { EmpresaWizard } from '../../components/empresas/EmpresaWizard';
+import { GestionarUsuariosModal } from '../../components/empresas/GestionarUsuariosModal';
 
 export const GestionEmpresas: React.FC = () => {
   const { usuario, tienePermiso, formatearMoneda } = useSesion();
@@ -947,6 +948,20 @@ export const GestionEmpresas: React.FC = () => {
         mode={modalType === 'edit' ? 'edit' : 'create'}
         empresaId={selectedEmpresa?.id}
       />
+
+      {/* Modal de Gestión de Usuarios */}
+      {selectedEmpresa && modalType === 'users' && (
+        <GestionarUsuariosModal
+          isOpen={showModal}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedEmpresa(null);
+            cargarDatos(); // Recargar datos después de cambios
+          }}
+          empresaId={selectedEmpresa.id}
+          empresaNombre={selectedEmpresa.nombre}
+        />
+      )}
     </div>
   );
 };

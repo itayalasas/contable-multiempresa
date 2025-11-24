@@ -119,6 +119,83 @@ export const usuariosSupabaseService = {
       ultimaConexion: user.ultima_conexion ? new Date(user.ultima_conexion) : undefined,
     }));
   },
+
+  async asignarEmpresa(usuarioId: string, empresaId: string): Promise<void> {
+    // Obtener usuario actual
+    const { data: usuario, error: getUserError } = await supabase
+      .from('usuarios')
+      .select('empresas_asignadas')
+      .eq('id', usuarioId)
+      .single();
+
+    if (getUserError) throw getUserError;
+
+    // Agregar empresa si no está asignada
+    const empresasActuales = usuario.empresas_asignadas || [];
+    if (!empresasActuales.includes(empresaId)) {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({
+          empresas_asignadas: [...empresasActuales, empresaId]
+        })
+        .eq('id', usuarioId);
+
+      if (error) throw error;
+    }
+  },
+
+  async desasignarEmpresa(usuarioId: string, empresaId: string): Promise<void> {
+    // Obtener usuario actual
+    const { data: usuario, error: getUserError } = await supabase
+      .from('usuarios')
+      .select('empresas_asignadas')
+      .eq('id', usuarioId)
+      .single();
+
+    if (getUserError) throw getUserError;
+
+    // Remover empresa
+    const empresasActuales = usuario.empresas_asignadas || [];
+    const { error } = await supabase
+      .from('usuarios')
+      .update({
+        empresas_asignadas: empresasActuales.filter(id => id !== empresaId)
+      })
+      .eq('id', usuarioId);
+
+    if (error) throw error;
+  },
+
+  async actualizarRol(usuarioId: string, nuevoRol: string): Promise<void> {
+    const { error } = await supabase
+      .from('usuarios')
+      .update({ rol: nuevoRol })
+      .eq('id', usuarioId);
+
+    if (error) throw error;
+  },
+
+  async getUsuariosDisponiblesParaEmpresa(empresaId: string): Promise<Usuario[]> {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('activo', true)
+      .order('nombre');
+
+    if (error) throw error;
+
+    // Filtrar usuarios que NO tienen esta empresa asignada
+    return data
+      .filter(user => !user.empresas_asignadas?.includes(empresaId))
+      .map(user => ({
+        ...user,
+        empresasAsignadas: user.empresas_asignadas,
+        paisId: user.pais_id,
+        auth0Id: user.auth0_id,
+        fechaCreacion: new Date(user.fecha_creacion),
+        ultimaConexion: user.ultima_conexion ? new Date(user.ultima_conexion) : undefined,
+      }));
+  },
 };
 
 export const getUsuariosByEmpresa = usuariosSupabaseService.getUsuariosByEmpresa;
