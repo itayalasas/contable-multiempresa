@@ -110,15 +110,27 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
       if (mode === 'edit' && empresaId && isOpen) {
         try {
           setIsLoading(true);
+
+          // Cargar empresa con información del país
           const { data: empresa, error } = await supabase
             .from('empresas')
-            .select('*')
+            .select(`
+              *,
+              pais:paises!empresas_pais_id_fkey(
+                id,
+                nombre,
+                codigo,
+                codigo_iso
+              )
+            `)
             .eq('id', empresaId)
             .single();
 
           if (error) throw error;
 
           if (empresa) {
+            console.log('✅ Empresa cargada:', empresa);
+
             // Convertir fecha ISO a dd/mm/aaaa
             let fechaFormateada = '';
             if (empresa.fecha_inicio_actividades) {
@@ -128,6 +140,9 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
             setFormData({
               pais_id: empresa.pais_id,
+              pais_nombre: empresa.pais?.nombre || '',
+              pais_iso2: empresa.pais?.codigo || '', // codigo es ISO2 (2 letras)
+              pais_iso3: empresa.pais?.codigo_iso || '', // codigo_iso es ISO3 (3 letras)
               nombre: empresa.nombre,
               razon_social: empresa.razon_social,
               nombre_fantasia: empresa.nombre_fantasia || '',
@@ -137,7 +152,9 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
               estado_tributario: empresa.estado_tributario || 'activa',
               email: empresa.email,
               telefono: empresa.telefono || '',
-              ciudad: empresa.direccion || ''
+              ciudad: empresa.direccion || '',
+              domicilio_fiscal: empresa.direccion || '',
+              domicilio_comercial: empresa.direccion || ''
             });
           }
         } catch (error) {
@@ -146,6 +163,9 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
         } finally {
           setIsLoading(false);
         }
+      } else if (mode === 'create' && isOpen) {
+        // Resetear formulario en modo crear
+        setFormData({});
       }
     };
 
