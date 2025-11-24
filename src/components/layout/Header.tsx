@@ -25,6 +25,31 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
 
+  const getInitials = (nombre: string) => {
+    if (!nombre) return 'U';
+    const parts = nombre.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return nombre.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = (nombre: string) => {
+    if (!nombre) return 'bg-gray-500';
+    const colors = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-yellow-500',
+      'bg-red-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-teal-500',
+    ];
+    const index = nombre.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 px-4 py-3">
       <div className="flex items-center justify-between">
@@ -135,11 +160,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 transition-colors"
             >
-              <img
-                src={usuario?.avatar || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150'}
-                alt={usuario?.nombre}
-                className="h-8 w-8 rounded-full object-cover"
-              />
+              <div className={`h-8 w-8 rounded-full ${getAvatarColor(usuario?.nombre || '')} flex items-center justify-center text-white font-semibold text-sm`}>
+                {getInitials(usuario?.nombre || '')}
+              </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium text-gray-900">{usuario?.nombre}</p>
                 <p className="text-xs text-gray-500">

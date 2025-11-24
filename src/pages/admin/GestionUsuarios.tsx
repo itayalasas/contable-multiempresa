@@ -93,12 +93,8 @@ export const GestionUsuarios: React.FC = () => {
   };
 
   const verificarConexionAuth0 = async () => {
-    try {
-      // TODO: Implementar verificación Auth0 con Supabase
-      setAuth0Connected(false);
-    } catch (error) {
-      setAuth0Connected(false);
-    }
+    // No necesitamos Auth0 Management API
+    setAuth0Connected(true);
   };
 
   const filteredUsuarios = usuarios.filter(usuario => {
@@ -185,6 +181,29 @@ export const GestionUsuarios: React.FC = () => {
     alert('Copiado al portapapeles');
   };
 
+  const getInitials = (nombre: string) => {
+    const parts = nombre.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return nombre.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = (nombre: string) => {
+    const colors = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-yellow-500',
+      'bg-red-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-teal-500',
+    ];
+    const index = nombre.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -221,119 +240,6 @@ export const GestionUsuarios: React.FC = () => {
             <span>Nuevo Usuario</span>
           </button>
         </div>
-      </div>
-
-      {/* Estado de conexión Auth0 */}
-      <div className={`p-4 rounded-lg border ${
-        auth0Connected === null ? 'bg-yellow-50 border-yellow-200' :
-        auth0Connected ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-      }`}>
-        <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-3">
-            {auth0Connected === null ? (
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-            ) : auth0Connected ? (
-              <CheckCircle className="h-5 w-5 text-green-600" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-600" />
-            )}
-            <div>
-              <h3 className={`text-sm font-medium ${
-                auth0Connected === null ? 'text-yellow-800' :
-                auth0Connected ? 'text-green-800' : 'text-red-800'
-              }`}>
-                {auth0Connected === null ? 'Verificando conexión Auth0...' :
-                 auth0Connected ? 'Auth0 Management API conectado' : 'Error: Auth0 Management API no configurado'}
-              </h3>
-              {auth0Connected === false && (
-                <div className="text-sm text-red-700 mt-1">
-                  <p>Para gestionar usuarios necesitas configurar el Auth0 Management API.</p>
-                  <div className="flex items-center space-x-2 mt-2">
-                    <button 
-                      onClick={verificarConexionAuth0}
-                      className="text-red-800 underline hover:no-underline"
-                    >
-                      Reintentar
-                    </button>
-                    <span>•</span>
-                    <button
-                      onClick={() => setShowManagementSetup(!showManagementSetup)}
-                      className="text-red-800 underline hover:no-underline"
-                    >
-                      Ver instrucciones
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Instrucciones de configuración */}
-        {showManagementSetup && auth0Connected === false && (
-          <div className="mt-4 p-4 bg-red-100 rounded border border-red-200">
-            <h4 className="text-sm font-medium text-red-800 mb-3">
-              📋 Configuración del Auth0 Management API
-            </h4>
-            <div className="text-sm text-red-700 space-y-3">
-              <div>
-                <p className="font-medium">1. Crear Machine to Machine Application:</p>
-                <ul className="list-disc list-inside ml-4 space-y-1">
-                  <li>Ve a Auth0 Dashboard → Applications</li>
-                  <li>Click "Create Application"</li>
-                  <li>Nombre: "ContaEmpresa Management API"</li>
-                  <li>Tipo: "Machine to Machine Applications"</li>
-                  <li>Autoriza para "Auth0 Management API"</li>
-                </ul>
-              </div>
-              
-              <div>
-                <p className="font-medium">2. Configurar permisos:</p>
-                <p className="ml-4">Selecciona estos scopes: <code className="bg-red-200 px-1 rounded">read:users, create:users, update:users, delete:users</code></p>
-              </div>
-              
-              <div>
-                <p className="font-medium">3. Obtener credenciales:</p>
-                <ul className="list-disc list-inside ml-4 space-y-1">
-                  <li>Copia el "Client ID" y "Client Secret"</li>
-                  <li>Agrégalos a tu archivo .env:</li>
-                </ul>
-                <div className="mt-2 p-2 bg-red-200 rounded font-mono text-xs">
-                  <div className="flex items-center justify-between">
-                    <span>VITE_AUTH0_MANAGEMENT_CLIENT_ID=tu-client-id</span>
-                    <button
-                      onClick={() => copyToClipboard('VITE_AUTH0_MANAGEMENT_CLIENT_ID=tu-client-id')}
-                      className="text-red-800 hover:text-red-900"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>VITE_AUTH0_MANAGEMENT_CLIENT_SECRET=tu-client-secret</span>
-                    <button
-                      onClick={() => copyToClipboard('VITE_AUTH0_MANAGEMENT_CLIENT_SECRET=tu-client-secret')}
-                      className="text-red-800 hover:text-red-900"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="pt-2 border-t border-red-200">
-                <a
-                  href="https://auth0.com/docs/get-started/auth0-overview/create-applications/machine-to-machine-apps"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-1 text-red-800 hover:text-red-900 underline"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  <span>Ver documentación oficial</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Estadísticas */}
@@ -449,11 +355,9 @@ export const GestionUsuarios: React.FC = () => {
                 <tr key={usuario.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <img
-                        src={usuario.avatar || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150'}
-                        alt={usuario.nombre}
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
+                      <div className={`h-10 w-10 rounded-full ${getAvatarColor(usuario.nombre)} flex items-center justify-center text-white font-semibold`}>
+                        {getInitials(usuario.nombre)}
+                      </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">{usuario.nombre}</div>
                         <div className="text-sm text-gray-500">{usuario.email}</div>

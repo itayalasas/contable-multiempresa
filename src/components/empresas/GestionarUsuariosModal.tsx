@@ -23,6 +23,31 @@ export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
   const [selectedUsuarioId, setSelectedUsuarioId] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
+  const getInitials = (nombre: string) => {
+    if (!nombre) return 'U';
+    const parts = nombre.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return nombre.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = (nombre: string) => {
+    if (!nombre) return 'bg-gray-500';
+    const colors = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-yellow-500',
+      'bg-red-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-teal-500',
+    ];
+    const index = nombre.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
   useEffect(() => {
     if (isOpen) {
       cargarUsuarios();
@@ -186,9 +211,9 @@ export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
                         className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                       >
                         <div className="flex items-center space-x-4 flex-1">
-                          <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
-                              {usuario.nombre.charAt(0).toUpperCase()}
+                          <div className={`flex-shrink-0 w-10 h-10 ${getAvatarColor(usuario.nombre)} rounded-full flex items-center justify-center`}>
+                            <span className="text-white font-semibold text-sm">
+                              {getInitials(usuario.nombre)}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
