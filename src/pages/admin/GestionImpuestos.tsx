@@ -29,10 +29,12 @@ export default function GestionImpuestos() {
   const cargarImpuestos = async () => {
     console.log('🔍 [GestionImpuestos] Iniciando carga de impuestos...');
     console.log('📊 [GestionImpuestos] empresaActual:', empresaActual);
-    console.log('🌍 [GestionImpuestos] pais_id:', empresaActual?.pais_id);
 
-    if (!empresaActual?.pais_id) {
-      console.error('❌ [GestionImpuestos] No hay pais_id en empresaActual');
+    const paisId = empresaActual?.paisId || empresaActual?.pais_id;
+    console.log('🌍 [GestionImpuestos] paisId:', paisId);
+
+    if (!paisId) {
+      console.error('❌ [GestionImpuestos] No hay paisId en empresaActual');
       setLoading(false);
       return;
     }
@@ -44,7 +46,7 @@ export default function GestionImpuestos() {
       const { data, error } = await supabase
         .from('impuestos_configuracion')
         .select('*')
-        .eq('pais_id', empresaActual.pais_id)
+        .eq('pais_id', paisId)
         .order('tipo', { ascending: true })
         .order('nombre', { ascending: true });
 
