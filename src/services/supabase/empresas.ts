@@ -198,12 +198,17 @@ export const empresasSupabaseService = {
   },
 
   async getEmpresasByPais(paisId: string): Promise<Empresa[]> {
-    const { data, error } = await supabase
+    let query = supabase
       .from('empresas')
       .select('*')
-      .eq('pais_id', paisId)
-      .eq('activa', true)
-      .order('nombre');
+      .eq('activa', true);
+
+    // Solo filtrar por país si se proporciona un paisId válido
+    if (paisId && paisId.trim() !== '') {
+      query = query.eq('pais_id', paisId);
+    }
+
+    const { data, error } = await query.order('nombre');
 
     if (error) throw error;
 
