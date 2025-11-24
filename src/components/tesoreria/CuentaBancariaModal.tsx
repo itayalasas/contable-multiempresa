@@ -359,23 +359,31 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
                 <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
               </div>
             ) : cuentas.length > 0 ? (
-              <SearchableAccountSelector
-                cuentas={cuentas.filter(c =>
-                  // Filtrar solo cuentas de activo corriente (bancos, caja)
-                  c.codigo.startsWith('1.1') && !c.esGrupo
-                )}
-                value={formData.cuentaContableId}
-                onChange={(value) => setFormData({ ...formData, cuentaContableId: value })}
-                placeholder="Buscar cuenta contable del plan de cuentas..."
-                disabled={mode === 'view' || saving}
-              />
+              <>
+                <SearchableAccountSelector
+                  cuentas={cuentas.filter(c => {
+                    // Filtrar cuentas de activo (código empieza con 1)
+                    // Si no hay cuentas de activo nivel 3+, mostrar todas las de activo
+                    const esActivo = c.codigo.startsWith('1');
+                    return esActivo;
+                  })}
+                  value={formData.cuentaContableId}
+                  onChange={(value) => setFormData({ ...formData, cuentaContableId: value })}
+                  placeholder="Buscar cuenta contable del plan de cuentas..."
+                  disabled={mode === 'view' || saving}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  📊 {cuentas.filter(c => c.codigo.startsWith('1')).length} cuentas de activo disponibles
+                  {cuentas.length > 0 && ` (de ${cuentas.length} cuentas totales)`}
+                </p>
+              </>
             ) : (
               <div className="w-full px-3 py-2 border border-yellow-300 rounded-lg bg-yellow-50 text-yellow-700 text-sm">
-                No hay cuentas contables disponibles. Configure el Plan de Cuentas primero.
+                ⚠️ No hay cuentas contables disponibles. Vaya a <strong>Contabilidad → Plan de Cuentas</strong> para crear cuentas primero.
               </div>
             )}
-            <p className="text-xs text-gray-500 mt-1">
-              <strong>Ejemplo:</strong> Si esta es "Cuenta Corriente Itaú", seleccione la cuenta contable "1.1.1.001 - Banco Itaú"
+            <p className="text-xs text-blue-600 mt-1 bg-blue-50 p-2 rounded">
+              💡 <strong>Tip:</strong> Seleccione una cuenta de activo corriente como "1.1.1.001 - Banco Itaú" para que los movimientos de esta cuenta bancaria se reflejen automáticamente en la contabilidad.
             </p>
           </div>
 
