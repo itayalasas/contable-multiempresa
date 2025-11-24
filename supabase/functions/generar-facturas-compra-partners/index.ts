@@ -300,6 +300,62 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         console.log(`✅ Cuenta por pagar creada: ${cuentaPorPagar.numero}`);
 
+        const itemsCuentaPorPagar = [
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Ventas totales cobradas (${comisionesPartner.length} órdenes)`,
+            cantidad: 1,
+            precio_unitario: totalVentas,
+            descuento: 0,
+            impuesto: 0,
+            total: totalVentas,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%)`,
+            cantidad: 1,
+            precio_unitario: -totalComisionApp,
+            descuento: 0,
+            impuesto: 0,
+            total: -totalComisionApp,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Comisión MercadoPago - Parte aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
+            cantidad: 1,
+            precio_unitario: -comisionMPAliado,
+            descuento: 0,
+            impuesto: 0,
+            total: -comisionMPAliado,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Subtotal a pagar al partner`,
+            cantidad: 1,
+            precio_unitario: subtotalAliado,
+            descuento: 0,
+            impuesto: 0,
+            total: subtotalAliado,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `IVA (${(tasaIVA * 100).toFixed(0)}%)`,
+            cantidad: 1,
+            precio_unitario: ivaAliado,
+            descuento: 0,
+            impuesto: tasaIVA * 100,
+            total: ivaAliado,
+          },
+        ];
+
+        const { error: itemsCuentaError } = await supabase
+          .from('items_factura_pagar')
+          .insert(itemsCuentaPorPagar);
+
+        if (itemsCuentaError) throw itemsCuentaError;
+
+        console.log(`✅ ${itemsCuentaPorPagar.length} items agregados a la cuenta por pagar`);
+
         const comisionIds = comisionesPartner.map((c) => c.id);
         const { error: updateError } = await supabase
           .from('comisiones_partners')
