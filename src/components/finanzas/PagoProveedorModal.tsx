@@ -7,6 +7,7 @@ import { useModals } from '../../hooks/useModals';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { useSesion } from '../../context/SesionContext';
 import { useTesoreria } from '../../hooks/useTesoreria';
+import { useNomencladores } from '../../hooks/useNomencladores';
 
 interface PagoProveedorModalProps {
   isOpen: boolean;
@@ -25,9 +26,10 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
   formasPago,
   generarAsientoAutomatico = true // Por defecto, generar asiento automático
 }) => {
-  const { empresaActual } = useSesion();
+  const { empresaActual, paisActual } = useSesion();
   const { notificationModal, showError, showSuccess, closeNotification } = useModals();
   const { cuentas, loading: loadingCuentas } = useTesoreria(empresaActual?.id);
+  const { bancos, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
 
   const [formData, setFormData] = useState({
     fechaPago: new Date().toISOString().split('T')[0],
@@ -305,13 +307,31 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Banco
                 </label>
-                <input
-                  type="text"
-                  value={formData.banco}
-                  onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  disabled={saving || success}
-                />
+                {loadingNomencladores ? (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                    Cargando bancos...
+                  </div>
+                ) : bancos.length > 0 ? (
+                  <SearchableSelect
+                    options={bancos.map(banco => ({
+                      value: banco.nombre,
+                      label: banco.nombre
+                    }))}
+                    value={formData.banco}
+                    onChange={(value) => setFormData({ ...formData, banco: value })}
+                    placeholder="Seleccionar banco..."
+                    disabled={saving || success}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.banco}
+                    onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Nombre del banco"
+                    disabled={saving || success}
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

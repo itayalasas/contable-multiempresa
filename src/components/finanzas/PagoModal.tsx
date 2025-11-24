@@ -6,6 +6,7 @@ import { useModals } from '../../hooks/useModals';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { useSesion } from '../../context/SesionContext';
 import { useTesoreria } from '../../hooks/useTesoreria';
+import { useNomencladores } from '../../hooks/useNomencladores';
 
 interface PagoModalProps {
   isOpen: boolean;
@@ -22,9 +23,10 @@ export const PagoModal: React.FC<PagoModalProps> = ({
   onSave,
   generarAsientoAutomatico = true // Por defecto, generar asiento automático
 }) => {
-  const { empresaActual } = useSesion();
+  const { empresaActual, paisActual } = useSesion();
   const { notificationModal, showError, showSuccess, closeNotification } = useModals();
   const { cuentas, loading: loadingCuentas } = useTesoreria(empresaActual?.id);
+  const { bancos, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
 
   const [formData, setFormData] = useState({
     fechaPago: new Date().toISOString().split('T')[0],
@@ -33,6 +35,9 @@ export const PagoModal: React.FC<PagoModalProps> = ({
     cuentaBancariaId: '',
     referencia: '',
     observaciones: '',
+    banco: '',
+    numeroCuenta: '',
+    numeroOperacion: '',
     generarAsiento: generarAsientoAutomatico
   });
 
@@ -83,6 +88,9 @@ export const PagoModal: React.FC<PagoModalProps> = ({
         tipoPago: formData.tipoPago,
         referencia: formData.referencia,
         observaciones: formData.observaciones,
+        banco: formData.banco,
+        numeroCuenta: formData.numeroCuenta,
+        numeroOperacion: formData.numeroOperacion,
         creadoPor: 'dev-user-123' // Esto debería venir del contexto
       };
 
@@ -122,6 +130,10 @@ export const PagoModal: React.FC<PagoModalProps> = ({
   const setPagoCompleto = () => {
     setFormData({ ...formData, monto: factura.saldoPendiente });
   };
+
+  // Determinar si se requieren campos adicionales según el tipo de pago
+  const requiereBanco = formData.tipoPago === 'TRANSFERENCIA' || formData.tipoPago === 'CHEQUE';
+  const requiereReferencia = formData.tipoPago !== 'EFECTIVO';
 
   if (!isOpen) return null;
 
@@ -261,19 +273,74 @@ export const PagoModal: React.FC<PagoModalProps> = ({
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Referencia
-            </label>
-            <input
-              type="text"
-              value={formData.referencia}
-              onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              placeholder="Número de operación, cheque, etc."
-              disabled={saving || success}
-            />
-          </div>
+          {/* Campos condicionales según el tipo de pago */}
+          {requiereBanco && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Banco
+                </label>
+                {loadingNomencladores ? (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                    Cargando bancos...
+                  </div>
+                ) : bancos.length > 0 ? (
+                  <SearchableSelect
+                    options={bancos.map(banco => ({
+                      value: banco.nombre,
+                      label: banco.nombre
+                    }))}
+                    value={formData.banco}
+                    onChange={(value) => setFormData({ ...formData, banco: value })}
+                    placeholder="Seleccionar banco..."
+                    disabled={saving || success}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.banco}
+                    onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Nombre del banco"
+                    disabled={saving || success}
+                  />
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Número de Cuenta
+                </label>
+                <input
+                  type="text"
+                  value={formData.numeroCuenta}
+                  onChange={(e) => setFormData({ ...formData, numeroCuenta: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  disabled={saving || success}
+                />
+              </div>
+            </div>
+          )}
+
+          {requiereReferencia && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {formData.tipoPago === 'TRANSFERENCIA' ? 'Número de Operación' :
+                 formData.tipoPago === 'CHEQUE' ? 'Número de Cheque' : 'Referencia'}
+              </label>
+              <input
+                type="text"
+                value={formData.tipoPago === 'TRANSFERENCIA' ? formData.numeroOperacion : formData.referencia}
+                onChange={(e) => formData.tipoPago === 'TRANSFERENCIA'
+                  ? setFormData({ ...formData, numeroOperacion: e.target.value })
+                  : setFormData({ ...formData, referencia: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder={formData.tipoPago === 'TRANSFERENCIA' ? 'Ej: 000123456' :
+                            formData.tipoPago === 'CHEQUE' ? 'Ej: 123456' : 'Referencia del pago'}
+                disabled={saving || success}
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
