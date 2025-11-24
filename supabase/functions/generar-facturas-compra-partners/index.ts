@@ -201,7 +201,11 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
         const comisionMPApp = comisionMPTotal - comisionMPAliado;
         const comisionAppNeta = totalComisionApp - comisionMPApp;
-        const totalAPagar = totalVentas - comisionAppNeta - comisionMPAliado;
+        const totalAPagarSinIVA = totalVentas - comisionAppNeta - comisionMPAliado;
+
+        // IMPORTANTE: Las comisiones son servicios gravados con IVA 22%
+        const ivaComisiones = totalAPagarSinIVA * tasaIVA;
+        const totalAPagar = totalAPagarSinIVA + ivaComisiones;
 
         console.log(`💰 Cálculos:`);
         console.log(`   Total ventas cobradas: $${totalVentas.toFixed(2)}`);
@@ -210,6 +214,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)} (se resta de comisión app)`);
         console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
         console.log(`   - Comisión App NETA: $${comisionAppNeta.toFixed(2)}`);
+        console.log(`   = SUBTOTAL: $${totalAPagarSinIVA.toFixed(2)}`);
+        console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaComisiones.toFixed(2)}`);
         console.log(`   = TOTAL A PAGAR AL ALIADO: $${totalAPagar.toFixed(2)}`);
 
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
@@ -247,8 +253,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
-            subtotal: totalAPagar,
-            total_iva: 0,
+            subtotal: totalAPagarSinIVA,
+            total_iva: ivaComisiones,
             total: totalAPagar,
             moneda: 'UYU',
             tipo_cambio: 1,
@@ -271,6 +277,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
                 comision_mp_app: comisionMPApp,
                 comision_mp_aliado: comisionMPAliado,
                 comision_app_neta: comisionAppNeta,
+                subtotal: totalAPagarSinIVA,
+                iva: ivaComisiones,
                 total: totalAPagar
               }
             },
@@ -287,14 +295,14 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
           .insert({
             factura_id: facturaCompra.id,
             numero_linea: 1,
-            descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
+            descripcion: `Comisiones por ventas - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
             cantidad: comisionesPartner.length,
-            precio_unitario: totalAPagar / comisionesPartner.length,
+            precio_unitario: totalAPagarSinIVA / comisionesPartner.length,
             descuento_porcentaje: 0,
             descuento_monto: 0,
-            tasa_iva: 0,
-            monto_iva: 0,
-            subtotal: totalAPagar,
+            tasa_iva: tasaIVA * 100,
+            monto_iva: ivaComisiones,
+            subtotal: totalAPagarSinIVA,
             total: totalAPagar,
             metadata: {
               comision_mp_descontada: comisionMPAliado,
@@ -316,9 +324,9 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             tipo_documento: 'FACTURA_PARTNER',
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
-            descripcion: `Pago servicios ${partner.razon_social}`,
-            monto_subtotal: totalAPagar,
-            monto_impuestos: 0,
+            descripcion: `Comisiones por ventas - ${partner.razon_social}`,
+            monto_subtotal: totalAPagarSinIVA,
+            monto_impuestos: ivaComisiones,
             monto_total: totalAPagar,
             monto_pagado: 0,
             saldo_pendiente: totalAPagar,

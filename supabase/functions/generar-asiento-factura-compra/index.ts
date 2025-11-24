@@ -115,26 +115,31 @@ async function generarAsientoPartner(supabase: any, factura: any, proveedorNombr
 
   // Obtener cuentas necesarias
   const cuentaGastoComisionId = await obtenerCuentaId(supabase, factura.empresa_id, '6011'); // Gasto comisiones
+  const cuentaIVACreditoId = await obtenerCuentaId(supabase, factura.empresa_id, '1213'); // IVA Crédito Fiscal
   const cuentaIngresoComisionId = await obtenerCuentaId(supabase, factura.empresa_id, '7031'); // Ingreso comisiones sistema
   const cuentaIngresoRetencionId = await obtenerCuentaId(supabase, factura.empresa_id, '7032'); // Ingreso retención ML
   const cuentaPagarId = await obtenerCuentaId(supabase, factura.empresa_id, '2211'); // Cuentas por pagar
 
-  if (!cuentaGastoComisionId || !cuentaIngresoComisionId || !cuentaIngresoRetencionId || !cuentaPagarId) {
+  if (!cuentaGastoComisionId || !cuentaIVACreditoId || !cuentaIngresoComisionId || !cuentaIngresoRetencionId || !cuentaPagarId) {
     const faltantes = [];
     if (!cuentaGastoComisionId) faltantes.push('6011 (Gasto Comisiones Partners)');
+    if (!cuentaIVACreditoId) faltantes.push('1213 (IVA Crédito Fiscal)');
     if (!cuentaIngresoComisionId) faltantes.push('7031 (Ingreso Comisiones Sistema)');
     if (!cuentaIngresoRetencionId) faltantes.push('7032 (Ingreso Retención ML)');
     if (!cuentaPagarId) faltantes.push('2211 (Cuentas por Pagar)');
     throw new Error(`Faltan cuentas: ${faltantes.join(', ')}`);
   }
 
-  const totalComision = parseFloat(factura.subtotal);
+  const subtotal = parseFloat(factura.subtotal);
+  const ivaCompra = parseFloat(factura.total_iva) || 0;
+  const totalComision = parseFloat(factura.total);
   const retencion = parseFloat(factura.retencion_monto) || 0;
   const comisionSistema = parseFloat(factura.comision_sistema_monto) || 0;
-  const montoTransferir = parseFloat(factura.monto_transferir_partner) || parseFloat(factura.total);
+  const montoTransferir = parseFloat(factura.monto_transferir_partner) || totalComision;
 
   console.log('💰 Montos:');
-  console.log(`   Total comisión (DEBE): $${totalComision.toFixed(2)}`);
+  console.log(`   Gasto comisión (DEBE): $${subtotal.toFixed(2)}`);
+  console.log(`   IVA Crédito Fiscal (DEBE): $${ivaCompra.toFixed(2)}`);
   console.log(`   Ingreso comisión sistema (HABER): $${comisionSistema.toFixed(2)}`);
   console.log(`   Ingreso retención ML (HABER): $${retencion.toFixed(2)}`);
   console.log(`   A pagar al partner (HABER): $${montoTransferir.toFixed(2)}`);
@@ -167,13 +172,21 @@ async function generarAsientoPartner(supabase: any, factura: any, proveedorNombr
 
   // Crear detalle del asiento
   const detalles = [
-    // DEBE: Gasto por comisiones (reconocemos el gasto total)
+    // DEBE: Gasto por comisiones (sin IVA)
     {
       asiento_id: asiento.id,
       cuenta_id: cuentaGastoComisionId,
       tipo_movimiento: 'DEBE',
-      monto: totalComision,
+      monto: subtotal,
       descripcion: `Gasto comisiones ${proveedorNombre}`,
+    },
+    // DEBE: IVA Crédito Fiscal (IVA de la compra que podemos deducir)
+    {
+      asiento_id: asiento.id,
+      cuenta_id: cuentaIVACreditoId,
+      tipo_movimiento: 'DEBE',
+      monto: ivaCompra,
+      descripcion: 'IVA crédito fiscal sobre comisiones',
     },
     // HABER: Ingreso comisión del sistema (lo que nos quedamos)
     {
@@ -191,7 +204,7 @@ async function generarAsientoPartner(supabase: any, factura: any, proveedorNombr
       monto: retencion,
       descripcion: 'Retención Mercado Libre',
     },
-    // HABER: Cuenta por pagar (lo que debemos al partner)
+    // HABER: Cuenta por pagar (lo que debemos al partner, incluye IVA)
     {
       asiento_id: asiento.id,
       cuenta_id: cuentaPagarId,
