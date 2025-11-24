@@ -293,30 +293,15 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const itemsCuentaPorPagar = [
           {
             factura_id: cuentaPorPagar.id,
-            descripcion: `Ventas totales cobradas (${comisionesPartner.length} órdenes)`,
-            cantidad: comisionesPartner.length,
-            precio_unitario: totalVentas / comisionesPartner.length,
+            descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)
+Ventas: $${totalVentas.toFixed(2)}
+- Comisión App (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%): $${totalComisionApp.toFixed(2)}
+- Comisión MP aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%): $${comisionMPAliado.toFixed(2)}`,
+            cantidad: 1,
+            precio_unitario: totalAPagar,
             descuento: 0,
             impuesto: 0,
-            total: totalVentas,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%)`,
-            cantidad: 1,
-            precio_unitario: totalComisionApp,
-            descuento: 100,
-            impuesto: 0,
-            total: 0,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `Comisión MercadoPago - Parte aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
-            cantidad: 1,
-            precio_unitario: comisionMPAliado,
-            descuento: 100,
-            impuesto: 0,
-            total: 0,
+            total: totalAPagar,
           },
         ];
 
