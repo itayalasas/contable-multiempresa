@@ -290,20 +290,40 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         console.log(`✅ Cuenta por pagar creada: ${cuentaPorPagar.numero}`);
 
-        const itemsCuentaPorPagar = [
-          {
+        const itemsCuentaPorPagar = [];
+
+        comisionesPartner.forEach((comision, index) => {
+          const subtotalVenta = parseFloat(comision.subtotal_venta);
+          itemsCuentaPorPagar.push({
             factura_id: cuentaPorPagar.id,
-            descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)
-Ventas: $${totalVentas.toFixed(2)}
-- Comisión App (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%): $${totalComisionApp.toFixed(2)}
-- Comisión MP aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%): $${comisionMPAliado.toFixed(2)}`,
+            descripcion: `Venta orden #${comision.orden_id_externo || comision.id.substring(0, 8)}`,
             cantidad: 1,
-            precio_unitario: totalAPagar,
+            precio_unitario: subtotalVenta,
             descuento: 0,
             impuesto: 0,
-            total: totalAPagar,
-          },
-        ];
+            total: subtotalVenta,
+          });
+        });
+
+        itemsCuentaPorPagar.push({
+          factura_id: cuentaPorPagar.id,
+          descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%)`,
+          cantidad: 1,
+          precio_unitario: -totalComisionApp,
+          descuento: 0,
+          impuesto: 0,
+          total: -totalComisionApp,
+        });
+
+        itemsCuentaPorPagar.push({
+          factura_id: cuentaPorPagar.id,
+          descripcion: `Comisión MercadoPago - Parte aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
+          cantidad: 1,
+          precio_unitario: -comisionMPAliado,
+          descuento: 0,
+          impuesto: 0,
+          total: -comisionMPAliado,
+        });
 
         const { error: itemsCuentaError } = await supabase
           .from('items_factura_pagar')
@@ -311,7 +331,7 @@ Ventas: $${totalVentas.toFixed(2)}
 
         if (itemsCuentaError) throw itemsCuentaError;
 
-        console.log(`✅ ${itemsCuentaPorPagar.length} item(s) con desglose detallado agregado a la cuenta por pagar`);
+        console.log(`✅ ${itemsCuentaPorPagar.length} item(s) agregados a la cuenta por pagar (${comisionesPartner.length} ventas + 2 descuentos)`);
 
         const comisionIds = comisionesPartner.map((c) => c.id);
         const { error: updateError } = await supabase

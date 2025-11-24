@@ -377,8 +377,7 @@ export const FacturaPagarModal: React.FC<FacturaPagarModalProps> = ({
                           type="number"
                           value={item.precioUnitario}
                           onChange={(e) => updateItem(index, 'precioUnitario', parseFloat(e.target.value) || 0)}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-1 focus:ring-red-500"
-                          min="0"
+                          className={`w-24 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-1 focus:ring-red-500 ${item.precioUnitario < 0 ? 'text-red-600' : ''}`}
                           step="0.01"
                           disabled={mode === 'view' || saving}
                         />
@@ -407,7 +406,7 @@ export const FacturaPagarModal: React.FC<FacturaPagarModalProps> = ({
                           disabled={mode === 'view' || saving}
                         />
                       </td>
-                      <td className="px-4 py-2 text-right font-medium">
+                      <td className={`px-4 py-2 text-right font-medium ${item.total < 0 ? 'text-red-600' : ''}`}>
                         {formatearMoneda(item.total)}
                       </td>
                       {mode !== 'view' && (
