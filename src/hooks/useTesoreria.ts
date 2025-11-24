@@ -2,30 +2,34 @@ import { useState, useEffect } from 'react';
 import { tesoreriaSupabaseService, CuentaBancaria, MovimientoTesoreria } from '../services/supabase/tesoreria';
 
 interface ResumenTesoreria {
+  totalCuentas: number;
   saldoTotal: number;
-  cuentasActivas: number;
-  ingresosMes: number;
-  egresosMes: number;
+  saldoDisponible: number;
+  ingresosDelMes: number;
+  egresosDelMes: number;
   movimientosPendientes: number;
-  distribucionPorTipo: {
-    [key: string]: number;
-  };
-  distribucionPorMoneda: {
-    [key: string]: number;
-  };
+  saldoPorMoneda: {
+    moneda: string;
+    saldo: number;
+  }[];
+  saldoPorTipoCuenta: {
+    tipo: string;
+    saldo: number;
+  }[];
 }
 
 export function useTesoreria(empresaId: string | undefined) {
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoTesoreria[]>([]);
   const [resumen, setResumen] = useState<ResumenTesoreria>({
+    totalCuentas: 0,
     saldoTotal: 0,
-    cuentasActivas: 0,
-    ingresosMes: 0,
-    egresosMes: 0,
+    saldoDisponible: 0,
+    ingresosDelMes: 0,
+    egresosDelMes: 0,
     movimientosPendientes: 0,
-    distribucionPorTipo: {},
-    distribucionPorMoneda: {},
+    saldoPorMoneda: [],
+    saldoPorTipoCuenta: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +111,12 @@ export function useTesoreria(empresaId: string | undefined) {
         distribucionPorTipo[cuenta.tipoCuenta] += cuenta.saldoActual;
       });
 
+      // Convertir a array para el componente
+      const saldoPorTipoCuenta = Object.entries(distribucionPorTipo).map(([tipo, saldo]) => ({
+        tipo,
+        saldo,
+      }));
+
       // Distribución por moneda
       const distribucionPorMoneda: { [key: string]: number } = {};
       cuentasData.forEach(cuenta => {
@@ -116,14 +126,21 @@ export function useTesoreria(empresaId: string | undefined) {
         distribucionPorMoneda[cuenta.moneda] += cuenta.saldoActual;
       });
 
+      // Convertir a array para el componente
+      const saldoPorMoneda = Object.entries(distribucionPorMoneda).map(([moneda, saldo]) => ({
+        moneda,
+        saldo,
+      }));
+
       setResumen({
+        totalCuentas: cuentasActivas,
         saldoTotal,
-        cuentasActivas,
-        ingresosMes,
-        egresosMes,
+        saldoDisponible: saldoTotal, // Por ahora es el mismo
+        ingresosDelMes: ingresosMes,
+        egresosDelMes: egresosMes,
         movimientosPendientes,
-        distribucionPorTipo,
-        distribucionPorMoneda,
+        saldoPorMoneda,
+        saldoPorTipoCuenta,
       });
 
     } catch (err: any) {
