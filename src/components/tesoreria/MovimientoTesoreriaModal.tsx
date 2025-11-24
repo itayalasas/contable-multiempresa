@@ -4,6 +4,7 @@ import { useSesion } from '../../context/SesionContext';
 import { NotificationModal } from '../common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
 import { useNomencladores } from '../../hooks/useNomencladores';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 // Tipos para el componente
 interface CuentaBancaria {
@@ -239,8 +240,8 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -262,20 +263,20 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {/* Información básica */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Fecha *
               </label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
                   type="date"
                   value={formData.fecha}
                   onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                   disabled={mode === 'view' || saving}
                 />
@@ -283,13 +284,13 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Tipo de Movimiento *
               </label>
               <select
                 value={formData.tipo}
                 onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={mode === 'view' || saving || loadingNomencladores}
               >
                 {loadingNomencladores ? (
@@ -323,32 +324,32 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Concepto *
             </label>
             <input
               type="text"
               value={formData.concepto}
               onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Descripción del movimiento"
               required
               disabled={mode === 'view' || saving}
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Monto *
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
                   type="number"
                   value={formData.monto}
                   onChange={(e) => setFormData({ ...formData, monto: parseFloat(e.target.value) || 0 })}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   step="0.01"
                   min="0"
                   required
@@ -358,14 +359,14 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Referencia {selectedTipoMovimiento?.requiereReferencia && '*'}
               </label>
               <input
                 type="text"
                 value={formData.referencia}
                 onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Número de operación, cheque, etc."
                 required={selectedTipoMovimiento?.requiereReferencia}
                 disabled={mode === 'view' || saving}
@@ -373,9 +374,9 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 {formData.tipo === 'TRANSFERENCIA' ? 'Cuenta Origen *' : 'Cuenta *'}
               </label>
               <div className="relative">
@@ -383,7 +384,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
                   className="relative border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent"
                   onClick={() => !saving && mode !== 'view' && setShowCuentaDropdown(true)}
                 >
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
                     type="text"
                     placeholder="Buscar cuenta por nombre o número..."
@@ -392,7 +393,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
                       setCuentaSearchTerm(e.target.value);
                       setShowCuentaDropdown(true);
                     }}
-                    className="w-full pl-10 pr-4 py-2 border-0 focus:ring-0 focus:outline-none"
+                    className="w-full pl-12 pr-4 py-3 text-base border-0 focus:ring-0 focus:outline-none"
                     disabled={mode === 'view' || saving}
                     onFocus={() => setShowCuentaDropdown(true)}
                   />
@@ -466,7 +467,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
 
             {formData.tipo === 'TRANSFERENCIA' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Cuenta Destino *
                 </label>
                 <div className="relative">
@@ -474,7 +475,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
                     className="relative border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent"
                     onClick={() => !saving && mode !== 'view' && setShowCuentaDestinoDropdown(true)}
                   >
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                     <input
                       type="text"
                       placeholder="Buscar cuenta destino..."
@@ -483,7 +484,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
                         setCuentaDestinoSearchTerm(e.target.value);
                         setShowCuentaDestinoDropdown(true);
                       }}
-                      className="w-full pl-10 pr-4 py-2 border-0 focus:ring-0 focus:outline-none"
+                      className="w-full pl-12 pr-4 py-3 text-base border-0 focus:ring-0 focus:outline-none"
                       disabled={mode === 'view' || saving}
                       onFocus={() => setShowCuentaDestinoDropdown(true)}
                     />
@@ -560,13 +561,13 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
 
           {mode !== 'create' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Estado
               </label>
               <select
                 value={formData.estado}
                 onChange={(e) => setFormData({ ...formData, estado: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={mode === 'view' || saving}
               >
                 <option value="PENDIENTE">Pendiente</option>
