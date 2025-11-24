@@ -205,27 +205,22 @@ export const GestionEmpresas: React.FC = () => {
   const openModal = (type: 'create' | 'edit' | 'view' | 'users', empresa?: Empresa) => {
     setModalType(type);
 
-    // Si es crear nueva empresa, abrir el wizard
+    // Si es crear o editar empresa, abrir el wizard
     if (type === 'create') {
+      setSelectedEmpresa(null);
+      setShowWizard(true);
+      return;
+    }
+
+    if (type === 'edit' && empresa) {
+      setSelectedEmpresa(empresa);
       setShowWizard(true);
       return;
     }
 
     if (empresa) {
       setSelectedEmpresa(empresa);
-      if (type === 'edit') {
-        setFormData({
-          nombre: empresa.nombre,
-          razonSocial: empresa.razonSocial,
-          numeroIdentificacion: empresa.numeroIdentificacion,
-          paisId: empresa.paisId,
-          direccion: empresa.direccion,
-          telefono: empresa.telefono,
-          email: empresa.email,
-          monedaPrincipal: empresa.monedaPrincipal,
-          subdominio: empresa.subdominio || ''
-        });
-      } else if (type === 'users') {
+      if (type === 'users') {
         cargarUsuariosEmpresa(empresa.id);
       }
     } else {
@@ -235,8 +230,16 @@ export const GestionEmpresas: React.FC = () => {
   };
 
   const handleWizardComplete = async (empresaId: string) => {
-    showSuccess('Empresa creada', 'La empresa ha sido creada exitosamente con toda su configuración.');
+    const mensaje = modalType === 'edit'
+      ? 'La empresa ha sido actualizada exitosamente.'
+      : 'La empresa ha sido creada exitosamente con toda su configuración.';
+
+    showSuccess(
+      modalType === 'edit' ? 'Empresa actualizada' : 'Empresa creada',
+      mensaje
+    );
     setShowWizard(false);
+    setSelectedEmpresa(null);
     await cargarDatos();
   };
 
@@ -932,12 +935,17 @@ export const GestionEmpresas: React.FC = () => {
         autoClose={notificationModal.autoClose}
       />
 
-      {/* Wizard de Nueva Empresa */}
+      {/* Wizard de Empresa (Crear/Editar) */}
       <EmpresaWizard
         isOpen={showWizard}
-        onClose={() => setShowWizard(false)}
+        onClose={() => {
+          setShowWizard(false);
+          setSelectedEmpresa(null);
+        }}
         onComplete={handleWizardComplete}
-        paisId={selectedPais}
+        paisId={selectedEmpresa?.paisId || selectedPais}
+        mode={modalType === 'edit' ? 'edit' : 'create'}
+        empresaId={selectedEmpresa?.id}
       />
     </div>
   );

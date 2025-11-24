@@ -21,18 +21,23 @@ interface EmpresaWizardProps {
   onClose: () => void;
   onComplete: (empresaId: string) => void;
   paisId?: string;
+  mode?: 'create' | 'edit';
+  empresaId?: string;
 }
 
 export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   isOpen,
   onClose,
   onComplete,
-  paisId
+  paisId,
+  mode = 'create',
+  empresaId
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [canProceed, setCanProceed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const steps: WizardStep[] = [
     {
@@ -99,11 +104,59 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
   const { usuario } = useAuth();
 
+  // Cargar datos de empresa en modo edición
+  useEffect(() => {
+    const cargarEmpresa = async () => {
+      if (mode === 'edit' && empresaId && isOpen) {
+        try {
+          setIsLoading(true);
+          const { data: empresa, error } = await supabase
+            .from('empresas')
+            .select('*')
+            .eq('id', empresaId)
+            .single();
+
+          if (error) throw error;
+
+          if (empresa) {
+            // Convertir fecha ISO a dd/mm/aaaa
+            let fechaFormateada = '';
+            if (empresa.fecha_inicio_actividades) {
+              const fecha = new Date(empresa.fecha_inicio_actividades);
+              fechaFormateada = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()}`;
+            }
+
+            setFormData({
+              pais_id: empresa.pais_id,
+              nombre: empresa.nombre,
+              razon_social: empresa.razon_social,
+              nombre_fantasia: empresa.nombre_fantasia || '',
+              numero_identificacion: empresa.numero_identificacion,
+              tipo_contribuyente_id: empresa.tipo_contribuyente_id || '',
+              fecha_inicio_actividades: fechaFormateada,
+              estado_tributario: empresa.estado_tributario || 'activa',
+              email: empresa.email,
+              telefono: empresa.telefono || '',
+              ciudad: empresa.direccion || ''
+            });
+          }
+        } catch (error) {
+          console.error('Error cargando empresa:', error);
+          alert('Error al cargar los datos de la empresa');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    cargarEmpresa();
+  }, [mode, empresaId, isOpen]);
+
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
       console.log('Guardando empresa:', formData);
-      console.log('Usuario actual:', usuario);
+      console.log('Modo:', mode);
 
       // Convertir fecha de dd/mm/aaaa a yyyy-mm-dd
       let fechaInicioISO = null;
@@ -114,54 +167,74 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
         }
       }
 
-      // Preparar configuración contable básica
-      const configuracionContable = {
-        ejercicio_fiscal: new Date().getFullYear(),
-        fecha_inicio_ejercicio: `${new Date().getFullYear()}-01-01`,
-        fecha_fin_ejercicio: `${new Date().getFullYear()}-12-31`,
-        metodo_costeo: 'promedio',
-        tipo_inventario: 'perpetuo',
-        maneja_inventario: false,
-        decimales_moneda: 2,
-        decimales_cantidades: 2,
-        numeracion_automatica: true,
-        prefijo_asientos: 'ASI',
-        longitud_numeracion: 6,
-        regimen_tributario: 'general',
-        configuracion_impuestos: []
+      const empresaData = {
+        nombre: formData.nombre,
+        razon_social: formData.razon_social,
+        nombre_fantasia: formData.nombre_fantasia || null,
+        numero_identificacion: formData.numero_identificacion,
+        pais_id: formData.pais_id,
+        tipo_contribuyente_id: formData.tipo_contribuyente_id || null,
+        fecha_inicio_actividades: fechaInicioISO,
+        estado_tributario: formData.estado_tributario || 'activa',
+        email: formData.email,
+        telefono: formData.telefono || null,
+        direccion: formData.ciudad || null,
+        moneda_principal: 'UYU'
       };
 
-      // Insertar empresa en Supabase
-      const { data: nuevaEmpresa, error } = await supabase
-        .from('empresas')
-        .insert({
-          nombre: formData.nombre,
-          razon_social: formData.razon_social,
-          nombre_fantasia: formData.nombre_fantasia || null,
-          numero_identificacion: formData.numero_identificacion,
-          pais_id: formData.pais_id,
-          tipo_contribuyente_id: formData.tipo_contribuyente_id || null,
-          fecha_inicio_actividades: fechaInicioISO,
-          estado_tributario: formData.estado_tributario || 'activa',
-          email: formData.email,
-          telefono: formData.telefono || null,
-          direccion: formData.ciudad || null,
-          moneda_principal: 'UYU',
-          activa: true,
-          usuarios_asignados: usuario?.id ? [usuario.id] : [],
-          configuracion_contable: configuracionContable
-        })
-        .select()
-        .single();
+      if (mode === 'edit' && empresaId) {
+        // Actualizar empresa existente
+        const { error } = await supabase
+          .from('empresas')
+          .update(empresaData)
+          .eq('id', empresaId);
 
-      if (error) {
-        console.error('Error al crear empresa:', error);
-        alert('Error al crear la empresa: ' + error.message);
-        return;
+        if (error) {
+          console.error('Error al actualizar empresa:', error);
+          alert('Error al actualizar la empresa: ' + error.message);
+          return;
+        }
+
+        console.log('Empresa actualizada exitosamente');
+        onComplete(empresaId);
+      } else {
+        // Crear nueva empresa
+        const configuracionContable = {
+          ejercicio_fiscal: new Date().getFullYear(),
+          fecha_inicio_ejercicio: `${new Date().getFullYear()}-01-01`,
+          fecha_fin_ejercicio: `${new Date().getFullYear()}-12-31`,
+          metodo_costeo: 'promedio',
+          tipo_inventario: 'perpetuo',
+          maneja_inventario: false,
+          decimales_moneda: 2,
+          decimales_cantidades: 2,
+          numeracion_automatica: true,
+          prefijo_asientos: 'ASI',
+          longitud_numeracion: 6,
+          regimen_tributario: 'general',
+          configuracion_impuestos: []
+        };
+
+        const { data: nuevaEmpresa, error } = await supabase
+          .from('empresas')
+          .insert({
+            ...empresaData,
+            activa: true,
+            usuarios_asignados: usuario?.id ? [usuario.id] : [],
+            configuracion_contable: configuracionContable
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error al crear empresa:', error);
+          alert('Error al crear la empresa: ' + error.message);
+          return;
+        }
+
+        console.log('Empresa creada exitosamente:', nuevaEmpresa);
+        onComplete(nuevaEmpresa.id);
       }
-
-      console.log('Empresa creada exitosamente:', nuevaEmpresa);
-      onComplete(nuevaEmpresa.id);
     } catch (error: any) {
       console.error('Error guardando empresa:', error);
       alert('Error al guardar: ' + error.message);
@@ -177,10 +250,13 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">Nueva Empresa</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {mode === 'edit' ? 'Editar Empresa' : 'Nueva Empresa'}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
+            disabled={isLoading}
           >
             <X className="w-6 h-6" />
           </button>
@@ -235,7 +311,16 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {steps[currentStep].component}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-gray-600">Cargando datos de la empresa...</p>
+              </div>
+            </div>
+          ) : (
+            steps[currentStep].component
+          )}
         </div>
 
         {/* Footer */}
@@ -271,12 +356,12 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Guardando...
+                  {mode === 'edit' ? 'Actualizando...' : 'Guardando...'}
                 </>
               ) : (
                 <>
                   <Check className="w-4 h-4 mr-2" />
-                  Crear Empresa
+                  {mode === 'edit' ? 'Actualizar Empresa' : 'Crear Empresa'}
                 </>
               )}
             </button>
