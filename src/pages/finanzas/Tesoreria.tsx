@@ -170,36 +170,6 @@ function Tesoreria() {
   };
 
   // Cargar datos mock en Firebase
-  const handleCargarDatosMock = async () => {
-    try {
-      confirmDelete(
-        'los datos existentes y cargar nuevos datos de prueba',
-        async () => {
-          try {
-            const resultado = await cargarDatosMockEnFirebase();
-            if (resultado) {
-              showSuccess(
-                'Datos cargados',
-                'Los datos de prueba han sido cargados exitosamente en Firebase.'
-              );
-              // Recargar datos después de cargar
-              await recargarDatos();
-            }
-          } catch (error) {
-            showError(
-              'Error al cargar datos',
-              error instanceof Error ? error.message : 'Error desconocido'
-            );
-          }
-        }
-      );
-    } catch (error) {
-      showError(
-        'Error al cargar datos',
-        error instanceof Error ? error.message : 'Error desconocido'
-      );
-    }
-  };
 
   // Obtener el nombre de la cuenta para un movimiento
   const getCuentaNombre = (cuentaId: string): string => {
@@ -314,23 +284,6 @@ function Tesoreria() {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Cuentas Bancarias</h3>
               <div className="flex space-x-2">
-                <button
-                  onClick={handleCargarDatosMock}
-                  disabled={isLoadingMockData}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm disabled:opacity-50"
-                >
-                  {isLoadingMockData ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Cargando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Database className="h-4 w-4" />
-                      <span>Cargar Datos en Firebase</span>
-                    </>
-                  )}
-                </button>
                 <Link
                   to="/manuales/finanzas/tesoreria"
                   className="bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1 text-sm"
@@ -417,23 +370,6 @@ function Tesoreria() {
                     Comience creando su primera cuenta bancaria para gestionar su tesorería.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <button
-                      onClick={handleCargarDatosMock}
-                      disabled={isLoadingMockData}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isLoadingMockData ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Cargando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Database className="h-4 w-4" />
-                          <span>Cargar Datos en Firebase</span>
-                        </>
-                      )}
-                    </button>
                     <button
                       onClick={handleNuevaCuenta}
                       className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 flex items-center justify-center gap-2"
@@ -580,25 +516,6 @@ function Tesoreria() {
                     : 'Comience registrando su primer movimiento de tesorería.'}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  {movimientos.length === 0 && (
-                    <button
-                      onClick={handleCargarDatosMock}
-                      disabled={isLoadingMockData}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isLoadingMockData ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Cargando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Database className="h-4 w-4" />
-                          <span>Cargar Datos en Firebase</span>
-                        </>
-                      )}
-                    </button>
-                  )}
                   <button
                     onClick={handleNuevoMovimiento}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
