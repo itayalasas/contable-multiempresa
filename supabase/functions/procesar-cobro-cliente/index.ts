@@ -85,8 +85,15 @@ Deno.serve(async (req: Request) => {
 
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Pagado=${totalPagado}/${total}`);
 
-    // 5. Generar asiento contable
-    await generarAsientoCobro(supabase, factura, pago, pagoData.id);
+    // 5. Generar asiento contable (si está configurado)
+    let mensajeAsiento = '';
+    try {
+      await generarAsientoCobro(supabase, factura, pago, pagoData.id);
+      mensajeAsiento = 'con asiento contable';
+    } catch (asientoError) {
+      console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
+      mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+    }
 
     return new Response(
       JSON.stringify({
@@ -95,7 +102,7 @@ Deno.serve(async (req: Request) => {
         totalPagado,
         saldoPendiente: Math.max(0, saldoPendiente),
         nuevoEstado,
-        message: 'Cobro procesado y asiento contable generado exitosamente'
+        message: `Cobro procesado exitosamente ${mensajeAsiento}`
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

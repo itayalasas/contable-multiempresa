@@ -82,17 +82,30 @@ Deno.serve(async (req: Request) => {
 
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Saldo=${nuevoSaldo}`);
 
-    // 3. Generar asiento contable
-    const asientoId = await generarAsientoPago(supabase, factura, pago, pagoData.id);
+    // 3. Generar asiento contable (si está configurado)
+    let asientoId = null;
+    let mensajeAsiento = '';
+
+    try {
+      asientoId = await generarAsientoPago(supabase, factura, pago, pagoData.id);
+      mensajeAsiento = 'asiento contable generado';
+    } catch (asientoError) {
+      console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
+      mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+    }
 
     // 4. Registrar movimiento en tesorería (actualiza saldo automáticamente)
-    await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId);
+    try {
+      await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId);
+    } catch (tesoreriaError) {
+      console.warn('⚠️ No se pudo registrar movimiento de tesorería:', tesoreriaError.message);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         pagoId: pagoData.id,
-        message: 'Pago procesado, asiento contable y movimiento de tesorería registrados exitosamente'
+        message: `Pago procesado exitosamente (${mensajeAsiento})`
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
