@@ -1,20 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useSesion } from '../../context/SesionContext';
 import { supabase } from '../../config/supabase';
+import { ImpuestoModal, ImpuestoFormData } from '../../components/admin/ImpuestoModal';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { NotificationModal } from '../../components/common/NotificationModal';
 
 interface Impuesto {
   id: string;
   nombre: string;
+  codigo: string;
   tipo: string;
   tasa: number;
   activo: boolean;
   descripcion?: string;
+  aplica_ventas: boolean;
+  aplica_compras: boolean;
+  codigo_dgi?: string;
 }
 
 export default function GestionImpuestos() {
   const { empresaActual } = useSesion();
   const [impuestos, setImpuestos] = useState<Impuesto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [impuestoEditar, setImpuestoEditar] = useState<Impuesto | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [impuestoEliminar, setImpuestoEliminar] = useState<Impuesto | null>(null);
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'info', title: '', message: '' });
 
   useEffect(() => {
     console.log('🔄 [GestionImpuestos] useEffect disparado');
@@ -60,10 +77,14 @@ export default function GestionImpuestos() {
       const impuestosFormateados = (data || []).map((imp: any) => ({
         id: imp.id,
         nombre: imp.nombre,
+        codigo: imp.codigo,
         tipo: imp.tipo,
         tasa: parseFloat(imp.tasa),
         activo: imp.activo,
         descripcion: imp.descripcion,
+        aplica_ventas: imp.aplica_ventas,
+        aplica_compras: imp.aplica_compras,
+        codigo_dgi: imp.codigo_dgi,
       }));
 
       console.log('✅ [GestionImpuestos] Impuestos cargados:', impuestosFormateados.length);
@@ -71,8 +92,118 @@ export default function GestionImpuestos() {
     } catch (error) {
       console.error('❌ [GestionImpuestos] Error al cargar impuestos:', error);
     } finally {
-      console.log('🏁 [GestionImpuestos] Finalizando carga (loading = false)');
       setLoading(false);
+    }
+  };
+
+  const handleNuevoImpuesto = () => {
+    setImpuestoEditar(null);
+    setShowModal(true);
+  };
+
+  const handleEditarImpuesto = (impuesto: Impuesto) => {
+    setImpuestoEditar(impuesto);
+    setShowModal(true);
+  };
+
+  const handleEliminarClick = (impuesto: Impuesto) => {
+    setImpuestoEliminar(impuesto);
+    setShowDeleteModal(true);
+  };
+
+  const handleGuardarImpuesto = async (formData: ImpuestoFormData) => {
+    const paisId = empresaActual?.paisId || empresaActual?.pais_id;
+    if (!paisId) {
+      throw new Error('No se pudo obtener el país de la empresa');
+    }
+
+    try {
+      if (formData.id) {
+        const { error } = await supabase
+          .from('impuestos_configuracion')
+          .update({
+            nombre: formData.nombre,
+            codigo: formData.codigo,
+            tipo: formData.tipo,
+            tasa: formData.tasa,
+            activo: formData.activo,
+            descripcion: formData.descripcion,
+            aplica_ventas: formData.aplica_ventas,
+            aplica_compras: formData.aplica_compras,
+            codigo_dgi: formData.codigo_dgi,
+          })
+          .eq('id', formData.id);
+
+        if (error) throw error;
+
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Impuesto actualizado',
+          message: 'El impuesto se actualizó correctamente.',
+        });
+      } else {
+        const { error } = await supabase
+          .from('impuestos_configuracion')
+          .insert({
+            pais_id: paisId,
+            nombre: formData.nombre,
+            codigo: formData.codigo,
+            tipo: formData.tipo,
+            tasa: formData.tasa,
+            activo: formData.activo,
+            descripcion: formData.descripcion,
+            aplica_ventas: formData.aplica_ventas,
+            aplica_compras: formData.aplica_compras,
+            codigo_dgi: formData.codigo_dgi,
+          });
+
+        if (error) throw error;
+
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Impuesto creado',
+          message: 'El impuesto se creó correctamente.',
+        });
+      }
+
+      await cargarImpuestos();
+    } catch (error: any) {
+      console.error('Error al guardar impuesto:', error);
+      throw new Error(error.message || 'Error al guardar el impuesto');
+    }
+  };
+
+  const handleEliminarConfirm = async () => {
+    if (!impuestoEliminar) return;
+
+    try {
+      const { error } = await supabase
+        .from('impuestos_configuracion')
+        .delete()
+        .eq('id', impuestoEliminar.id);
+
+      if (error) throw error;
+
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Impuesto eliminado',
+        message: 'El impuesto se eliminó correctamente.',
+      });
+
+      await cargarImpuestos();
+      setShowDeleteModal(false);
+      setImpuestoEliminar(null);
+    } catch (error: any) {
+      console.error('Error al eliminar impuesto:', error);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Error al eliminar el impuesto',
+      });
     }
   };
 
@@ -101,7 +232,10 @@ export default function GestionImpuestos() {
             Configuración de tasas impositivas y tipos de impuestos
           </p>
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+        <button
+          onClick={handleNuevoImpuesto}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        >
           Nuevo Impuesto
         </button>
       </div>
@@ -179,8 +313,18 @@ export default function GestionImpuestos() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
-                    <button className="text-red-600 hover:text-red-900">Eliminar</button>
+                    <button
+                      onClick={() => handleEditarImpuesto(impuesto)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleEliminarClick(impuesto)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Eliminar
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -211,6 +355,31 @@ export default function GestionImpuestos() {
           </div>
         </div>
       </div>
+
+      <ImpuestoModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSave={handleGuardarImpuesto}
+        impuesto={impuestoEditar}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleEliminarConfirm}
+        title="Eliminar Impuesto"
+        message={`¿Está seguro que desea eliminar el impuesto "${impuestoEliminar?.nombre}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+      />
+
+      <NotificationModal
+        isOpen={notification.show}
+        onClose={() => setNotification({ ...notification, show: false })}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+      />
     </div>
   );
 }
