@@ -366,7 +366,7 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     .from('proveedores')
     .select('id')
     .eq('empresa_id', empresaId)
-    .eq('numero_identificacion', partner.partner_id_externo)
+    .eq('numero_documento', partner.partner_id_externo)
     .maybeSingle();
 
   if (proveedorExistente) {
@@ -380,8 +380,7 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
       pais_id: paisId,
       razon_social: partner.razon_social,
       nombre_comercial: partner.razon_social,
-      numero_identificacion: partner.partner_id_externo,
-      tipo_identificacion: 'RUT',
+      numero_documento: partner.partner_id_externo,
       email: partner.email || null,
       telefono: partner.telefono || null,
       activo: true,
