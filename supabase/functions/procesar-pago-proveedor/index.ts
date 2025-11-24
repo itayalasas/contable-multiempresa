@@ -83,13 +83,16 @@ Deno.serve(async (req: Request) => {
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Saldo=${nuevoSaldo}`);
 
     // 3. Generar asiento contable
-    await generarAsientoPago(supabase, factura, pago, pagoData.id);
+    const asientoId = await generarAsientoPago(supabase, factura, pago, pagoData.id);
+
+    // 4. Registrar movimiento en tesorería (actualiza saldo automáticamente)
+    await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId);
 
     return new Response(
       JSON.stringify({
         success: true,
         pagoId: pagoData.id,
-        message: 'Pago procesado y asiento contable generado exitosamente'
+        message: 'Pago procesado, asiento contable y movimiento de tesorería registrados exitosamente'
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -233,9 +236,140 @@ async function generarAsientoPago(supabase: any, factura: any, pago: any, pagoId
 
     console.log(`✅ Asiento contable ${numeroAsiento} generado exitosamente`);
 
+    return asiento.id;
+
   } catch (error) {
     console.error('❌ Error generando asiento de pago:', error);
     throw error;
+  }
+}
+
+async function registrarMovimientoTesoreria(
+  supabase: any,
+  factura: any,
+  pago: any,
+  pagoId: string,
+  asientoId: string
+) {
+  try {
+    console.log('💰 [Tesorería] Registrando movimiento bancario...');
+
+    // Obtener o crear cuenta bancaria según el tipo de pago
+    let cuentaBancaria = null;
+
+    if (pago.tipoPago === 'TRANSFERENCIA' || pago.tipoPago === 'CHEQUE') {
+      // Buscar cuenta bancaria por banco y número de cuenta
+      const { data: cuenta } = await supabase
+        .from('cuentas_bancarias')
+        .select('id')
+        .eq('empresa_id', factura.empresa_id)
+        .eq('banco', pago.banco || 'Banco General')
+        .eq('numero_cuenta', pago.numeroCuenta || '00000000')
+        .maybeSingle();
+
+      if (cuenta) {
+        cuentaBancaria = cuenta;
+      } else {
+        // Crear cuenta bancaria si no existe
+        const { data: nuevaCuenta, error: cuentaError } = await supabase
+          .from('cuentas_bancarias')
+          .insert({
+            empresa_id: factura.empresa_id,
+            nombre: `Cuenta ${pago.banco || 'Banco General'}`,
+            numero_cuenta: pago.numeroCuenta || '00000000',
+            banco: pago.banco || 'Banco General',
+            tipo_cuenta: 'CORRIENTE',
+            moneda: factura.moneda || 'UYU',
+            saldo_inicial: 0,
+            saldo_actual: 0,
+            activa: true,
+          })
+          .select()
+          .single();
+
+        if (cuentaError) {
+          console.warn('⚠️ No se pudo crear cuenta bancaria:', cuentaError.message);
+          return; // No bloquear el pago si falla la tesorería
+        }
+
+        cuentaBancaria = nuevaCuenta;
+        console.log('✅ Cuenta bancaria creada:', cuentaBancaria.id);
+      }
+    } else if (pago.tipoPago === 'EFECTIVO') {
+      // Buscar cuenta de caja
+      const { data: cuenta } = await supabase
+        .from('cuentas_bancarias')
+        .select('id')
+        .eq('empresa_id', factura.empresa_id)
+        .eq('tipo_cuenta', 'CAJA')
+        .maybeSingle();
+
+      if (cuenta) {
+        cuentaBancaria = cuenta;
+      } else {
+        // Crear cuenta de caja si no existe
+        const { data: nuevaCuenta } = await supabase
+          .from('cuentas_bancarias')
+          .insert({
+            empresa_id: factura.empresa_id,
+            nombre: 'Caja General',
+            numero_cuenta: 'CAJA-001',
+            banco: 'Efectivo',
+            tipo_cuenta: 'CAJA',
+            moneda: factura.moneda || 'UYU',
+            saldo_inicial: 0,
+            saldo_actual: 0,
+            activa: true,
+          })
+          .select()
+          .single();
+
+        cuentaBancaria = nuevaCuenta;
+        console.log('✅ Cuenta de caja creada:', cuentaBancaria?.id);
+      }
+    }
+
+    if (!cuentaBancaria) {
+      console.warn('⚠️ No se encontró cuenta bancaria, saltando registro de tesorería');
+      return;
+    }
+
+    // Registrar movimiento de EGRESO (sale dinero)
+    const { error: movError } = await supabase
+      .from('movimientos_tesoreria')
+      .insert({
+        empresa_id: factura.empresa_id,
+        cuenta_bancaria_id: cuentaBancaria.id,
+        tipo_movimiento: 'EGRESO',
+        fecha: pago.fechaPago,
+        monto: pago.monto,
+        descripcion: `Pago factura ${factura.numero} - ${factura.proveedor?.razon_social || 'Proveedor'}`,
+        referencia: pago.referencia || factura.numero,
+        beneficiario: factura.proveedor?.razon_social || 'Proveedor',
+        categoria: 'PAGO_PROVEEDOR',
+        asiento_contable_id: asientoId,
+        documento_origen_tipo: 'pago_proveedor',
+        documento_origen_id: pagoId,
+        metadata: {
+          tipo_pago: pago.tipoPago,
+          banco: pago.banco,
+          numero_cuenta: pago.numeroCuenta,
+          numero_operacion: pago.numeroOperacion,
+          factura_id: factura.id,
+        },
+      });
+
+    if (movError) {
+      console.error('⚠️ Error registrando movimiento de tesorería:', movError.message);
+      // No lanzar error, solo advertir
+      return;
+    }
+
+    console.log('✅ Movimiento de tesorería registrado - Saldo bancario actualizado automáticamente');
+
+  } catch (error) {
+    console.error('⚠️ Error en tesorería (no crítico):', error);
+    // No lanzar error para no bloquear el pago
   }
 }
 
