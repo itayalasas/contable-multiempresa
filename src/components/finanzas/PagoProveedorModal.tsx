@@ -94,6 +94,7 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
         banco: formData.banco,
         numeroCuenta: formData.numeroCuenta,
         numeroOperacion: formData.numeroOperacion,
+        cuentaBancariaId: formData.cuentaBancariaId,
         creadoPor: 'dev-user-123' // Esto debería venir del contexto
       };
 

@@ -75,6 +75,7 @@ export interface PagoProveedor {
   banco?: string;
   numeroCuenta?: string;
   numeroOperacion?: string;
+  cuentaBancariaId?: string;
 }
 
 export interface ResumenCuentasPorPagar {

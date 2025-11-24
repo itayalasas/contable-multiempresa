@@ -38,6 +38,7 @@ Deno.serve(async (req: Request) => {
         banco: pago.banco,
         numero_cuenta: pago.numeroCuenta,
         numero_operacion: pago.numeroOperacion,
+        cuenta_bancaria_id: pago.cuentaBancariaId || null,
       })
       .select()
       .single();
@@ -81,6 +82,11 @@ Deno.serve(async (req: Request) => {
       .eq('id', factura_id);
 
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Saldo=${nuevoSaldo}`);
+
+    // 2.5. Actualizar estado de comisiones si es una factura de comisiones
+    if (nuevoEstado === 'PAGADA') {
+      await actualizarEstadoComisiones(supabase, factura_id);
+    }
 
     // 3. Generar asiento contable (si está configurado)
     let asientoId = null;
@@ -276,97 +282,40 @@ async function registrarMovimientoTesoreria(
   try {
     console.log('💰 [Tesorería] Registrando movimiento bancario...');
 
-    // Obtener o crear cuenta bancaria según el tipo de pago
-    let cuentaBancaria = null;
+    // Si el pago ya tiene un ID de cuenta bancaria, usarlo directamente
+    let cuentaBancariaId = pago.cuentaBancariaId;
 
-    if (pago.tipoPago === 'TRANSFERENCIA' || pago.tipoPago === 'CHEQUE') {
-      // Buscar cuenta bancaria por banco y número de cuenta
-      const { data: cuenta } = await supabase
-        .from('cuentas_bancarias')
-        .select('id')
-        .eq('empresa_id', factura.empresa_id)
-        .eq('banco', pago.banco || 'Banco General')
-        .eq('numero_cuenta', pago.numeroCuenta || '00000000')
-        .maybeSingle();
-
-      if (cuenta) {
-        cuentaBancaria = cuenta;
-      } else {
-        // Crear cuenta bancaria si no existe
-        const { data: nuevaCuenta, error: cuentaError } = await supabase
-          .from('cuentas_bancarias')
-          .insert({
-            empresa_id: factura.empresa_id,
-            nombre: `Cuenta ${pago.banco || 'Banco General'}`,
-            numero_cuenta: pago.numeroCuenta || '00000000',
-            banco: pago.banco || 'Banco General',
-            tipo_cuenta: 'CORRIENTE',
-            moneda: factura.moneda || 'UYU',
-            saldo_inicial: 0,
-            saldo_actual: 0,
-            activa: true,
-          })
-          .select()
-          .single();
-
-        if (cuentaError) {
-          console.warn('⚠️ No se pudo crear cuenta bancaria:', cuentaError.message);
-          return; // No bloquear el pago si falla la tesorería
-        }
-
-        cuentaBancaria = nuevaCuenta;
-        console.log('✅ Cuenta bancaria creada:', cuentaBancaria.id);
-      }
-    } else if (pago.tipoPago === 'EFECTIVO') {
-      // Buscar cuenta de caja
-      const { data: cuenta } = await supabase
-        .from('cuentas_bancarias')
-        .select('id')
-        .eq('empresa_id', factura.empresa_id)
-        .eq('tipo_cuenta', 'CAJA')
-        .maybeSingle();
-
-      if (cuenta) {
-        cuentaBancaria = cuenta;
-      } else {
-        // Crear cuenta de caja si no existe
-        const { data: nuevaCuenta } = await supabase
-          .from('cuentas_bancarias')
-          .insert({
-            empresa_id: factura.empresa_id,
-            nombre: 'Caja General',
-            numero_cuenta: 'CAJA-001',
-            banco: 'Efectivo',
-            tipo_cuenta: 'CAJA',
-            moneda: factura.moneda || 'UYU',
-            saldo_inicial: 0,
-            saldo_actual: 0,
-            activa: true,
-          })
-          .select()
-          .single();
-
-        cuentaBancaria = nuevaCuenta;
-        console.log('✅ Cuenta de caja creada:', cuentaBancaria?.id);
-      }
-    }
-
-    if (!cuentaBancaria) {
-      console.warn('⚠️ No se encontró cuenta bancaria, saltando registro de tesorería');
+    if (!cuentaBancariaId) {
+      console.warn('⚠️ No se proporcionó ID de cuenta bancaria');
       return;
     }
+
+    // Verificar que la cuenta bancaria existe
+    const { data: cuenta, error: cuentaError } = await supabase
+      .from('cuentas_bancarias')
+      .select('id, nombre')
+      .eq('id', cuentaBancariaId)
+      .eq('empresa_id', factura.empresa_id)
+      .maybeSingle();
+
+    if (cuentaError || !cuenta) {
+      console.warn('⚠️ No se encontró cuenta bancaria con ID:', cuentaBancariaId);
+      return;
+    }
+
+    console.log('✅ Usando cuenta bancaria:', cuenta.nombre);
 
     // Registrar movimiento de EGRESO (sale dinero)
     const { error: movError } = await supabase
       .from('movimientos_tesoreria')
       .insert({
         empresa_id: factura.empresa_id,
-        cuenta_bancaria_id: cuentaBancaria.id,
+        cuenta_bancaria_id: cuentaBancariaId,
         tipo_movimiento: 'EGRESO',
         fecha: pago.fechaPago,
         monto: pago.monto,
         descripcion: `Pago factura ${factura.numero} - ${factura.proveedor?.razon_social || 'Proveedor'}`,
-        referencia: pago.referencia || factura.numero,
+        referencia: pago.numeroOperacion || pago.referencia || factura.numero,
         beneficiario: factura.proveedor?.razon_social || 'Proveedor',
         categoria: 'PAGO_PROVEEDOR',
         asiento_contable_id: asientoId,
@@ -441,5 +390,35 @@ async function obtenerCuentaId(supabase: any, empresaId: string, codigo: string)
   } catch (error) {
     console.warn(`⚠️ Error buscando cuenta ${codigo}:`, error);
     return null;
+  }
+}
+
+async function actualizarEstadoComisiones(supabase: any, facturaId: string) {
+  try {
+    console.log('📊 [Comisiones] Actualizando estado de comisiones relacionadas...');
+
+    // Actualizar comisiones relacionadas con esta factura a PAGADA
+    const { data, error } = await supabase
+      .from('comisiones_partners')
+      .update({
+        estado_pago: 'PAGADA',
+        fecha_pagada: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('factura_compra_id', facturaId)
+      .select();
+
+    if (error) {
+      console.error('⚠️ Error actualizando comisiones:', error);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      console.log(`✅ ${data.length} comisiones actualizadas a PAGADA`);
+    } else {
+      console.log('ℹ️ No hay comisiones relacionadas con esta factura');
+    }
+  } catch (error) {
+    console.error('⚠️ Error en actualización de comisiones (no crítico):', error);
   }
 }
