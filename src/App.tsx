@@ -59,7 +59,6 @@ const GestionEmpresas = React.lazy(() =>
 )
 const GestionNomencladores = React.lazy(() =>
   import('./pages/admin/GestionNomencladores')
-    .then(mod => ({ default: mod.GestionNomencladores }))
 )
 
 const ConfiguracionMapeoArchivos = React.lazy(() =>
