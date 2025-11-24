@@ -116,6 +116,29 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
     console.log(`⚙️ Comisión MP: ${(tasaMP * 100).toFixed(2)}%`);
     console.log(`⚙️ División MP Aliado: ${divisionMPAliado}%`);
 
+    // Primero verificar cuántas comisiones hay en total
+    const { data: todasComisiones, error: errorTodas } = await supabase
+      .from('comisiones_partners')
+      .select('id, estado_comision, estado_pago, factura_venta_comision_id, factura_compra_id', { count: 'exact' })
+      .eq('empresa_id', empresaId);
+
+    console.log('📊 Diagnóstico comisiones totales:', {
+      total: todasComisiones?.length || 0,
+      error: errorTodas?.message,
+      estados: todasComisiones?.reduce((acc: any, c: any) => {
+        const key = `${c.estado_comision}-${c.estado_pago}`;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {})
+    });
+
+    console.log('🔍 Buscando comisiones con criterios:');
+    console.log('  - empresa_id:', empresaId);
+    console.log('  - estado_comision: facturada');
+    console.log('  - factura_venta_comision_id: NOT NULL');
+    console.log('  - factura_compra_id: NULL');
+    if (partnerId) console.log('  - partner_id:', partnerId);
+
     let query = supabase
       .from('comisiones_partners')
       .select(`
@@ -133,7 +156,22 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
     const { data: comisiones, error: comisionesError } = await query;
 
-    if (comisionesError) throw comisionesError;
+    console.log('📊 Resultado query comisiones:', {
+      encontradas: comisiones?.length || 0,
+      error: comisionesError?.message,
+      sample: comisiones?.[0] ? {
+        id: comisiones[0].id,
+        estado_comision: comisiones[0].estado_comision,
+        estado_pago: comisiones[0].estado_pago,
+        tiene_factura_venta: !!comisiones[0].factura_venta_comision_id,
+        tiene_factura_compra: !!comisiones[0].factura_compra_id
+      } : null
+    });
+
+    if (comisionesError) {
+      console.error('❌ Error en query comisiones:', comisionesError);
+      throw comisionesError;
+    }
 
     if (!comisiones || comisiones.length === 0) {
       console.log('✅ No hay comisiones facturadas pendientes de generar cuenta por pagar');
