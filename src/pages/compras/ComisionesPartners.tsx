@@ -171,10 +171,18 @@ export default function ComisionesPartners() {
   };
 
   const generarFacturasCompraAhora = async () => {
-    if (!empresaActual) return;
+    console.log('🚀 [ComisionesPartners] Iniciando generación de facturas de compra...');
+    console.log('📊 [ComisionesPartners] empresaActual:', empresaActual);
+
+    if (!empresaActual) {
+      console.error('❌ [ComisionesPartners] No hay empresa actual');
+      return;
+    }
 
     try {
       setGenerandoFacturasCompra(true);
+      console.log('🔄 [ComisionesPartners] Llamando a edge function: generar-facturas-compra-partners');
+      console.log('📤 [ComisionesPartners] Body:', { empresaId: empresaActual.id });
 
       const { data, error } = await supabase.functions.invoke('generar-facturas-compra-partners', {
         body: {
@@ -182,9 +190,15 @@ export default function ComisionesPartners() {
         },
       });
 
-      if (error) throw error;
+      console.log('📥 [ComisionesPartners] Respuesta de edge function:', { data, error });
+
+      if (error) {
+        console.error('❌ [ComisionesPartners] Error en edge function:', error);
+        throw error;
+      }
 
       if (data.success) {
+        console.log('✅ [ComisionesPartners] Facturas generadas exitosamente:', data);
         setShowGenerarCompraModal(false);
         setNotification({
           show: true,
@@ -194,6 +208,7 @@ export default function ComisionesPartners() {
         });
         await cargarDatos();
       } else {
+        console.error('⚠️ [ComisionesPartners] Edge function reportó fallo:', data);
         setNotification({
           show: true,
           type: 'error',
@@ -202,7 +217,13 @@ export default function ComisionesPartners() {
         });
       }
     } catch (error: any) {
-      console.error('Error al generar facturas de compra:', error);
+      console.error('❌ [ComisionesPartners] Error al generar facturas de compra:', error);
+      console.error('❌ [ComisionesPartners] Error detallado:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        fullError: error,
+      });
       setNotification({
         show: true,
         type: 'error',
@@ -210,6 +231,7 @@ export default function ComisionesPartners() {
         message: error.message || 'No se pudieron generar las facturas de compra. Por favor, intente nuevamente.',
       });
     } finally {
+      console.log('🏁 [ComisionesPartners] Finalizando generación (generandoFacturasCompra = false)');
       setGenerandoFacturasCompra(false);
     }
   };

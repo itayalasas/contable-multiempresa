@@ -23,10 +23,20 @@ export default function GestionImpuestos() {
   }, [empresaActual]);
 
   const cargarImpuestos = async () => {
-    if (!empresaActual?.pais_id) return;
+    console.log('🔍 [GestionImpuestos] Iniciando carga de impuestos...');
+    console.log('📊 [GestionImpuestos] empresaActual:', empresaActual);
+    console.log('🌍 [GestionImpuestos] pais_id:', empresaActual?.pais_id);
+
+    if (!empresaActual?.pais_id) {
+      console.error('❌ [GestionImpuestos] No hay pais_id en empresaActual');
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
+      console.log('🔄 [GestionImpuestos] Consultando impuestos_configuracion...');
+
       const { data, error } = await supabase
         .from('impuestos_configuracion')
         .select('*')
@@ -34,7 +44,12 @@ export default function GestionImpuestos() {
         .order('tipo', { ascending: true })
         .order('nombre', { ascending: true });
 
-      if (error) throw error;
+      console.log('📥 [GestionImpuestos] Respuesta de Supabase:', { data, error });
+
+      if (error) {
+        console.error('❌ [GestionImpuestos] Error en query:', error);
+        throw error;
+      }
 
       const impuestosFormateados = (data || []).map((imp: any) => ({
         id: imp.id,
@@ -45,10 +60,12 @@ export default function GestionImpuestos() {
         descripcion: imp.descripcion,
       }));
 
+      console.log('✅ [GestionImpuestos] Impuestos cargados:', impuestosFormateados.length);
       setImpuestos(impuestosFormateados);
     } catch (error) {
-      console.error('Error al cargar impuestos:', error);
+      console.error('❌ [GestionImpuestos] Error al cargar impuestos:', error);
     } finally {
+      console.log('🏁 [GestionImpuestos] Finalizando carga (loading = false)');
       setLoading(false);
     }
   };
