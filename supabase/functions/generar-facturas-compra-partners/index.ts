@@ -78,7 +78,6 @@ Deno.serve(async (req: Request) => {
 
 async function procesarCuentasPorPagar(supabase: any, empresaId: string, partnerId?: string) {
   try {
-    // Obtener empresa y país
     const { data: empresa } = await supabase
       .from('empresas')
       .select('pais_id')
@@ -89,7 +88,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
       throw new Error('Empresa no encontrada');
     }
 
-    // Obtener configuración de IVA
     const { data: ivaConfig } = await supabase
       .from('impuestos_configuracion')
       .select('tasa')
@@ -102,7 +100,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
     const tasaIVA = ivaConfig?.tasa ? parseFloat(ivaConfig.tasa) / 100 : 0.22;
     console.log(`⚙️ Tasa IVA: ${(tasaIVA * 100).toFixed(2)}%`);
 
-    // Obtener configuración de comisión Mercado Pago
     const { data: mpConfig } = await supabase
       .from('impuestos_configuracion')
       .select('tasa, configuracion')
@@ -117,7 +114,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
     console.log(`⚙️ Comisión MP: ${(tasaMP * 100).toFixed(2)}%`);
     console.log(`⚙️ División MP Aliado: ${divisionMPAliado}%`);
 
-    // Query comisiones facturadas
     let query = supabase
       .from('comisiones_partners')
       .select(`
@@ -127,7 +123,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
       .eq('empresa_id', empresaId)
       .eq('estado_comision', 'facturada')
       .not('factura_venta_comision_id', 'is', null)
-      .is('factura_compra_id', null); // Solo las que NO tienen factura de compra aún
+      .is('factura_compra_id', null);
 
     if (partnerId) {
       query = query.eq('partner_id', partnerId);
@@ -144,7 +140,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
     console.log(`📋 Encontradas ${comisiones.length} comisiones facturadas`);
 
-    // Agrupar por partner
     const comisionesPorPartner = new Map<string, any[]>();
     comisiones.forEach((comision: any) => {
       const pid = comision.partner_id;
@@ -159,35 +154,18 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
     let comisionesProcesadas = 0;
     const errores: any[] = [];
 
-    // Procesar cada partner
     for (const [pid, comisionesPartner] of comisionesPorPartner) {
       try {
         const partner = comisionesPartner[0].partner;
         console.log(`\n👤 Procesando partner: ${partner.razon_social}`);
 
-        // CÁLCULO CORRECTO:
-        // 1. Sumar todos los subtotales de venta (lo que cobró la app al cliente)
         const totalVentas = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.subtotal_venta), 0);
-
-        // 2. Sumar todas las comisiones de la app (lo que ya se queda la app)
         const totalComisionApp = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.comision_monto), 0);
-
-        // 3. Calcular comisión Mercado Pago total
         const comisionMPTotal = totalVentas * tasaMP;
-
-        // 4. Calcular parte de MP que le toca al aliado (ej: 50%)
         const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
-
-        // 5. Calcular parte de MP que se queda la app (ej: 50%)
         const comisionMPApp = comisionMPTotal - comisionMPAliado;
-
-        // 6. Calcular subtotal a pagar al aliado (SIN IVA)
         const subtotalAliado = totalVentas - totalComisionApp - comisionMPAliado;
-
-        // 7. Calcular IVA sobre el subtotal del aliado
         const ivaAliado = subtotalAliado * tasaIVA;
-
-        // 8. Calcular total a pagar (subtotal + IVA)
         const totalAPagar = subtotalAliado + ivaAliado;
 
         console.log(`💰 Cálculos:`);
@@ -200,10 +178,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaAliado.toFixed(2)}`);
         console.log(`   = TOTAL A PAGAR: $${totalAPagar.toFixed(2)}`);
 
-        // Crear o actualizar proveedor desde partner
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
 
-        // Generar número de factura de compra
         const { data: ultimaFactura } = await supabase
           .from('facturas_compra')
           .select('numero_factura')
@@ -224,7 +200,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const fechaEmision = new Date().toISOString().split('T')[0];
         const fechaVencimiento = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        // Crear factura de compra
         const { data: facturaCompra, error: facturaError } = await supabase
           .from('facturas_compra')
           .insert({
@@ -243,8 +218,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             total: totalAPagar,
             moneda: 'UYU',
             tipo_cambio: 1,
-            retencion_porcentaje: 0, // No hay retención, es comisión MP
-            retencion_monto: comisionMPAliado, // Guardamos cuánto se descontó de MP
+            retencion_porcentaje: 0,
+            retencion_monto: comisionMPAliado,
             comision_sistema_porcentaje: (totalComisionApp / totalVentas) * 100,
             comision_sistema_monto: totalComisionApp,
             monto_transferir_partner: totalAPagar,
@@ -274,7 +249,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         console.log(`✅ Factura de compra creada: ${facturaCompra.serie}-${facturaCompra.numero_factura}`);
 
-        // Crear items de factura
         const { error: itemsError } = await supabase
           .from('facturas_compra_items')
           .insert({
@@ -298,7 +272,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (itemsError) throw itemsError;
 
-        // Crear cuenta por pagar
         const { data: cuentaPorPagar, error: cuentaError } = await supabase
           .from('facturas_por_pagar')
           .insert({
@@ -327,7 +300,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         console.log(`✅ Cuenta por pagar creada: ${cuentaPorPagar.numero}`);
 
-        // Actualizar comisiones
         const comisionIds = comisionesPartner.map((c) => c.id);
         const { error: updateError } = await supabase
           .from('comisiones_partners')
@@ -339,7 +311,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (updateError) throw updateError;
 
-        // Generar asiento contable
         try {
           await supabase.functions.invoke('generar-asiento-factura-compra', {
             body: {
@@ -395,9 +366,8 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     await supabase
       .from('proveedores')
       .update({
-        nombre: partner.nombre_comercial || partner.razon_social,
+        nombre_comercial: partner.nombre_comercial || partner.razon_social,
         razon_social: partner.razon_social,
-        tipo_documento: partner.tipo_documento || 'RUT',
         email: partner.email,
         telefono: partner.telefono,
         direccion: partner.direccion,
@@ -412,9 +382,9 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     .from('proveedores')
     .insert({
       empresa_id: empresaId,
-      nombre: partner.nombre_comercial || partner.razon_social,
+      pais_id: paisId,
+      nombre_comercial: partner.nombre_comercial || partner.razon_social,
       razon_social: partner.razon_social,
-      tipo_documento: partner.tipo_documento || 'RUT',
       numero_documento: partner.documento,
       email: partner.email,
       telefono: partner.telefono,
