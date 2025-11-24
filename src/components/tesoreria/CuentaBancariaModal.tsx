@@ -363,17 +363,20 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
                 <SearchableAccountSelector
                   cuentas={cuentas.filter(c => {
                     // Filtrar cuentas de activo (código empieza con 1)
-                    // Si no hay cuentas de activo nivel 3+, mostrar todas las de activo
+                    // Estructura: 111001 = Banco Itaú (6 dígitos)
+                    // Solo mostrar cuentas de detalle (código >= 4 dígitos)
+                    // NO mostrar grupos: "1" (ACTIVO), "11" (ACTIVO CORRIENTE), "111" (DISPONIBILIDADES)
                     const esActivo = c.codigo.startsWith('1');
-                    return esActivo;
+                    const esDetalle = c.codigo.length >= 4; // Ej: 111001, 111002, 111003
+                    return esActivo && esDetalle;
                   })}
                   value={formData.cuentaContableId}
                   onChange={(value) => setFormData({ ...formData, cuentaContableId: value })}
-                  placeholder="Buscar cuenta contable del plan de cuentas..."
+                  placeholder="Ej: 111001 Banco Itaú, 111002 Bancos..."
                   disabled={mode === 'view' || saving}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  📊 {cuentas.filter(c => c.codigo.startsWith('1')).length} cuentas de activo disponibles
+                  📊 {cuentas.filter(c => c.codigo.startsWith('1') && c.codigo.length >= 4).length} cuentas de activo disponibles
                   {cuentas.length > 0 && ` (de ${cuentas.length} cuentas totales)`}
                 </p>
               </>
@@ -383,7 +386,7 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
               </div>
             )}
             <p className="text-xs text-blue-600 mt-1 bg-blue-50 p-2 rounded">
-              💡 <strong>Tip:</strong> Seleccione una cuenta de activo corriente como "1.1.1.001 - Banco Itaú" para que los movimientos de esta cuenta bancaria se reflejen automáticamente en la contabilidad.
+              💡 <strong>Tip:</strong> Seleccione una cuenta de activo corriente como "111001 - Banco Itaú" o "111101 - Caja" para que los movimientos de esta cuenta bancaria se reflejen automáticamente en la contabilidad.
             </p>
           </div>
 
