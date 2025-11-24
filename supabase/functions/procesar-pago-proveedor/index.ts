@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
         tipo_pago: pago.tipoPago,
         referencia: pago.referencia,
         observaciones: pago.observaciones,
-        creado_por: pago.creadoPor,
+        creado_por: pago.creadoPor || null,
         banco: pago.banco,
         numero_cuenta: pago.numeroCuenta,
         numero_operacion: pago.numeroOperacion,
