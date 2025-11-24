@@ -303,48 +303,12 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const itemsCuentaPorPagar = [
           {
             factura_id: cuentaPorPagar.id,
-            descripcion: `Ventas totales cobradas (${comisionesPartner.length} órdenes)`,
-            cantidad: 1,
-            precio_unitario: totalVentas,
-            descuento: 0,
-            impuesto: 0,
-            total: totalVentas,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%)`,
-            cantidad: 1,
-            precio_unitario: -totalComisionApp,
-            descuento: 0,
-            impuesto: 0,
-            total: -totalComisionApp,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `Comisión MercadoPago - Parte aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
-            cantidad: 1,
-            precio_unitario: -comisionMPAliado,
-            descuento: 0,
-            impuesto: 0,
-            total: -comisionMPAliado,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `Subtotal a pagar al partner`,
+            descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)\n\nDETALLE DEL CÁLCULO:\n• Ventas totales cobradas: $${totalVentas.toFixed(2)}\n• Menos comisión app (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%): -$${totalComisionApp.toFixed(2)}\n• Menos comisión MP partner (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%): -$${comisionMPAliado.toFixed(2)}\n• Subtotal partner: $${subtotalAliado.toFixed(2)}\n• IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaAliado.toFixed(2)}`,
             cantidad: 1,
             precio_unitario: subtotalAliado,
             descuento: 0,
-            impuesto: 0,
-            total: subtotalAliado,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `IVA (${(tasaIVA * 100).toFixed(0)}%)`,
-            cantidad: 1,
-            precio_unitario: ivaAliado,
-            descuento: 0,
             impuesto: tasaIVA * 100,
-            total: ivaAliado,
+            total: totalAPagar,
           },
         ];
 
@@ -354,7 +318,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (itemsCuentaError) throw itemsCuentaError;
 
-        console.log(`✅ ${itemsCuentaPorPagar.length} items agregados a la cuenta por pagar`);
+        console.log(`✅ ${itemsCuentaPorPagar.length} item(s) con desglose detallado agregado a la cuenta por pagar`);
 
         const comisionIds = comisionesPartner.map((c) => c.id);
         const { error: updateError } = await supabase
