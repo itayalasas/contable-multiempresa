@@ -3,6 +3,9 @@ import { X, Save, DollarSign, CreditCard, CheckCircle } from 'lucide-react';
 import { FacturaPorCobrar, PagoFactura, TipoPago } from '../../types/cuentasPorCobrar';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
+import { SearchableSelect } from '../common/SearchableSelect';
+import { useSesion } from '../../context/SesionContext';
+import { useTesoreria } from '../../hooks/useTesoreria';
 
 interface PagoModalProps {
   isOpen: boolean;
@@ -19,12 +22,15 @@ export const PagoModal: React.FC<PagoModalProps> = ({
   onSave,
   generarAsientoAutomatico = true // Por defecto, generar asiento automático
 }) => {
+  const { empresaActual } = useSesion();
   const { notificationModal, showError, showSuccess, closeNotification } = useModals();
-  
+  const { cuentas, loading: loadingCuentas } = useTesoreria(empresaActual?.id);
+
   const [formData, setFormData] = useState({
     fechaPago: new Date().toISOString().split('T')[0],
     monto: factura.saldoPendiente,
     tipoPago: 'TRANSFERENCIA' as TipoPago,
+    cuentaBancariaId: '',
     referencia: '',
     observaciones: '',
     generarAsiento: generarAsientoAutomatico
@@ -60,9 +66,17 @@ export const PagoModal: React.FC<PagoModalProps> = ({
       return;
     }
 
+    if (!formData.cuentaBancariaId) {
+      showError(
+        'Cuenta bancaria requerida',
+        'Debe seleccionar una cuenta bancaria para registrar el pago'
+      );
+      return;
+    }
+
     try {
       setSaving(true);
-      
+
       const pagoData: Omit<PagoFactura, 'id' | 'facturaId' | 'fechaCreacion'> = {
         fechaPago: formData.fechaPago,
         monto: formData.monto,
@@ -223,6 +237,32 @@ export const PagoModal: React.FC<PagoModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cuenta Bancaria *
+            </label>
+            {loadingCuentas ? (
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                Cargando cuentas...
+              </div>
+            ) : cuentas.length > 0 ? (
+              <SearchableSelect
+                options={cuentas.map(cuenta => ({
+                  value: cuenta.id,
+                  label: `${cuenta.nombre} - ${cuenta.numero} (${cuenta.moneda})`
+                }))}
+                value={formData.cuentaBancariaId}
+                onChange={(value) => setFormData({ ...formData, cuentaBancariaId: value })}
+                placeholder="Buscar cuenta bancaria..."
+                disabled={saving || success}
+              />
+            ) : (
+              <div className="w-full px-3 py-2 border border-yellow-300 rounded-lg bg-yellow-50 text-yellow-700 text-sm">
+                No hay cuentas bancarias disponibles. Cree una cuenta en Tesorería primero.
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Referencia
             </label>
             <input
@@ -298,7 +338,7 @@ export const PagoModal: React.FC<PagoModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={saving || success || formData.monto <= 0 || formData.monto > factura.saldoPendiente}
+              disabled={saving || success || formData.monto <= 0 || formData.monto > factura.saldoPendiente || !formData.cuentaBancariaId}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (

@@ -4,6 +4,9 @@ import { FacturaPorPagar, PagoProveedor, TipoPago } from '../../types/cuentasPor
 import { FormaPago } from '../../types/nomencladores';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
+import { SearchableSelect } from '../common/SearchableSelect';
+import { useSesion } from '../../context/SesionContext';
+import { useTesoreria } from '../../hooks/useTesoreria';
 
 interface PagoProveedorModalProps {
   isOpen: boolean;
@@ -22,12 +25,15 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
   formasPago,
   generarAsientoAutomatico = true // Por defecto, generar asiento automático
 }) => {
+  const { empresaActual } = useSesion();
   const { notificationModal, showError, showSuccess, closeNotification } = useModals();
-  
+  const { cuentas, loading: loadingCuentas } = useTesoreria(empresaActual?.id);
+
   const [formData, setFormData] = useState({
     fechaPago: new Date().toISOString().split('T')[0],
     monto: factura.saldoPendiente,
     tipoPago: 'TRANSFERENCIA' as TipoPago,
+    cuentaBancariaId: '',
     referencia: '',
     observaciones: '',
     banco: '',
@@ -62,6 +68,14 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
       showError(
         'Monto inválido',
         'El monto del pago debe ser mayor a 0 y no puede exceder el saldo pendiente'
+      );
+      return;
+    }
+
+    if (!formData.cuentaBancariaId) {
+      showError(
+        'Cuenta bancaria requerida',
+        'Debe seleccionar una cuenta bancaria para registrar el pago'
       );
       return;
     }
@@ -234,6 +248,32 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
             </select>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cuenta Bancaria *
+            </label>
+            {loadingCuentas ? (
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                Cargando cuentas...
+              </div>
+            ) : cuentas.length > 0 ? (
+              <SearchableSelect
+                options={cuentas.map(cuenta => ({
+                  value: cuenta.id,
+                  label: `${cuenta.nombre} - ${cuenta.numero} (${cuenta.moneda})`
+                }))}
+                value={formData.cuentaBancariaId}
+                onChange={(value) => setFormData({ ...formData, cuentaBancariaId: value })}
+                placeholder="Buscar cuenta bancaria..."
+                disabled={saving || success}
+              />
+            ) : (
+              <div className="w-full px-3 py-2 border border-yellow-300 rounded-lg bg-yellow-50 text-yellow-700 text-sm">
+                No hay cuentas bancarias disponibles. Cree una cuenta en Tesorería primero.
+              </div>
+            )}
+          </div>
+
           {/* Campos condicionales según el tipo de pago */}
           {requiereBanco && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -348,7 +388,7 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={saving || success || formData.monto <= 0 || formData.monto > factura.saldoPendiente}
+              disabled={saving || success || formData.monto <= 0 || formData.monto > factura.saldoPendiente || !formData.cuentaBancariaId}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
