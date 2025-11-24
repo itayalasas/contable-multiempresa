@@ -8,17 +8,32 @@ export const cuentasPorPagarSupabaseService = {
       .select('*')
       .eq('empresa_id', empresaId)
       .eq('activo', true)
-      .order('nombre');
+      .order('razon_social');
 
     if (error) throw error;
 
     return data.map(proveedor => ({
-      ...proveedor,
+      id: proveedor.id,
+      nombre: proveedor.nombre_comercial || proveedor.razon_social,
+      razonSocial: proveedor.razon_social,
+      tipoDocumento: proveedor.tipo_documento,
+      numeroDocumento: proveedor.numero_documento,
+      email: proveedor.email,
+      telefono: proveedor.telefono,
+      direccion: proveedor.direccion,
+      ciudad: proveedor.ciudad,
+      departamento: proveedor.departamento,
+      codigoPostal: proveedor.codigo_postal,
+      contacto: proveedor.contacto,
+      activo: proveedor.activo,
       empresaId: proveedor.empresa_id,
+      paisId: proveedor.pais_id,
       fechaCreacion: new Date(proveedor.fecha_creacion),
       condicionesPago: proveedor.condiciones_pago,
-      diasCredito: proveedor.dias_credito,
+      diasCredito: proveedor.dias_credito || proveedor.dias_pago,
       cuentaBancaria: proveedor.cuenta_bancaria,
+      observaciones: proveedor.observaciones,
+      banco: proveedor.banco,
     }));
   },
 
@@ -191,52 +206,6 @@ export const cuentasPorPagarSupabaseService = {
     };
   },
 
-  async registrarPago(pago: Omit<PagoProveedor, 'id' | 'fechaCreacion'>): Promise<void> {
-    const { error } = await supabase
-      .from('pagos_proveedor')
-      .insert({
-        factura_id: pago.facturaId,
-        fecha_pago: pago.fechaPago,
-        monto: pago.monto,
-        tipo_pago: pago.tipoPago,
-        referencia: pago.referencia,
-        observaciones: pago.observaciones,
-        creado_por: pago.creadoPor,
-        banco: pago.banco,
-        numero_cuenta: pago.numeroCuenta,
-        numero_operacion: pago.numeroOperacion,
-      });
-
-    if (error) throw error;
-
-    const { data: factura } = await supabase
-      .from('facturas_por_pagar')
-      .select('monto_pagado, monto_total')
-      .eq('id', pago.facturaId)
-      .single();
-
-    if (factura) {
-      const nuevoMontoPagado = factura.monto_pagado + pago.monto;
-      const nuevoSaldo = factura.monto_total - nuevoMontoPagado;
-      let nuevoEstado = 'PENDIENTE';
-
-      if (nuevoSaldo === 0) {
-        nuevoEstado = 'PAGADA';
-      } else if (nuevoMontoPagado > 0) {
-        nuevoEstado = 'PARCIAL';
-      }
-
-      await supabase
-        .from('facturas_por_pagar')
-        .update({
-          monto_pagado: nuevoMontoPagado,
-          saldo_pendiente: nuevoSaldo,
-          estado: nuevoEstado,
-          fecha_modificacion: new Date().toISOString(),
-        })
-        .eq('id', pago.facturaId);
-    }
-  },
 
   async getPagos(facturaId: string): Promise<PagoProveedor[]> {
     const { data, error } = await supabase
@@ -261,5 +230,164 @@ export const cuentasPorPagarSupabaseService = {
       numeroCuenta: pago.numero_cuenta,
       numeroOperacion: pago.numero_operacion,
     }));
+  },
+
+  async getResumen(empresaId: string): Promise<any> {
+    const { data, error } = await supabase
+      .from('facturas_por_pagar')
+      .select('estado, monto_total, monto_pagado, saldo_pendiente, fecha_vencimiento')
+      .eq('empresa_id', empresaId);
+
+    if (error) throw error;
+
+    const totalPorPagar = data.reduce((sum, f) => sum + (parseFloat(f.saldo_pendiente) || 0), 0);
+    const totalPagado = data.reduce((sum, f) => sum + (parseFloat(f.monto_pagado) || 0), 0);
+    const facturasPendientes = data.filter(f => f.estado === 'PENDIENTE' || f.estado === 'PARCIAL').length;
+
+    const hoy = new Date();
+    const vencidas = data.filter(f => {
+      const vencimiento = new Date(f.fecha_vencimiento);
+      return vencimiento < hoy && (f.estado === 'PENDIENTE' || f.estado === 'PARCIAL');
+    });
+
+    return {
+      totalPorPagar,
+      totalPagado,
+      facturasPendientes,
+      facturasVencidas: vencidas.length,
+      montoVencido: vencidas.reduce((sum, f) => sum + (parseFloat(f.saldo_pendiente) || 0), 0),
+    };
+  },
+
+  async actualizarFactura(empresaId: string, facturaId: string, datos: Partial<FacturaPorPagar>): Promise<void> {
+    const updateData: any = {};
+
+    if (datos.estado) updateData.estado = datos.estado;
+    if (datos.montoPagado !== undefined) updateData.monto_pagado = datos.montoPagado;
+    if (datos.saldoPendiente !== undefined) updateData.saldo_pendiente = datos.saldoPendiente;
+    if (datos.observaciones) updateData.observaciones = datos.observaciones;
+
+    updateData.fecha_modificacion = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('facturas_por_pagar')
+      .update(updateData)
+      .eq('id', facturaId)
+      .eq('empresa_id', empresaId);
+
+    if (error) throw error;
+  },
+
+  async eliminarFactura(empresaId: string, facturaId: string): Promise<void> {
+    const { error } = await supabase
+      .from('facturas_por_pagar')
+      .delete()
+      .eq('id', facturaId)
+      .eq('empresa_id', empresaId);
+
+    if (error) throw error;
+  },
+
+  async crearFactura(empresaId: string, factura: Omit<FacturaPorPagar, 'id' | 'proveedor' | 'fechaCreacion'>): Promise<string> {
+    const { data, error } = await supabase
+      .from('facturas_por_pagar')
+      .insert({
+        numero: factura.numero,
+        tipo_documento: factura.tipoDocumento,
+        proveedor_id: factura.proveedorId,
+        fecha_emision: factura.fechaEmision,
+        fecha_vencimiento: factura.fechaVencimiento,
+        descripcion: factura.descripcion,
+        monto_subtotal: factura.montoSubtotal,
+        monto_impuestos: factura.montoImpuestos,
+        monto_total: factura.montoTotal,
+        monto_pagado: factura.montoPagado || 0,
+        saldo_pendiente: factura.saldoPendiente || factura.montoTotal,
+        estado: factura.estado,
+        moneda: factura.moneda || 'UYU',
+        observaciones: factura.observaciones,
+        referencia: factura.referencia,
+        condiciones_pago: factura.condicionesPago,
+        empresa_id: empresaId,
+        creado_por: factura.creadoPor,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return data.id;
+  },
+
+  async crearProveedor(empresaId: string, proveedor: Omit<Proveedor, 'id' | 'fechaCreacion'>): Promise<string> {
+    const { data, error } = await supabase
+      .from('proveedores')
+      .insert({
+        nombre_comercial: proveedor.nombre,
+        razon_social: proveedor.razonSocial,
+        numero_documento: proveedor.numeroDocumento,
+        email: proveedor.email,
+        telefono: proveedor.telefono,
+        direccion: proveedor.direccion,
+        activo: proveedor.activo !== false,
+        empresa_id: empresaId,
+        pais_id: proveedor.paisId,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return data.id;
+  },
+
+  async registrarPago(empresaId: string, facturaId: string, pago: Omit<PagoProveedor, 'id' | 'facturaId' | 'fechaCreacion'>): Promise<void> {
+    const pagoCompleto: Omit<PagoProveedor, 'id' | 'fechaCreacion'> = {
+      ...pago,
+      facturaId,
+    };
+
+    const { error } = await supabase
+      .from('pagos_proveedor')
+      .insert({
+        factura_id: pagoCompleto.facturaId,
+        fecha_pago: pagoCompleto.fechaPago,
+        monto: pagoCompleto.monto,
+        tipo_pago: pagoCompleto.tipoPago,
+        referencia: pagoCompleto.referencia,
+        observaciones: pagoCompleto.observaciones,
+        creado_por: pagoCompleto.creadoPor,
+        banco: pagoCompleto.banco,
+        numero_cuenta: pagoCompleto.numeroCuenta,
+        numero_operacion: pagoCompleto.numeroOperacion,
+      });
+
+    if (error) throw error;
+
+    const { data: factura } = await supabase
+      .from('facturas_por_pagar')
+      .select('monto_pagado, monto_total')
+      .eq('id', pagoCompleto.facturaId)
+      .single();
+
+    if (factura) {
+      const nuevoMontoPagado = factura.monto_pagado + pagoCompleto.monto;
+      const nuevoSaldo = factura.monto_total - nuevoMontoPagado;
+      let nuevoEstado = 'PENDIENTE';
+
+      if (nuevoSaldo === 0) {
+        nuevoEstado = 'PAGADA';
+      } else if (nuevoMontoPagado > 0) {
+        nuevoEstado = 'PARCIAL';
+      }
+
+      await supabase
+        .from('facturas_por_pagar')
+        .update({
+          monto_pagado: nuevoMontoPagado,
+          saldo_pendiente: nuevoSaldo,
+          estado: nuevoEstado,
+          fecha_modificacion: new Date().toISOString(),
+        })
+        .eq('id', pagoCompleto.facturaId);
+    }
   },
 };

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FacturaPorPagar, Proveedor, PagoProveedor, ResumenCuentasPorPagar } from '../types/cuentasPorPagar';
-import { cuentasPorPagarService } from '../services/firebase/cuentasPorPagar';
+import { cuentasPorPagarSupabaseService as cuentasPorPagarService } from '../services/supabase/cuentasPorPagar';
 
 export const useCuentasPorPagar = (empresaId: string | undefined) => {
   const [facturas, setFacturas] = useState<FacturaPorPagar[]>([]);
