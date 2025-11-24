@@ -104,6 +104,29 @@ export const tesoreriaSupabaseService = {
     };
   },
 
+  async updateCuentaBancaria(cuentaId: string, updates: Partial<CuentaBancaria>): Promise<void> {
+    const updateData: any = {};
+
+    if (updates.nombre) updateData.nombre = updates.nombre;
+    if (updates.numeroCuenta) updateData.numero_cuenta = updates.numeroCuenta;
+    if (updates.bancoId !== undefined) updateData.banco_id = updates.bancoId;
+    if (updates.banco) updateData.banco = updates.banco;
+    if (updates.tipoCuenta) updateData.tipo_cuenta = updates.tipoCuenta;
+    if (updates.moneda) updateData.moneda = updates.moneda;
+    if (updates.saldoInicial !== undefined) updateData.saldo_inicial = updates.saldoInicial;
+    if (updates.fechaApertura !== undefined) updateData.fecha_apertura = updates.fechaApertura;
+    if (updates.activa !== undefined) updateData.activa = updates.activa;
+    if (updates.cuentaContableId !== undefined) updateData.cuenta_contable_id = updates.cuentaContableId;
+    if (updates.observaciones !== undefined) updateData.observaciones = updates.observaciones;
+
+    const { error } = await supabase
+      .from('cuentas_bancarias')
+      .update(updateData)
+      .eq('id', cuentaId);
+
+    if (error) throw error;
+  },
+
   async getMovimientos(empresaId: string, cuentaBancariaId?: string): Promise<MovimientoTesoreria[]> {
     let query = supabase
       .from('movimientos_tesoreria')
