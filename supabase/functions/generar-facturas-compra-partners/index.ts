@@ -160,14 +160,16 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const comisionMPTotal = totalVentas * tasaMP;
         const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
         const comisionMPApp = comisionMPTotal - comisionMPAliado;
-        const totalAPagar = totalVentas - totalComisionApp - comisionMPAliado;
+        const comisionAppNeta = totalComisionApp - comisionMPApp;
+        const totalAPagar = totalVentas - comisionAppNeta - comisionMPAliado;
 
         console.log(`💰 Cálculos:`);
         console.log(`   Total ventas cobradas: $${totalVentas.toFixed(2)}`);
-        console.log(`   - Comisión App: $${totalComisionApp.toFixed(2)}`);
+        console.log(`   - Comisión App base: $${totalComisionApp.toFixed(2)}`);
         console.log(`   - Comisión MP total: $${comisionMPTotal.toFixed(2)}`);
-        console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)}`);
+        console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)} (se resta de comisión app)`);
         console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
+        console.log(`   - Comisión App NETA: $${comisionAppNeta.toFixed(2)}`);
         console.log(`   = TOTAL A PAGAR AL ALIADO: $${totalAPagar.toFixed(2)}`);
 
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
@@ -212,8 +214,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             tipo_cambio: 1,
             retencion_porcentaje: 0,
             retencion_monto: comisionMPAliado,
-            comision_sistema_porcentaje: (totalComisionApp / totalVentas) * 100,
-            comision_sistema_monto: totalComisionApp,
+            comision_sistema_porcentaje: (comisionAppNeta / totalVentas) * 100,
+            comision_sistema_monto: comisionAppNeta,
             monto_transferir_partner: totalAPagar,
             observaciones: `Pago por servicios - ${comisionesPartner.length} órdenes`,
             metadata: {
@@ -224,10 +226,11 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
               cantidad_ordenes: comisionesPartner.length,
               calculo: {
                 total_ventas: totalVentas,
-                comision_app: totalComisionApp,
+                comision_app_base: totalComisionApp,
                 comision_mp_total: comisionMPTotal,
                 comision_mp_app: comisionMPApp,
                 comision_mp_aliado: comisionMPAliado,
+                comision_app_neta: comisionAppNeta,
                 total: totalAPagar
               }
             },
@@ -255,7 +258,9 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             total: totalAPagar,
             metadata: {
               comision_mp_descontada: comisionMPAliado,
-              comision_app_descontada: totalComisionApp,
+              comision_app_descontada: comisionAppNeta,
+              comision_app_base: totalComisionApp,
+              comision_mp_app: comisionMPApp,
               total_ventas_base: totalVentas,
             },
           });
@@ -307,12 +312,12 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         itemsCuentaPorPagar.push({
           factura_id: cuentaPorPagar.id,
-          descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%)`,
+          descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%) - Parte MP app (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)}`,
           cantidad: 1,
-          precio_unitario: -totalComisionApp,
+          precio_unitario: -comisionAppNeta,
           descuento: 0,
           impuesto: 0,
-          total: -totalComisionApp,
+          total: -comisionAppNeta,
         });
 
         itemsCuentaPorPagar.push({
