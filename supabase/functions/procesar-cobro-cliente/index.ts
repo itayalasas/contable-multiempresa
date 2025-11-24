@@ -131,22 +131,28 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
     }
 
     // Determinar la cuenta de destino según el tipo de pago
-    let cuentaDestinoCodigo = '1111'; // Efectivo/Caja por defecto
+    let cuentaDestinoCodigo = '111101'; // Efectivo/Caja por defecto
+    let nombreCuentaDestino = 'Caja - Efectivo';
 
-    if (pago.tipoPago === 'TRANSFERENCIA' || pago.tipoPago === 'CHEQUE') {
-      cuentaDestinoCodigo = '1112'; // Bancos
+    if (pago.tipoPago === 'TRANSFERENCIA') {
+      cuentaDestinoCodigo = '112101'; // Bancos - Transferencias
+      nombreCuentaDestino = 'Bancos - Transferencias';
+    } else if (pago.tipoPago === 'CHEQUE') {
+      cuentaDestinoCodigo = '112102'; // Bancos - Cheques
+      nombreCuentaDestino = 'Bancos - Cheques';
     } else if (pago.tipoPago === 'TARJETA_CREDITO') {
-      cuentaDestinoCodigo = '1113'; // Tarjetas de Crédito
+      cuentaDestinoCodigo = '113101'; // Tarjetas de Crédito
+      nombreCuentaDestino = 'Tarjetas de Crédito';
     }
 
     // Obtener IDs de cuentas
     const cuentaDestinoId = await obtenerCuentaId(supabase, factura.empresa_id, cuentaDestinoCodigo);
-    const cuentaCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '1212'); // Cuentas por Cobrar
+    const cuentaCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '121201'); // Cuentas por Cobrar - Clientes
 
     if (!cuentaDestinoId || !cuentaCobrarId) {
       const cuentasFaltantes = [];
       if (!cuentaDestinoId) cuentasFaltantes.push(`${cuentaDestinoCodigo} (${pago.tipoPago})`);
-      if (!cuentaCobrarId) cuentasFaltantes.push('1212 (Cuentas por Cobrar)');
+      if (!cuentaCobrarId) cuentasFaltantes.push('121201 (Cuentas por Cobrar - Clientes)');
 
       throw new Error(`Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`);
     }
@@ -193,7 +199,7 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaDestinoId,
-        cuenta: `${cuentaDestinoCodigo} - ${pago.tipoPago === 'EFECTIVO' ? 'Caja' : 'Bancos'}`,
+        cuenta: `${cuentaDestinoCodigo} - ${nombreCuentaDestino}`,
         debito: monto,
         credito: 0,
         descripcion: `Cobro ${factura.numero_factura} - ${pago.tipoPago}`,
@@ -202,7 +208,7 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaCobrarId,
-        cuenta: '1212 - Cuentas por Cobrar - Comerciales',
+        cuenta: '121201 - Cuentas por Cobrar - Clientes',
         debito: 0,
         credito: monto,
         descripcion: `Cobro ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,

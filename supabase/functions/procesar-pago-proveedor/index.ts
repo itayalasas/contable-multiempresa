@@ -134,12 +134,18 @@ async function generarAsientoPago(supabase: any, factura: any, pago: any, pagoId
     }
 
     // Determinar la cuenta de origen según el tipo de pago
-    let cuentaOrigenCodigo = '1111'; // Efectivo/Caja por defecto
+    let cuentaOrigenCodigo = '111101'; // Efectivo/Caja por defecto
+    let nombreCuentaOrigen = 'Caja - Efectivo';
 
-    if (pago.tipoPago === 'TRANSFERENCIA' || pago.tipoPago === 'CHEQUE') {
-      cuentaOrigenCodigo = '1112'; // Bancos
+    if (pago.tipoPago === 'TRANSFERENCIA') {
+      cuentaOrigenCodigo = '112101'; // Bancos - Transferencias
+      nombreCuentaOrigen = 'Bancos - Transferencias';
+    } else if (pago.tipoPago === 'CHEQUE') {
+      cuentaOrigenCodigo = '112102'; // Bancos - Cheques
+      nombreCuentaOrigen = 'Bancos - Cheques';
     } else if (pago.tipoPago === 'TARJETA_CREDITO') {
-      cuentaOrigenCodigo = '1113'; // Tarjetas de Crédito
+      cuentaOrigenCodigo = '113101'; // Tarjetas de Crédito
+      nombreCuentaOrigen = 'Tarjetas de Crédito';
     }
 
     // Obtener IDs de cuentas
@@ -149,14 +155,17 @@ async function generarAsientoPago(supabase: any, factura: any, pago: any, pagoId
     const esComision = factura.referencia?.includes('COMISION') ||
                        factura.descripcion?.toLowerCase().includes('comision');
 
-    let cuentaDestinoCodigo = '2112'; // Cuentas por Pagar por defecto
+    let cuentaDestinoCodigo = '213001'; // Cuentas por Pagar - Proveedores por defecto
+    let nombreCuentaDestino = 'Cuentas por Pagar - Proveedores';
 
     if (esComision) {
       // Verificar si es comisión de partner o MercadoPago
       if (factura.descripcion?.toLowerCase().includes('mercadopago')) {
-        cuentaDestinoCodigo = '2115'; // Comisiones MercadoPago por Pagar
+        cuentaDestinoCodigo = '212002'; // Comisiones MercadoPago por Pagar
+        nombreCuentaDestino = 'Comisiones MercadoPago por Pagar';
       } else {
-        cuentaDestinoCodigo = '2114'; // Comisiones por Pagar - Partners
+        cuentaDestinoCodigo = '212001'; // Comisiones por Pagar - Partners
+        nombreCuentaDestino = 'Comisiones por Pagar - Partners';
       }
     }
 
@@ -212,7 +221,7 @@ async function generarAsientoPago(supabase: any, factura: any, pago: any, pagoId
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaDestinoId,
-        cuenta: `${cuentaDestinoCodigo} - ${esComision ? 'Comisiones por Pagar' : 'Cuentas por Pagar'}`,
+        cuenta: `${cuentaDestinoCodigo} - ${nombreCuentaDestino}`,
         debito: monto,
         credito: 0,
         descripcion: `Pago ${factura.numero} - ${factura.proveedor?.razon_social || 'Proveedor'}`,
@@ -221,7 +230,7 @@ async function generarAsientoPago(supabase: any, factura: any, pago: any, pagoId
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaOrigenId,
-        cuenta: `${cuentaOrigenCodigo} - ${pago.tipoPago === 'EFECTIVO' ? 'Caja' : 'Bancos'}`,
+        cuenta: `${cuentaOrigenCodigo} - ${nombreCuentaOrigen}`,
         debito: 0,
         credito: monto,
         descripcion: `Pago ${factura.numero} - ${pago.tipoPago}`,
