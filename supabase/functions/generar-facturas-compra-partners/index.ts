@@ -303,12 +303,39 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const itemsCuentaPorPagar = [
           {
             factura_id: cuentaPorPagar.id,
-            descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)\n\nDETALLE DEL CÁLCULO:\n• Ventas totales cobradas: $${totalVentas.toFixed(2)}\n• Menos comisión app (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%): -$${totalComisionApp.toFixed(2)}\n• Menos comisión MP partner (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%): -$${comisionMPAliado.toFixed(2)}\n• Subtotal partner: $${subtotalAliado.toFixed(2)}\n• IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaAliado.toFixed(2)}`,
+            descripcion: `Ventas totales cobradas (${comisionesPartner.length} órdenes)`,
+            cantidad: comisionesPartner.length,
+            precio_unitario: totalVentas / comisionesPartner.length,
+            descuento: 0,
+            impuesto: 0,
+            total: totalVentas,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%)`,
+            cantidad: 1,
+            precio_unitario: totalComisionApp,
+            descuento: 100,
+            impuesto: 0,
+            total: 0,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Comisión MercadoPago - Parte aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
+            cantidad: 1,
+            precio_unitario: comisionMPAliado,
+            descuento: 100,
+            impuesto: 0,
+            total: 0,
+          },
+          {
+            factura_id: cuentaPorPagar.id,
+            descripcion: `Subtotal a pagar al partner`,
             cantidad: 1,
             precio_unitario: subtotalAliado,
             descuento: 0,
             impuesto: tasaIVA * 100,
-            total: totalAPagar,
+            total: subtotalAliado,
           },
         ];
 
