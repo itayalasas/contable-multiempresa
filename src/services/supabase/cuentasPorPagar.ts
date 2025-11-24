@@ -235,27 +235,102 @@ export const cuentasPorPagarSupabaseService = {
   async getResumen(empresaId: string): Promise<any> {
     const { data, error } = await supabase
       .from('facturas_por_pagar')
-      .select('estado, monto_total, monto_pagado, saldo_pendiente, fecha_vencimiento')
+      .select('estado, monto_total, monto_pagado, saldo_pendiente, fecha_vencimiento, fecha_emision, proveedor_id')
       .eq('empresa_id', empresaId);
 
     if (error) throw error;
 
-    const totalPorPagar = data.reduce((sum, f) => sum + (parseFloat(f.saldo_pendiente) || 0), 0);
-    const totalPagado = data.reduce((sum, f) => sum + (parseFloat(f.monto_pagado) || 0), 0);
-    const facturasPendientes = data.filter(f => f.estado === 'PENDIENTE' || f.estado === 'PARCIAL').length;
-
     const hoy = new Date();
-    const vencidas = data.filter(f => {
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+    // Facturas pendientes (con saldo)
+    const facturasPendientes = data.filter(f =>
+      (f.estado === 'PENDIENTE' || f.estado === 'PARCIAL') &&
+      parseFloat(f.saldo_pendiente) > 0
+    );
+
+    // Facturas vencidas
+    const vencidas = facturasPendientes.filter(f => {
       const vencimiento = new Date(f.fecha_vencimiento);
-      return vencimiento < hoy && (f.estado === 'PENDIENTE' || f.estado === 'PARCIAL');
+      return vencimiento < hoy;
     });
 
+    // Por vencer (próximos 30 días)
+    const proximos30 = new Date(hoy);
+    proximos30.setDate(proximos30.getDate() + 30);
+    const porVencer = facturasPendientes.filter(f => {
+      const vencimiento = new Date(f.fecha_vencimiento);
+      return vencimiento >= hoy && vencimiento <= proximos30;
+    });
+
+    // Facturas del mes
+    const facturasDelMes = data.filter(f => {
+      const emision = new Date(f.fecha_emision);
+      return emision >= inicioMes;
+    }).length;
+
+    // Antigüedad de saldos
+    const dias30 = new Date(hoy);
+    dias30.setDate(dias30.getDate() - 30);
+    const dias60 = new Date(hoy);
+    dias60.setDate(dias60.getDate() - 60);
+    const dias90 = new Date(hoy);
+    dias90.setDate(dias90.getDate() - 90);
+
+    const vencimiento0a30 = vencidas.filter(f => {
+      const venc = new Date(f.fecha_vencimiento);
+      return venc >= dias30;
+    }).reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0);
+
+    const vencimiento31a60 = vencidas.filter(f => {
+      const venc = new Date(f.fecha_vencimiento);
+      return venc >= dias60 && venc < dias30;
+    }).reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0);
+
+    const vencimiento61a90 = vencidas.filter(f => {
+      const venc = new Date(f.fecha_vencimiento);
+      return venc >= dias90 && venc < dias60;
+    }).reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0);
+
+    const vencimientoMas90 = vencidas.filter(f => {
+      const venc = new Date(f.fecha_vencimiento);
+      return venc < dias90;
+    }).reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0);
+
+    // Proveedores únicos con deuda
+    const proveedoresConDeudaSet = new Set(
+      facturasPendientes.map(f => f.proveedor_id)
+    );
+
+    // Promedio de días de pago (facturas pagadas)
+    const facturasPagadas = data.filter(f => f.estado === 'PAGADA');
+    let promedioPago = 0;
+    if (facturasPagadas.length > 0) {
+      const totalDias = facturasPagadas.reduce((sum, f) => {
+        const emision = new Date(f.fecha_emision);
+        const venc = new Date(f.fecha_vencimiento);
+        const dias = Math.floor((venc.getTime() - emision.getTime()) / (1000 * 60 * 60 * 24));
+        return sum + dias;
+      }, 0);
+      promedioPago = Math.round(totalDias / facturasPagadas.length);
+    }
+
     return {
-      totalPorPagar,
-      totalPagado,
-      facturasPendientes,
+      totalPorPagar: facturasPendientes.reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0),
+      totalPagado: data.reduce((sum, f) => sum + parseFloat(f.monto_pagado), 0),
+      totalFacturas: data.length,
+      facturasPendientes: facturasPendientes.length,
       facturasVencidas: vencidas.length,
-      montoVencido: vencidas.reduce((sum, f) => sum + (parseFloat(f.saldo_pendiente) || 0), 0),
+      totalVencido: vencidas.reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0),
+      totalPorVencer: porVencer.reduce((sum, f) => sum + parseFloat(f.saldo_pendiente), 0),
+      facturasDelMes,
+      promedioPago,
+      proveedoresConDeuda: proveedoresConDeudaSet.size,
+      vencimiento0a30,
+      vencimiento31a60,
+      vencimiento61a90,
+      vencimientoMas90,
+      proveedoresMayorDeuda: [], // Por ahora vacío, se puede implementar después
     };
   },
 
