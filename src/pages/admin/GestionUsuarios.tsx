@@ -19,7 +19,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Usuario, Rol, Permiso } from '../../types';
-import { getUsuariosByEmpresa } from '../../services/supabase/usuarios';
+import { usuariosSupabaseService } from '../../services/supabase/usuarios';
 import { useAuth } from '../../context/AuthContext';
 import { useSesion } from '../../context/SesionContext';
 
@@ -59,19 +59,34 @@ export const GestionUsuarios: React.FC = () => {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      if (!empresaActual) {
-        setUsuarios([]);
-        return;
+      console.log('🔄 Cargando usuarios...', { empresaActual: empresaActual?.id, usuarioActual: usuarioActual?.rol });
+
+      let usuariosData: Usuario[] = [];
+
+      // Mostrar todos los usuarios si:
+      // 1. Es super_admin
+      // 2. No hay empresa seleccionada
+      // 3. Es admin_empresa (para gestionar usuarios en general)
+      if (
+        usuarioActual?.rol === 'super_admin' ||
+        usuarioActual?.rol === 'admin_empresa' ||
+        !empresaActual
+      ) {
+        usuariosData = await usuariosSupabaseService.getAllUsuarios();
+        console.log('✅ Usuarios cargados (todos):', usuariosData.length);
+      } else {
+        // Sino, solo los de la empresa actual
+        usuariosData = await usuariosSupabaseService.getUsuariosByEmpresa(empresaActual.id);
+        console.log('✅ Usuarios cargados (empresa):', usuariosData.length);
       }
 
-      const usuariosData = await getUsuariosByEmpresa(empresaActual.id);
       setUsuarios(usuariosData);
 
       // TODO: Implementar roles y permisos desde Supabase
       setRoles([]);
       setPermisos([]);
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('❌ Error cargando datos:', error);
     } finally {
       setLoading(false);
     }

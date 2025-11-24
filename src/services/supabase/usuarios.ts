@@ -87,17 +87,26 @@ export const usuariosSupabaseService = {
     const { data, error } = await supabase
       .from('usuarios')
       .select('*')
+      .eq('activo', true)
       .order('nombre');
 
     if (error) throw error;
 
     return data.map(user => ({
-      ...user,
-      empresasAsignadas: user.empresas_asignadas,
+      id: user.id,
+      nombre: user.nombre,
+      email: user.email,
+      rol: user.rol,
+      empresasAsignadas: user.empresas_asignadas || [],
+      permisos: user.permisos || [],
+      avatar: user.avatar,
       paisId: user.pais_id,
       auth0Id: user.auth0_id,
       fechaCreacion: new Date(user.fecha_creacion),
       ultimaConexion: user.ultima_conexion ? new Date(user.ultima_conexion) : undefined,
+      activo: user.activo,
+      configuracion: user.configuracion,
+      metadata: user.metadata || {},
     }));
   },
 

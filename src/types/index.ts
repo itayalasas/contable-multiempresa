@@ -17,6 +17,7 @@ export interface Usuario {
     formatoFecha: string;
     formatoMoneda: string;
   };
+  metadata?: Record<string, any>; // Metadata adicional del sistema de autenticación
 }
 
 export interface Empresa {
