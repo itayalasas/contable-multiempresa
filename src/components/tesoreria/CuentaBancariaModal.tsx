@@ -109,10 +109,21 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
 
     try {
       setSaving(true);
-      
-      const cuentaData: Omit<CuentaBancaria, 'id' | 'fechaCreacion'> = {
-        ...formData,
-        empresaId: empresaActual?.id || 'dev-empresa-pe'
+
+      const cuentaData = {
+        nombre: formData.nombre,
+        numeroCuenta: formData.numero,
+        bancoId: null,
+        banco: formData.banco || 'Sin banco',
+        tipoCuenta: formData.tipo,
+        moneda: formData.moneda,
+        saldoActual: formData.saldoActual,
+        saldoInicial: formData.saldoActual,
+        fechaApertura: new Date().toISOString().split('T')[0],
+        activa: formData.activa,
+        empresaId: empresaActual?.id || '',
+        cuentaContableId: null,
+        observaciones: null
       };
 
       await onSave(cuentaData);
