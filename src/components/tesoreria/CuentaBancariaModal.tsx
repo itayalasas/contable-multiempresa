@@ -5,6 +5,8 @@ import { NotificationModal } from '../common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
 import { useNomencladores } from '../../hooks/useNomencladores';
 import { SearchableSelect } from '../common/SearchableSelect';
+import { SearchableAccountSelector } from '../common/SearchableAccountSelector';
+import { usePlanCuentas } from '../../hooks/usePlanCuentas';
 
 // Tipos para el componente
 interface CuentaBancaria {
@@ -40,7 +42,8 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
   const { empresaActual, paisActual } = useSesion();
   const { notificationModal, showError, closeNotification } = useModals();
   const { tiposMoneda, bancos, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
-  
+  const { cuentas, loading: loadingCuentas } = usePlanCuentas(empresaActual?.id);
+
   const [formData, setFormData] = useState({
     nombre: '',
     tipo: 'CORRIENTE' as const,
@@ -49,6 +52,7 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
     moneda: '',
     saldoActual: 0,
     saldoDisponible: 0,
+    cuentaContableId: '',
     activa: true
   });
 
@@ -64,14 +68,15 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
         moneda: cuenta.moneda,
         saldoActual: cuenta.saldoActual,
         saldoDisponible: cuenta.saldoDisponible,
+        cuentaContableId: (cuenta as any).cuentaContableId || '',
         activa: cuenta.activa
       });
     } else if (mode === 'create') {
       // Valores por defecto para nueva cuenta
-      const monedaPrincipal = tiposMoneda.find(m => m.esPrincipal)?.codigo || 
-                             paisActual?.monedaPrincipal || 
+      const monedaPrincipal = tiposMoneda.find(m => m.esPrincipal)?.codigo ||
+                             paisActual?.monedaPrincipal ||
                              'PEN';
-      
+
       setFormData({
         nombre: '',
         tipo: 'CORRIENTE',
@@ -80,6 +85,7 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
         moneda: monedaPrincipal,
         saldoActual: 0,
         saldoDisponible: 0,
+        cuentaContableId: '',
         activa: true
       });
     }
@@ -122,7 +128,7 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
         fechaApertura: new Date().toISOString().split('T')[0],
         activa: formData.activa,
         empresaId: empresaActual?.id || '',
-        cuentaContableId: null,
+        cuentaContableId: formData.cuentaContableId || null,
         observaciones: null
       };
 
@@ -334,6 +340,43 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
                 disabled={mode === 'view' || saving || (formData.tipo !== 'TARJETA')}
               />
             </div>
+          </div>
+
+          {/* Selector de Cuenta Contable */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cuenta Contable Asociada
+              <span className="text-xs text-gray-500 ml-2">(Opcional - Recomendado para integración contable)</span>
+            </label>
+            {loadingCuentas ? (
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value="Cargando cuentas contables..."
+                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg bg-gray-50"
+                  disabled
+                />
+                <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+              </div>
+            ) : cuentas.length > 0 ? (
+              <SearchableAccountSelector
+                cuentas={cuentas.filter(c =>
+                  // Filtrar solo cuentas de activo corriente (bancos, caja)
+                  c.codigo.startsWith('1.1') && !c.esGrupo
+                )}
+                value={formData.cuentaContableId}
+                onChange={(value) => setFormData({ ...formData, cuentaContableId: value })}
+                placeholder="Buscar cuenta contable del plan de cuentas..."
+                disabled={mode === 'view' || saving}
+              />
+            ) : (
+              <div className="w-full px-3 py-2 border border-yellow-300 rounded-lg bg-yellow-50 text-yellow-700 text-sm">
+                No hay cuentas contables disponibles. Configure el Plan de Cuentas primero.
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              <strong>Ejemplo:</strong> Si esta es "Cuenta Corriente Itaú", seleccione la cuenta contable "1.1.1.001 - Banco Itaú"
+            </p>
           </div>
 
           <div className="flex items-center">

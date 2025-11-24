@@ -182,6 +182,30 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
               <p className="text-red-600 font-semibold">{formatearMoneda(factura.saldoPendiente)}</p>
             </div>
           </div>
+
+          {/* Datos bancarios del proveedor */}
+          {(factura.proveedor.banco || factura.proveedor.cuentaBancaria) && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">Datos Bancarios del Proveedor</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {factura.proveedor.banco && (
+                  <div>
+                    <span className="text-blue-700">Banco:</span>
+                    <p className="text-blue-900 font-medium">{factura.proveedor.banco}</p>
+                  </div>
+                )}
+                {factura.proveedor.cuentaBancaria && (
+                  <div>
+                    <span className="text-blue-700">Cuenta:</span>
+                    <p className="text-blue-900 font-medium">{factura.proveedor.cuentaBancaria}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
