@@ -10,17 +10,25 @@ const corsHeaders = {
 /**
  * Edge Function: generar-facturas-compra-partners
  *
- * Convierte las comisiones facturadas de partners en facturas de compra y cuentas por pagar.
+ * LÓGICA CORRECTA DEL MARKETPLACE:
  *
- * Flujo:
- * 1. Obtiene comisiones con estado 'facturada' (tienen factura_venta_comision_id)
- * 2. Agrupa por partner
- * 3. Calcula: Total venta - Retención ML - Comisión Sistema = Monto a transferir
- * 4. Crea proveedor si no existe (desde partner)
- * 5. Crea factura de compra con los montos calculados
- * 6. Crea cuenta por pagar
- * 7. Actualiza comisiones a estado 'pendiente_pago'
- * 8. Genera asiento contable
+ * La aplicación cobra TODO al cliente (subtotal_venta)
+ * De ese total:
+ *   - Se queda la comisión de la app (comision_monto - ya calculado)
+ *   - Se descuenta la parte de comisión MP que le toca al aliado (50%)
+ *   - El resto se le paga al aliado + IVA
+ *
+ * Ejemplo:
+ *   Venta: $1000
+ *   Comisión App (15%): $150 (ya en comisiones_partners.comision_monto)
+ *   Comisión MP total (7%): $70
+ *     - Parte App (50%): $35
+ *     - Parte Aliado (50%): $35
+ *
+ *   Cálculo pago aliado:
+ *   Subtotal: $1000 - $150 - $35 = $815
+ *   IVA (22%): $815 * 0.22 = $179.30
+ *   Total: $994.30
  */
 
 Deno.serve(async (req: Request) => {
@@ -38,7 +46,7 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('📦 Iniciando generación de facturas de compra a partners...');
+    console.log('📦 Iniciando generación de cuentas por pagar a partners...');
 
     const body = await req.json().catch(() => ({}));
     const { empresaId, partnerId } = body;
@@ -47,7 +55,7 @@ Deno.serve(async (req: Request) => {
       throw new Error('empresaId es requerido');
     }
 
-    const resultado = await procesarFacturasCompra(supabase, empresaId, partnerId);
+    const resultado = await procesarCuentasPorPagar(supabase, empresaId, partnerId);
 
     return new Response(
       JSON.stringify({
@@ -68,12 +76,12 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function procesarFacturasCompra(supabase: any, empresaId: string, partnerId?: string) {
+async function procesarCuentasPorPagar(supabase: any, empresaId: string, partnerId?: string) {
   try {
-    // Obtener configuración de retenciones y comisiones desde metadata de empresa
+    // Obtener empresa y país
     const { data: empresa } = await supabase
       .from('empresas')
-      .select('metadata, pais_id')
+      .select('pais_id')
       .eq('id', empresaId)
       .maybeSingle();
 
@@ -81,13 +89,35 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
       throw new Error('Empresa no encontrada');
     }
 
-    // Configuración por defecto o desde metadata
-    const retencionML = empresa.metadata?.retencion_mercadolibre || 7.0; // 7% retención ML
-    const comisionSistema = empresa.metadata?.comision_sistema || 15.0; // 15% comisión sistema
+    // Obtener configuración de IVA
+    const { data: ivaConfig } = await supabase
+      .from('impuestos_configuracion')
+      .select('tasa')
+      .eq('pais_id', empresa.pais_id)
+      .eq('tipo', 'IVA')
+      .eq('codigo', 'IVA_BASICO')
+      .eq('activo', true)
+      .maybeSingle();
 
-    console.log(`⚙️ Config: Retención ML: ${retencionML}%, Comisión Sistema: ${comisionSistema}%`);
+    const tasaIVA = ivaConfig?.tasa ? parseFloat(ivaConfig.tasa) / 100 : 0.22;
+    console.log(`⚙️ Tasa IVA: ${(tasaIVA * 100).toFixed(2)}%`);
 
-    // Query base para comisiones facturadas
+    // Obtener configuración de comisión Mercado Pago
+    const { data: mpConfig } = await supabase
+      .from('impuestos_configuracion')
+      .select('tasa, configuracion')
+      .eq('pais_id', empresa.pais_id)
+      .eq('codigo', 'COMISION_MERCADOPAGO')
+      .eq('activo', true)
+      .maybeSingle();
+
+    const tasaMP = mpConfig?.tasa ? parseFloat(mpConfig.tasa) / 100 : 0.07;
+    const divisionMPAliado = mpConfig?.configuracion?.division_porcentaje_aliado || 50.0;
+
+    console.log(`⚙️ Comisión MP: ${(tasaMP * 100).toFixed(2)}%`);
+    console.log(`⚙️ División MP Aliado: ${divisionMPAliado}%`);
+
+    // Query comisiones facturadas
     let query = supabase
       .from('comisiones_partners')
       .select(`
@@ -96,7 +126,8 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
       `)
       .eq('empresa_id', empresaId)
       .eq('estado_comision', 'facturada')
-      .not('factura_venta_comision_id', 'is', null);
+      .not('factura_venta_comision_id', 'is', null)
+      .is('factura_compra_id', null); // Solo las que NO tienen factura de compra aún
 
     if (partnerId) {
       query = query.eq('partner_id', partnerId);
@@ -107,7 +138,7 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
     if (comisionesError) throw comisionesError;
 
     if (!comisiones || comisiones.length === 0) {
-      console.log('✅ No hay comisiones facturadas pendientes de generar factura de compra');
+      console.log('✅ No hay comisiones facturadas pendientes de generar cuenta por pagar');
       return { facturas_generadas: 0, cuentas_por_pagar: 0, comisiones_procesadas: 0, errores: [] };
     }
 
@@ -134,29 +165,45 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
         const partner = comisionesPartner[0].partner;
         console.log(`\n👤 Procesando partner: ${partner.razon_social}`);
 
-        // Calcular totales
-        // Total comisión (lo que facturamos al cliente)
-        const totalComision = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.comision_monto), 0);
+        // CÁLCULO CORRECTO:
+        // 1. Sumar todos los subtotales de venta (lo que cobró la app al cliente)
+        const totalVentas = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.subtotal_venta), 0);
 
-        // Retención ML (se deduce del total)
-        const montoRetencionML = totalComision * (retencionML / 100);
+        // 2. Sumar todas las comisiones de la app (lo que ya se queda la app)
+        const totalComisionApp = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.comision_monto), 0);
 
-        // Comisión del sistema (se deduce del total)
-        const montoComisionSistema = totalComision * (comisionSistema / 100);
+        // 3. Calcular comisión Mercado Pago total
+        const comisionMPTotal = totalVentas * tasaMP;
 
-        // Lo que realmente transferimos al partner
-        const montoTransferir = totalComision - montoRetencionML - montoComisionSistema;
+        // 4. Calcular parte de MP que le toca al aliado (ej: 50%)
+        const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
 
-        console.log(`💰 Totales:`);
-        console.log(`   Total comisión facturada: $${totalComision.toFixed(2)}`);
-        console.log(`   - Retención ML (${retencionML}%): $${montoRetencionML.toFixed(2)}`);
-        console.log(`   - Comisión Sistema (${comisionSistema}%): $${montoComisionSistema.toFixed(2)}`);
-        console.log(`   = A transferir al partner: $${montoTransferir.toFixed(2)}`);
+        // 5. Calcular parte de MP que se queda la app (ej: 50%)
+        const comisionMPApp = comisionMPTotal - comisionMPAliado;
 
-        // 1. Crear o actualizar proveedor desde partner
+        // 6. Calcular subtotal a pagar al aliado (SIN IVA)
+        const subtotalAliado = totalVentas - totalComisionApp - comisionMPAliado;
+
+        // 7. Calcular IVA sobre el subtotal del aliado
+        const ivaAliado = subtotalAliado * tasaIVA;
+
+        // 8. Calcular total a pagar (subtotal + IVA)
+        const totalAPagar = subtotalAliado + ivaAliado;
+
+        console.log(`💰 Cálculos:`);
+        console.log(`   Total ventas cobradas: $${totalVentas.toFixed(2)}`);
+        console.log(`   - Comisión App: $${totalComisionApp.toFixed(2)}`);
+        console.log(`   - Comisión MP total: $${comisionMPTotal.toFixed(2)}`);
+        console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)}`);
+        console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
+        console.log(`   = Subtotal aliado: $${subtotalAliado.toFixed(2)}`);
+        console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaAliado.toFixed(2)}`);
+        console.log(`   = TOTAL A PAGAR: $${totalAPagar.toFixed(2)}`);
+
+        // Crear o actualizar proveedor desde partner
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
 
-        // 2. Generar número de factura de compra
+        // Generar número de factura de compra
         const { data: ultimaFactura } = await supabase
           .from('facturas_compra')
           .select('numero_factura')
@@ -177,7 +224,7 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
         const fechaEmision = new Date().toISOString().split('T')[0];
         const fechaVencimiento = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        // 3. Crear factura de compra
+        // Crear factura de compra
         const { data: facturaCompra, error: facturaError } = await supabase
           .from('facturas_compra')
           .insert({
@@ -191,23 +238,33 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
-            subtotal: totalComision,
-            total_iva: 0, // Sin IVA en facturas a partners
-            total: montoTransferir, // El total es lo que realmente pagaremos
+            subtotal: subtotalAliado,
+            total_iva: ivaAliado,
+            total: totalAPagar,
             moneda: 'UYU',
             tipo_cambio: 1,
-            retencion_porcentaje: retencionML,
-            retencion_monto: montoRetencionML,
-            comision_sistema_porcentaje: comisionSistema,
-            comision_sistema_monto: montoComisionSistema,
-            monto_transferir_partner: montoTransferir,
-            observaciones: `Pago de comisiones - ${comisionesPartner.length} órdenes`,
+            retencion_porcentaje: 0, // No hay retención, es comisión MP
+            retencion_monto: comisionMPAliado, // Guardamos cuánto se descontó de MP
+            comision_sistema_porcentaje: (totalComisionApp / totalVentas) * 100,
+            comision_sistema_monto: totalComisionApp,
+            monto_transferir_partner: totalAPagar,
+            observaciones: `Pago por servicios - ${comisionesPartner.length} órdenes`,
             metadata: {
               tipo: 'factura_compra_partner',
               partner_id: pid,
               partner_razon_social: partner.razon_social,
               comisiones_ids: comisionesPartner.map((c) => c.id),
               cantidad_ordenes: comisionesPartner.length,
+              calculo: {
+                total_ventas: totalVentas,
+                comision_app: totalComisionApp,
+                comision_mp_total: comisionMPTotal,
+                comision_mp_app: comisionMPApp,
+                comision_mp_aliado: comisionMPAliado,
+                subtotal_aliado: subtotalAliado,
+                iva: ivaAliado,
+                total: totalAPagar
+              }
             },
           })
           .select()
@@ -217,31 +274,31 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
 
         console.log(`✅ Factura de compra creada: ${facturaCompra.serie}-${facturaCompra.numero_factura}`);
 
-        // 4. Crear items de factura
+        // Crear items de factura
         const { error: itemsError } = await supabase
           .from('facturas_compra_items')
           .insert({
             factura_id: facturaCompra.id,
             numero_linea: 1,
-            descripcion: `Pago de comisiones - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
+            descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
             cantidad: comisionesPartner.length,
-            precio_unitario: montoTransferir / comisionesPartner.length,
+            precio_unitario: subtotalAliado / comisionesPartner.length,
             descuento_porcentaje: 0,
             descuento_monto: 0,
-            tasa_iva: 0,
-            monto_iva: 0,
-            subtotal: montoTransferir,
-            total: montoTransferir,
+            tasa_iva: tasaIVA,
+            monto_iva: ivaAliado,
+            subtotal: subtotalAliado,
+            total: totalAPagar,
             metadata: {
-              retencion_ml: montoRetencionML,
-              comision_sistema: montoComisionSistema,
-              total_comision_bruta: totalComision,
+              comision_mp_descontada: comisionMPAliado,
+              comision_app_descontada: totalComisionApp,
+              total_ventas_base: totalVentas,
             },
           });
 
         if (itemsError) throw itemsError;
 
-        // 5. Crear cuenta por pagar
+        // Crear cuenta por pagar
         const { data: cuentaPorPagar, error: cuentaError } = await supabase
           .from('facturas_por_pagar')
           .insert({
@@ -251,12 +308,12 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
             tipo_documento: 'FACTURA_PARTNER',
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
-            descripcion: `Pago comisiones ${partner.razon_social}`,
-            monto_subtotal: montoTransferir,
-            monto_impuestos: 0,
-            monto_total: montoTransferir,
+            descripcion: `Pago servicios ${partner.razon_social}`,
+            monto_subtotal: subtotalAliado,
+            monto_impuestos: ivaAliado,
+            monto_total: totalAPagar,
             monto_pagado: 0,
-            saldo_pendiente: montoTransferir,
+            saldo_pendiente: totalAPagar,
             estado: 'PENDIENTE',
             moneda: 'UYU',
             observaciones: `Factura de compra: ${facturaCompra.serie}-${facturaCompra.numero_factura}`,
@@ -270,19 +327,19 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
 
         console.log(`✅ Cuenta por pagar creada: ${cuentaPorPagar.numero}`);
 
-        // 6. Actualizar comisiones
+        // Actualizar comisiones
         const comisionIds = comisionesPartner.map((c) => c.id);
         const { error: updateError } = await supabase
           .from('comisiones_partners')
           .update({
             factura_compra_id: facturaCompra.id,
-            estado_pago: 'pendiente', // Ahora está pendiente de pago
+            estado_pago: 'pendiente',
           })
           .in('id', comisionIds);
 
         if (updateError) throw updateError;
 
-        // 7. Generar asiento contable
+        // Generar asiento contable
         try {
           await supabase.functions.invoke('generar-asiento-factura-compra', {
             body: {
@@ -327,7 +384,6 @@ async function procesarFacturasCompra(supabase: any, empresaId: string, partnerI
 }
 
 async function crearActualizarProveedor(supabase: any, empresaId: string, partner: any, paisId: string) {
-  // Buscar proveedor existente
   const { data: proveedorExistente } = await supabase
     .from('proveedores')
     .select('id')
@@ -336,7 +392,6 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     .maybeSingle();
 
   if (proveedorExistente) {
-    // Actualizar datos del proveedor
     await supabase
       .from('proveedores')
       .update({
@@ -353,7 +408,6 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     return proveedorExistente.id;
   }
 
-  // Crear nuevo proveedor
   const { data: nuevoProveedor, error } = await supabase
     .from('proveedores')
     .insert({
