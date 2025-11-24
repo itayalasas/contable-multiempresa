@@ -199,13 +199,33 @@ export default function ComisionesPartners() {
 
       if (data.success) {
         console.log('✅ [ComisionesPartners] Facturas generadas exitosamente:', data);
+
+        // Mostrar errores si los hay
+        if (data.errores && data.errores.length > 0) {
+          console.error('⚠️ [ComisionesPartners] Se encontraron errores durante el proceso:');
+          data.errores.forEach((error: any, index: number) => {
+            console.error(`   ${index + 1}. ${error.partner || 'Partner desconocido'}:`, error.error || error.message);
+          });
+        }
+
         setShowGenerarCompraModal(false);
-        setNotification({
-          show: true,
-          type: 'success',
-          title: 'Facturas de Compra Generadas',
-          message: `Se generaron ${data.facturas_compra_generadas} factura(s) de compra y ${data.cuentas_por_pagar_generadas} cuenta(s) por pagar. ${data.comisiones_procesadas} comisiones procesadas.`,
-        });
+
+        // Si hay errores pero también hay éxitos, mostrar warning
+        if (data.errores && data.errores.length > 0 && data.facturas_compra_generadas === 0) {
+          setNotification({
+            show: true,
+            type: 'warning',
+            title: 'No se pudieron generar facturas',
+            message: `Se encontraron ${data.errores.length} error(es). Revisa la consola para más detalles.`,
+          });
+        } else {
+          setNotification({
+            show: true,
+            type: 'success',
+            title: 'Facturas de Compra Generadas',
+            message: `Se generaron ${data.facturas_compra_generadas} factura(s) de compra y ${data.cuentas_por_pagar_generadas} cuenta(s) por pagar. ${data.comisiones_procesadas} comisiones procesadas.`,
+          });
+        }
         await cargarDatos();
       } else {
         console.error('⚠️ [ComisionesPartners] Edge function reportó fallo:', data);

@@ -328,7 +328,14 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
       } catch (error: any) {
         console.error(`❌ Error procesando partner ${pid}:`, error.message);
-        errores.push({ partner_id: pid, error: error.message });
+        console.error(`❌ Error completo:`, error);
+        const partner = comisionesPartner[0]?.partner;
+        errores.push({
+          partner_id: pid,
+          partner: partner?.razon_social || 'Desconocido',
+          error: error.message,
+          details: error.details || error.hint || null,
+        });
       }
     }
 
@@ -349,7 +356,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
       facturas_generadas: 0,
       cuentas_por_pagar: 0,
       comisiones_procesadas: 0,
-      error: error.message,
+      errores: [{ error: error.message }],
     };
   }
 }
@@ -359,22 +366,10 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     .from('proveedores')
     .select('id')
     .eq('empresa_id', empresaId)
-    .eq('numero_documento', partner.documento)
+    .eq('numero_identificacion', partner.partner_id_externo)
     .maybeSingle();
 
   if (proveedorExistente) {
-    await supabase
-      .from('proveedores')
-      .update({
-        nombre_comercial: partner.nombre_comercial || partner.razon_social,
-        razon_social: partner.razon_social,
-        email: partner.email,
-        telefono: partner.telefono,
-        direccion: partner.direccion,
-        activo: true,
-      })
-      .eq('id', proveedorExistente.id);
-
     return proveedorExistente.id;
   }
 
@@ -383,20 +378,22 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
     .insert({
       empresa_id: empresaId,
       pais_id: paisId,
-      nombre_comercial: partner.nombre_comercial || partner.razon_social,
       razon_social: partner.razon_social,
-      numero_documento: partner.documento,
-      email: partner.email,
-      telefono: partner.telefono,
-      direccion: partner.direccion,
+      nombre_comercial: partner.razon_social,
+      numero_identificacion: partner.partner_id_externo,
+      tipo_identificacion: 'RUT',
+      email: partner.email || null,
+      telefono: partner.telefono || null,
       activo: true,
-      observaciones: `Proveedor creado automáticamente desde partner: ${partner.partner_id_externo}`,
+      metadata: {
+        tipo: 'proveedor_partner',
+        partner_id: partner.id,
+      },
     })
-    .select()
+    .select('id')
     .single();
 
   if (error) throw error;
 
-  console.log(`✅ Proveedor creado: ${nuevoProveedor.razon_social}`);
   return nuevoProveedor.id;
 }

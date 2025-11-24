@@ -17,8 +17,12 @@ export default function GestionImpuestos() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('🔄 [GestionImpuestos] useEffect disparado');
+    console.log('📊 [GestionImpuestos] empresaActual en useEffect:', empresaActual);
     if (empresaActual) {
       cargarImpuestos();
+    } else {
+      console.warn('⚠️ [GestionImpuestos] No hay empresaActual, no se cargan impuestos');
     }
   }, [empresaActual]);
 
