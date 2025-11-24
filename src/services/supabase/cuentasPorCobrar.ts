@@ -212,28 +212,36 @@ export const cuentasPorCobrarSupabaseService = {
   },
 
   async registrarPago(pago: Omit<PagoFactura, 'id' | 'fechaCreacion'>): Promise<void> {
-    // Registrar pago actualizando el estado de la factura de venta
-    const { data: factura, error: facturaError } = await supabase
-      .from('facturas_venta')
-      .select('total, estado')
-      .eq('id', pago.facturaId)
-      .maybeSingle();
+    // Llamar a la edge function que procesa el cobro y genera el asiento contable
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    if (facturaError) throw facturaError;
-    if (!factura) throw new Error('Factura no encontrada');
+    const response = await fetch(`${supabaseUrl}/functions/v1/procesar-cobro-cliente`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        factura_id: pago.facturaId,
+        pago: {
+          fechaPago: pago.fechaPago,
+          monto: pago.monto,
+          tipoPago: pago.tipoPago,
+          referencia: pago.referencia,
+          observaciones: pago.observaciones,
+          creadoPor: pago.creadoPor,
+        },
+      }),
+    });
 
-    // Actualizar el estado de la factura a "pagada"
-    const { error: updateError } = await supabase
-      .from('facturas_venta')
-      .update({
-        estado: 'pagada',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', pago.facturaId);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al procesar el cobro');
+    }
 
-    if (updateError) throw updateError;
-
-    console.log(`✅ Pago registrado para factura ${pago.facturaId}: $${pago.monto}`);
+    const result = await response.json();
+    console.log('✅ Cobro procesado:', result);
   },
 
   async getPagos(facturaId: string): Promise<PagoFactura[]> {

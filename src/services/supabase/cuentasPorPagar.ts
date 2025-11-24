@@ -415,54 +415,38 @@ export const cuentasPorPagarSupabaseService = {
   },
 
   async registrarPago(empresaId: string, facturaId: string, pago: Omit<PagoProveedor, 'id' | 'facturaId' | 'fechaCreacion'>): Promise<void> {
-    const pagoCompleto: Omit<PagoProveedor, 'id' | 'fechaCreacion'> = {
-      ...pago,
-      facturaId,
-    };
+    // Llamar a la edge function que procesa el pago y genera el asiento contable
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    const { error } = await supabase
-      .from('pagos_proveedor')
-      .insert({
-        factura_id: pagoCompleto.facturaId,
-        fecha_pago: pagoCompleto.fechaPago,
-        monto: pagoCompleto.monto,
-        tipo_pago: pagoCompleto.tipoPago,
-        referencia: pagoCompleto.referencia,
-        observaciones: pagoCompleto.observaciones,
-        creado_por: pagoCompleto.creadoPor,
-        banco: pagoCompleto.banco,
-        numero_cuenta: pagoCompleto.numeroCuenta,
-        numero_operacion: pagoCompleto.numeroOperacion,
-      });
+    const response = await fetch(`${supabaseUrl}/functions/v1/procesar-pago-proveedor`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        factura_id: facturaId,
+        pago: {
+          fechaPago: pago.fechaPago,
+          monto: pago.monto,
+          tipoPago: pago.tipoPago,
+          referencia: pago.referencia,
+          observaciones: pago.observaciones,
+          creadoPor: pago.creadoPor,
+          banco: pago.banco,
+          numeroCuenta: pago.numeroCuenta,
+          numeroOperacion: pago.numeroOperacion,
+        },
+      }),
+    });
 
-    if (error) throw error;
-
-    const { data: factura } = await supabase
-      .from('facturas_por_pagar')
-      .select('monto_pagado, monto_total')
-      .eq('id', pagoCompleto.facturaId)
-      .single();
-
-    if (factura) {
-      const nuevoMontoPagado = factura.monto_pagado + pagoCompleto.monto;
-      const nuevoSaldo = factura.monto_total - nuevoMontoPagado;
-      let nuevoEstado = 'PENDIENTE';
-
-      if (nuevoSaldo === 0) {
-        nuevoEstado = 'PAGADA';
-      } else if (nuevoMontoPagado > 0) {
-        nuevoEstado = 'PARCIAL';
-      }
-
-      await supabase
-        .from('facturas_por_pagar')
-        .update({
-          monto_pagado: nuevoMontoPagado,
-          saldo_pendiente: nuevoSaldo,
-          estado: nuevoEstado,
-          fecha_modificacion: new Date().toISOString(),
-        })
-        .eq('id', pagoCompleto.facturaId);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al procesar el pago');
     }
+
+    const result = await response.json();
+    console.log('✅ Pago procesado:', result);
   },
 };
