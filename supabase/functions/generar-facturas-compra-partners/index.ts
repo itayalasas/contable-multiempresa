@@ -12,23 +12,19 @@ const corsHeaders = {
  *
  * LÓGICA CORRECTA DEL MARKETPLACE:
  *
- * La aplicación cobra TODO al cliente (subtotal_venta)
- * De ese total:
- *   - Se queda la comisión de la app (comision_monto - ya calculado)
- *   - Se descuenta la parte de comisión MP que le toca al aliado (50%)
- *   - El resto se le paga al aliado + IVA
+ * El cliente paga $5000 (incluye IVA de compra)
+ * De ese total se descuenta:
+ *   - Comisión de la app (15%): $750
+ *   - Comisión MP del aliado (50% de 7% = 3.5%): $175
+ *
+ * Lo que recibe el aliado:
+ *   $5000 - $750 - $175 = $4075 (SIN IVA ADICIONAL)
  *
  * Ejemplo:
  *   Venta: $1000
- *   Comisión App (15%): $150 (ya en comisiones_partners.comision_monto)
- *   Comisión MP total (7%): $70
- *     - Parte App (50%): $35
- *     - Parte Aliado (50%): $35
- *
- *   Cálculo pago aliado:
- *   Subtotal: $1000 - $150 - $35 = $815
- *   IVA (22%): $815 * 0.22 = $179.30
- *   Total: $994.30
+ *   Comisión App (15%): $150
+ *   Comisión MP aliado (3.5%): $35
+ *   Total aliado: $1000 - $150 - $35 = $815
  */
 
 Deno.serve(async (req: Request) => {
@@ -164,9 +160,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const comisionMPTotal = totalVentas * tasaMP;
         const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
         const comisionMPApp = comisionMPTotal - comisionMPAliado;
-        const subtotalAliado = totalVentas - totalComisionApp - comisionMPAliado;
-        const ivaAliado = subtotalAliado * tasaIVA;
-        const totalAPagar = subtotalAliado + ivaAliado;
+        const totalAPagar = totalVentas - totalComisionApp - comisionMPAliado;
 
         console.log(`💰 Cálculos:`);
         console.log(`   Total ventas cobradas: $${totalVentas.toFixed(2)}`);
@@ -174,9 +168,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         console.log(`   - Comisión MP total: $${comisionMPTotal.toFixed(2)}`);
         console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)}`);
         console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
-        console.log(`   = Subtotal aliado: $${subtotalAliado.toFixed(2)}`);
-        console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaAliado.toFixed(2)}`);
-        console.log(`   = TOTAL A PAGAR: $${totalAPagar.toFixed(2)}`);
+        console.log(`   = TOTAL A PAGAR AL ALIADO: $${totalAPagar.toFixed(2)}`);
 
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
 
@@ -213,8 +205,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
-            subtotal: subtotalAliado,
-            total_iva: ivaAliado,
+            subtotal: totalAPagar,
+            total_iva: 0,
             total: totalAPagar,
             moneda: 'UYU',
             tipo_cambio: 1,
@@ -236,8 +228,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
                 comision_mp_total: comisionMPTotal,
                 comision_mp_app: comisionMPApp,
                 comision_mp_aliado: comisionMPAliado,
-                subtotal_aliado: subtotalAliado,
-                iva: ivaAliado,
                 total: totalAPagar
               }
             },
@@ -256,12 +246,12 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             numero_linea: 1,
             descripcion: `Pago por servicios - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
             cantidad: comisionesPartner.length,
-            precio_unitario: subtotalAliado / comisionesPartner.length,
+            precio_unitario: totalAPagar / comisionesPartner.length,
             descuento_porcentaje: 0,
             descuento_monto: 0,
-            tasa_iva: tasaIVA,
-            monto_iva: ivaAliado,
-            subtotal: subtotalAliado,
+            tasa_iva: 0,
+            monto_iva: 0,
+            subtotal: totalAPagar,
             total: totalAPagar,
             metadata: {
               comision_mp_descontada: comisionMPAliado,
@@ -282,8 +272,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             descripcion: `Pago servicios ${partner.razon_social}`,
-            monto_subtotal: subtotalAliado,
-            monto_impuestos: ivaAliado,
+            monto_subtotal: totalAPagar,
+            monto_impuestos: 0,
             monto_total: totalAPagar,
             monto_pagado: 0,
             saldo_pendiente: totalAPagar,
@@ -327,15 +317,6 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             descuento: 100,
             impuesto: 0,
             total: 0,
-          },
-          {
-            factura_id: cuentaPorPagar.id,
-            descripcion: `Subtotal a pagar al partner`,
-            cantidad: 1,
-            precio_unitario: subtotalAliado,
-            descuento: 0,
-            impuesto: tasaIVA * 100,
-            total: subtotalAliado,
           },
         ];
 
