@@ -9,29 +9,24 @@ import { NotificationModal } from '../../components/common/NotificationModal';
 import { CuentaBancariaModal } from '../../components/tesoreria/CuentaBancariaModal';
 import { MovimientoTesoreriaModal } from '../../components/tesoreria/MovimientoTesoreriaModal';
 import { ResumenTesoreria } from '../../components/tesoreria/ResumenTesoreria';
-import { useTesoreriaFirebase } from '../../hooks/useTesoreriaFirebase';
+import { useTesoreria } from '../../hooks/useTesoreria';
 
 function Tesoreria() {
   const { empresaActual, paisActual, formatearMoneda } = useSesion();
   const { usuario } = useAuth();
   
-  // Hook personalizado para manejo de tesorería con Firebase
+  // Hook personalizado para manejo de tesorería con Supabase
   const {
     cuentas,
     movimientos,
     resumen,
     loading,
     error,
-    isLoadingMockData,
     crearCuentaBancaria,
-    actualizarCuentaBancaria,
-    eliminarCuentaBancaria,
-    crearMovimientoTesoreria,
-    actualizarMovimientoTesoreria,
-    eliminarMovimientoTesoreria,
-    cargarDatosMockEnFirebase,
+    crearMovimiento,
+    actualizarMovimiento,
     recargarDatos
-  } = useTesoreriaFirebase(empresaActual?.id);
+  } = useTesoreria(empresaActual?.id);
   
   // Estados locales
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,44 +101,16 @@ function Tesoreria() {
   };
 
   const handleEliminarMovimiento = (movimiento: any) => {
-    confirmDelete(
-      `el movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : movimiento.tipo === 'EGRESO' ? 'egreso' : 'transferencia'}`,
-      async () => {
-        try {
-          await eliminarMovimientoTesoreria(movimiento.id);
-          
-          showSuccess(
-            'Movimiento eliminado',
-            'El movimiento ha sido eliminado exitosamente'
-          );
-        } catch (error) {
-          showError(
-            'Error al eliminar movimiento',
-            error instanceof Error ? error.message : 'Error desconocido'
-          );
-        }
-      }
+    showError(
+      'Función no disponible',
+      'La eliminación de movimientos no está disponible actualmente'
     );
   };
 
   const handleEliminarCuenta = (cuenta: any) => {
-    confirmDelete(
-      `la cuenta ${cuenta.nombre}`,
-      async () => {
-        try {
-          await eliminarCuentaBancaria(cuenta.id);
-          
-          showSuccess(
-            'Cuenta eliminada',
-            'La cuenta ha sido eliminada exitosamente'
-          );
-        } catch (error) {
-          showError(
-            'Error al eliminar cuenta',
-            error instanceof Error ? error.message : 'Error desconocido'
-          );
-        }
-      }
+    showError(
+      'Función no disponible',
+      'La eliminación de cuentas no está disponible actualmente'
     );
   };
 
@@ -151,17 +118,16 @@ function Tesoreria() {
   const handleSaveCuenta = async (cuentaData: any) => {
     try {
       if (modalType === 'create') {
-        const cuentaId = await crearCuentaBancaria(cuentaData);
+        const cuenta = await crearCuentaBancaria(cuentaData);
         showSuccess(
           'Cuenta creada',
           `La cuenta "${cuentaData.nombre}" ha sido creada exitosamente.`
         );
-        return cuentaId;
+        return cuenta.id;
       } else if (modalType === 'edit' && selectedCuentaBancaria) {
-        await actualizarCuentaBancaria(selectedCuentaBancaria.id, cuentaData);
-        showSuccess(
-          'Cuenta actualizada',
-          `La cuenta "${cuentaData.nombre}" ha sido actualizada exitosamente.`
+        showError(
+          'Función no disponible',
+          'La edición de cuentas no está disponible actualmente'
         );
         return selectedCuentaBancaria.id;
       }
@@ -179,14 +145,14 @@ function Tesoreria() {
   const handleSaveMovimiento = async (movimientoData: any) => {
     try {
       if (modalType === 'create') {
-        const movimientoId = await crearMovimientoTesoreria(movimientoData);
+        const movimiento = await crearMovimiento(movimientoData);
         showSuccess(
           'Movimiento creado',
           `El movimiento ha sido creado exitosamente.`
         );
-        return movimientoId;
+        return movimiento.id;
       } else if (modalType === 'edit' && selectedMovimiento) {
-        await actualizarMovimientoTesoreria(selectedMovimiento.id, movimientoData);
+        await actualizarMovimiento(selectedMovimiento.id, movimientoData);
         showSuccess(
           'Movimiento actualizado',
           `El movimiento ha sido actualizado exitosamente.`
