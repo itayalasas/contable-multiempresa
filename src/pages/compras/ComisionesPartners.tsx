@@ -48,7 +48,9 @@ export default function ComisionesPartners() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todas');
   const [loading, setLoading] = useState(true);
   const [generandoFacturas, setGenerandoFacturas] = useState(false);
+  const [generandoFacturasCompra, setGenerandoFacturasCompra] = useState(false);
   const [showGenerarModal, setShowGenerarModal] = useState(false);
+  const [showGenerarCompraModal, setShowGenerarCompraModal] = useState(false);
   const [notification, setNotification] = useState<{
     show: boolean;
     type: 'success' | 'error' | 'warning' | 'info';
@@ -168,6 +170,50 @@ export default function ComisionesPartners() {
     }
   };
 
+  const generarFacturasCompraAhora = async () => {
+    if (!empresaActual) return;
+
+    try {
+      setGenerandoFacturasCompra(true);
+
+      const { data, error } = await supabase.functions.invoke('generar-facturas-compra-partners', {
+        body: {
+          empresaId: empresaActual.id,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setShowGenerarCompraModal(false);
+        setNotification({
+          show: true,
+          type: 'success',
+          title: 'Facturas de Compra Generadas',
+          message: `Se generaron ${data.facturas_compra_generadas} factura(s) de compra y ${data.cuentas_por_pagar_generadas} cuenta(s) por pagar. ${data.comisiones_procesadas} comisiones procesadas.`,
+        });
+        await cargarDatos();
+      } else {
+        setNotification({
+          show: true,
+          type: 'error',
+          title: 'Error al Generar Facturas de Compra',
+          message: data.error || 'Ocurrió un error al generar las facturas de compra.',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error al generar facturas de compra:', error);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'No se pudieron generar las facturas de compra. Por favor, intente nuevamente.',
+      });
+    } finally {
+      setGenerandoFacturasCompra(false);
+    }
+  };
+
   const aprobarFactura = async (factura: FacturaCompra) => {
     const { error } = await supabase
       .from('facturas_compra')
@@ -263,14 +309,24 @@ export default function ComisionesPartners() {
             Control y gestión de comisiones y pagos a partners
           </p>
         </div>
-        <button
-          onClick={() => setShowGenerarModal(true)}
-          disabled={generandoFacturas}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-        >
-          <Play className="w-5 h-5" />
-          {generandoFacturas ? 'Generando...' : 'Generar Facturas Ahora'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowGenerarModal(true)}
+            disabled={generandoFacturas}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            <Play className="w-5 h-5" />
+            {generandoFacturas ? 'Generando...' : '1. Generar Facturas a Clientes'}
+          </button>
+          <button
+            onClick={() => setShowGenerarCompraModal(true)}
+            disabled={generandoFacturasCompra}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+          >
+            <DollarSign className="w-5 h-5" />
+            {generandoFacturasCompra ? 'Generando...' : '2. Generar Cuentas por Pagar'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -504,11 +560,24 @@ export default function ComisionesPartners() {
           isOpen={showGenerarModal}
           onClose={() => !generandoFacturas && setShowGenerarModal(false)}
           onConfirm={generarFacturasAhora}
-          title="Generar Facturas de Comisiones"
+          title="Generar Facturas de Comisiones a Clientes"
           message="¿Deseas generar las facturas de comisiones pendientes ahora? Esto agrupará todas las comisiones pendientes por partner y creará facturas electrónicas para enviar a DGI."
           confirmText="Generar"
           cancelText="Cancelar"
           loading={generandoFacturas}
+        />
+      )}
+
+      {showGenerarCompraModal && (
+        <ConfirmModal
+          isOpen={showGenerarCompraModal}
+          onClose={() => !generandoFacturasCompra && setShowGenerarCompraModal(false)}
+          onConfirm={generarFacturasCompraAhora}
+          title="Generar Cuentas por Pagar a Partners"
+          message="¿Deseas generar las facturas de compra y cuentas por pagar a partners? Esto convertirá las comisiones facturadas en cuentas por pagar, descontando retenciones y comisiones del sistema."
+          confirmText="Generar"
+          cancelText="Cancelar"
+          loading={generandoFacturasCompra}
         />
       )}
 
