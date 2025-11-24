@@ -179,6 +179,16 @@ export function useTesoreria(empresaId: string | undefined) {
     }
   };
 
+  const actualizarCuentaBancaria = async (cuentaId: string, updates: Partial<CuentaBancaria>) => {
+    try {
+      await tesoreriaSupabaseService.updateCuentaBancaria(cuentaId, updates);
+      await cargarDatos(); // Recargar datos
+    } catch (err: any) {
+      console.error('Error actualizando cuenta bancaria:', err);
+      throw err;
+    }
+  };
+
   const actualizarMovimiento = async (movimientoId: string, updates: Partial<MovimientoTesoreria>) => {
     try {
       await tesoreriaSupabaseService.updateMovimiento(movimientoId, updates);
@@ -196,6 +206,7 @@ export function useTesoreria(empresaId: string | undefined) {
     loading,
     error,
     crearCuentaBancaria,
+    actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
     recargarDatos: cargarDatos,

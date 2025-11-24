@@ -23,6 +23,7 @@ function Tesoreria() {
     loading,
     error,
     crearCuentaBancaria,
+    actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
     recargarDatos
@@ -125,9 +126,10 @@ function Tesoreria() {
         );
         return cuenta.id;
       } else if (modalType === 'edit' && selectedCuentaBancaria) {
-        showError(
-          'Función no disponible',
-          'La edición de cuentas no está disponible actualmente'
+        await actualizarCuentaBancaria(selectedCuentaBancaria.id, cuentaData);
+        showSuccess(
+          'Cuenta actualizada',
+          `La cuenta "${cuentaData.nombre}" ha sido actualizada exitosamente.`
         );
         return selectedCuentaBancaria.id;
       }

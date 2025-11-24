@@ -49,33 +49,144 @@ const PlanCuentasManual: React.FC = () => {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Estructura del Plan de Cuentas</h2>
             <p className="text-gray-700 mb-4">
-              El plan de cuentas en ContaEmpresa está organizado jerárquicamente por niveles, siguiendo la estructura 
-              del Plan Contable General Empresarial (PCGE) para Perú u otros planes contables según el país seleccionado.
+              El plan de cuentas en ContaEmpresa está organizado jerárquicamente por niveles, siguiendo un estándar
+              de códigos de 6 dígitos sin puntos, adaptado para Uruguay y países de la región.
             </p>
-            
-            <div className="space-y-4">
+
+            <div className="space-y-4 mb-6">
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="font-semibold text-gray-800">Nivel 1: Clase</h3>
-                <p className="text-gray-600">Representa las grandes categorías de cuentas (Activo, Pasivo, Patrimonio, Ingreso, Gasto).</p>
-                <p className="text-gray-600 mt-1"><strong>Ejemplo:</strong> 10 - EFECTIVO Y EQUIVALENTES DE EFECTIVO</p>
+                <h3 className="font-semibold text-gray-800">Nivel 1: Clase (1 dígito)</h3>
+                <p className="text-gray-600">Representa las grandes categorías de cuentas.</p>
+                <p className="text-gray-600 mt-1"><strong>Ejemplos:</strong> 1 - ACTIVO, 2 - PASIVO, 5 - PATRIMONIO, 6 - GASTOS, 7 - INGRESOS</p>
               </div>
-              
+
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="font-semibold text-gray-800">Nivel 2: Grupo</h3>
+                <h3 className="font-semibold text-gray-800">Nivel 2: Subgrupo (2 dígitos)</h3>
                 <p className="text-gray-600">Subdivide las clases en grupos de cuentas relacionadas.</p>
-                <p className="text-gray-600 mt-1"><strong>Ejemplo:</strong> 101 - Caja</p>
+                <p className="text-gray-600 mt-1"><strong>Ejemplos:</strong> 11 - ACTIVO CORRIENTE, 21 - PASIVO CORRIENTE, 51 - CAPITAL</p>
               </div>
-              
+
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="font-semibold text-gray-800">Nivel 3: Cuenta</h3>
-                <p className="text-gray-600">Detalla los grupos en cuentas específicas.</p>
-                <p className="text-gray-600 mt-1"><strong>Ejemplo:</strong> 1011 - Caja MN</p>
+                <h3 className="font-semibold text-gray-800">Nivel 3: Categoría (3 dígitos)</h3>
+                <p className="text-gray-600">Detalla los grupos en categorías específicas.</p>
+                <p className="text-gray-600 mt-1"><strong>Ejemplos:</strong> 111 - DISPONIBILIDADES, 112 - BANCOS, 211 - Tributos por Pagar</p>
               </div>
-              
+
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="font-semibold text-gray-800">Nivel 4: Subcuenta</h3>
-                <p className="text-gray-600">Proporciona un mayor detalle para el registro de operaciones específicas.</p>
-                <p className="text-gray-600 mt-1"><strong>Ejemplo:</strong> 10111 - Caja Principal</p>
+                <h3 className="font-semibold text-gray-800">Nivel 4: Cuenta Detalle (6 dígitos)</h3>
+                <p className="text-gray-600">Proporciona el máximo detalle para el registro de operaciones específicas.</p>
+                <p className="text-gray-600 mt-1"><strong>Ejemplos:</strong> 111001 - Caja MN, 112002 - Banco Itaú, 211001 - IVA por Pagar</p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <Info className="h-5 w-5 text-blue-500" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <strong>Formato de códigos:</strong> El sistema usa códigos de 6 dígitos sin puntos (ejemplo: 111001 en lugar de 1.1.1.001).
+                    Los grupos de niveles superiores usan 1, 2 o 3 dígitos según corresponda.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Plan de Cuentas Completo (73 cuentas)</h3>
+            <div className="bg-gray-900 text-gray-100 p-6 rounded-lg font-mono text-sm overflow-x-auto">
+              <pre className="whitespace-pre">{`📊 PLAN DE CUENTAS URUGUAY (73 cuentas totales)
+
+1. ACTIVO (16 cuentas de detalle)
+   ├─ 11. ACTIVO CORRIENTE
+   │   ├─ 111. DISPONIBILIDADES
+   │   │   ├─ 111001 Caja MN
+   │   │   └─ 111002 Caja ME
+   │   └─ 112. BANCOS
+   │       ├─ 112001 Cuentas Corrientes Operativas
+   │       ├─ 112002 Banco Itaú
+   │       └─ 112003 Banco BROU
+   ├─ 12. CUENTAS POR COBRAR
+   │   └─ 121. Cuentas por Cobrar Comerciales
+   │       ├─ 121001 Facturas no emitidas
+   │       └─ 121002 Facturas emitidas en cartera
+   ├─ 13. INVENTARIOS
+   │   └─ 131. Mercaderías
+   │       └─ 131001 Mercaderías manufacturadas
+   └─ 14. ACTIVO FIJO
+       └─ 141. Inmuebles, Maquinaria y Equipo
+           ├─ 141001 Terrenos
+           ├─ 141002 Maquinarias y equipos
+           └─ 141003 Unidades de transporte
+
+2. PASIVO (11 cuentas de detalle)
+   └─ 21. PASIVO CORRIENTE
+       ├─ 211. Tributos por Pagar
+       │   ├─ 211001 IVA por Pagar
+       │   └─ 211002 IGV por Pagar
+       ├─ 212. Comisiones por Pagar
+       │   ├─ 212001 Comisiones por Pagar - Partners
+       │   └─ 212002 Comisiones MercadoPago por Pagar
+       ├─ 213. Cuentas por Pagar Comerciales
+       │   ├─ 213001 Facturas emitidas por pagar
+       │   └─ 213002 Cuentas por Pagar - Partners
+       └─ 214. Cuentas por Pagar Diversas
+           └─ 214001 Pasivos por compra de activo
+
+5. PATRIMONIO (3 cuentas de detalle)
+   ├─ 51. CAPITAL
+   │   └─ 511. Capital Social
+   │       └─ 511001 Acciones
+   └─ 59. RESULTADOS ACUMULADOS
+       ├─ 591. Utilidades
+       │   └─ 591001 Utilidades no distribuidas
+       └─ 592. Pérdidas
+           └─ 592001 Pérdidas acumuladas
+
+7. INGRESOS (3 cuentas de detalle)
+   ├─ 71. VENTAS
+   │   └─ 711. Ventas de Mercaderías
+   │       └─ 711001 Mercaderías manufacturadas
+   └─ 75. OTROS INGRESOS
+       └─ 751. Otros Ingresos de Gestión
+           ├─ 751001 Servicios en beneficio del personal
+           └─ 751002 Otros ingresos diversos
+
+6. GASTOS (12 cuentas de detalle)
+   ├─ 61. COMPRAS
+   │   ├─ 611. Mercaderías
+   │   │   └─ 611001 Mercaderías manufacturadas
+   │   └─ 612. Comisiones
+   │       ├─ 612001 Comisiones a Partners
+   │       └─ 612002 Comisiones MercadoPago
+   ├─ 63. GASTOS DE SERVICIOS
+   │   ├─ 631. Servicios de Terceros
+   │   │   ├─ 631001 Transporte y correos
+   │   │   └─ 631002 Mantenimiento y reparaciones
+   │   └─ 636. Servicios Básicos
+   │       ├─ 636001 Energía eléctrica
+   │       ├─ 636002 Gas
+   │       ├─ 636003 Agua
+   │       ├─ 636004 Teléfono
+   │       └─ 636005 Internet
+   └─ 65. OTROS GASTOS DE GESTIÓN
+       └─ 651. Gastos Generales
+           ├─ 651001 Seguros
+           ├─ 651002 Suministros
+           └─ 651003 Otros gastos diversos`}</pre>
+            </div>
+
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 mt-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-700">
+                    <strong>Cuentas operativas:</strong> Las cuentas de 6 dígitos (nivel 4) son las únicas que se pueden
+                    usar en asientos contables y movimientos. Los niveles superiores son solo organizacionales.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
