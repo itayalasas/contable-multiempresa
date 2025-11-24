@@ -350,19 +350,22 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
           });
         });
 
+        const porcentajeComisionReal = (totalComisionApp / totalVentas) * 100;
+        const comisionMPPorcentaje = (comisionMPAliado / totalVentas) * 100;
+
         itemsCuentaPorPagar.push({
           factura_id: cuentaPorPagar.id,
-          descripcion: `Comisión aplicación (${((totalComisionApp / totalVentas) * 100).toFixed(2)}%) - Parte MP app (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)}`,
+          descripcion: `Comisión aplicación (${porcentajeComisionReal.toFixed(2)}%)`,
           cantidad: 1,
-          precio_unitario: -comisionAppNeta,
+          precio_unitario: -totalComisionApp,
           descuento: 0,
           impuesto: 0,
-          total: -comisionAppNeta,
+          total: -totalComisionApp,
         });
 
         itemsCuentaPorPagar.push({
           factura_id: cuentaPorPagar.id,
-          descripcion: `Comisión MercadoPago - Parte aliado (${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
+          descripcion: `Comisión MercadoPago - Parte aliado (${comisionMPPorcentaje.toFixed(2)}% = ${divisionMPAliado}% de ${(tasaMP * 100).toFixed(2)}%)`,
           cantidad: 1,
           precio_unitario: -comisionMPAliado,
           descuento: 0,
@@ -376,7 +379,10 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (itemsCuentaError) throw itemsCuentaError;
 
-        console.log(`✅ ${itemsCuentaPorPagar.length} item(s) agregados a la cuenta por pagar (${comisionesPartner.length} ventas + 2 descuentos)`);
+        console.log(`✅ ${itemsCuentaPorPagar.length} item(s) agregados a la cuenta por pagar:`);
+        console.log(`   - ${comisionesPartner.length} ventas individuales`);
+        console.log(`   - Comisión app: -$${totalComisionApp.toFixed(2)}`);
+        console.log(`   - Comisión MP aliado: -$${comisionMPAliado.toFixed(2)}`);
 
         const comisionIds = comisionesPartner.map((c) => c.id);
         const { error: updateError } = await supabase
@@ -389,16 +395,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (updateError) throw updateError;
 
-        try {
-          await supabase.functions.invoke('generar-asiento-factura-compra', {
-            body: {
-              facturaCompraId: facturaCompra.id,
-            },
-          });
-          console.log('✅ Asiento contable generado');
-        } catch (asientoErr: any) {
-          console.error('⚠️ Error generando asiento:', asientoErr.message);
-        }
+        console.log('ℹ️ NO se genera asiento contable (ya existen asientos de facturas de venta validadas por DGI)');
 
         facturasGeneradas++;
         cuentasPorPagarGeneradas++;
