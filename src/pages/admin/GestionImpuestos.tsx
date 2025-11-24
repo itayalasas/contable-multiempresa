@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSesion } from '../../context/SesionContext';
+import { supabase } from '../../config/supabase';
 
 interface Impuesto {
   id: string;
@@ -12,37 +13,58 @@ interface Impuesto {
 
 export default function GestionImpuestos() {
   const { empresaActual } = useSesion();
-  const [impuestos, setImpuestos] = useState<Impuesto[]>([
-    {
-      id: '1',
-      nombre: 'IVA Básico',
-      tipo: 'IVA',
-      tasa: 22,
-      activo: true,
-      descripcion: 'Impuesto al Valor Agregado - Tasa Básica',
-    },
-    {
-      id: '2',
-      nombre: 'IVA Mínimo',
-      tipo: 'IVA',
-      tasa: 10,
-      activo: true,
-      descripcion: 'Impuesto al Valor Agregado - Tasa Mínima',
-    },
-    {
-      id: '3',
-      nombre: 'Exento',
-      tipo: 'IVA',
-      tasa: 0,
-      activo: true,
-      descripcion: 'Operaciones exentas de IVA',
-    },
-  ]);
+  const [impuestos, setImpuestos] = useState<Impuesto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (empresaActual) {
+      cargarImpuestos();
+    }
+  }, [empresaActual]);
+
+  const cargarImpuestos = async () => {
+    if (!empresaActual?.pais_id) return;
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('impuestos_configuracion')
+        .select('*')
+        .eq('pais_id', empresaActual.pais_id)
+        .order('tipo', { ascending: true })
+        .order('nombre', { ascending: true });
+
+      if (error) throw error;
+
+      const impuestosFormateados = (data || []).map((imp: any) => ({
+        id: imp.id,
+        nombre: imp.nombre,
+        tipo: imp.tipo,
+        tasa: parseFloat(imp.tasa),
+        activo: imp.activo,
+        descripcion: imp.descripcion,
+      }));
+
+      setImpuestos(impuestosFormateados);
+    } catch (error) {
+      console.error('Error al cargar impuestos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!empresaActual) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-gray-500">Seleccione una empresa para continuar</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500">Cargando impuestos...</p>
       </div>
     );
   }
