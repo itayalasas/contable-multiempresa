@@ -128,10 +128,52 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
       return;
     }
 
+    // ========================================
+    // OBTENER COMISIONES ASOCIADAS A ESTA FACTURA
+    // ========================================
+    const { data: comisiones } = await supabase
+      .from('comisiones_partners')
+      .select('*, partner:partners_aliados(*)')
+      .eq('factura_venta_comision_id', factura.id);
+
+    console.log(`💰 Comisiones encontradas: ${comisiones?.length || 0}`);
+
+    // Calcular totales de comisiones
+    let totalComisionApp = 0;
+    let totalComisionMPAliado = 0;
+
+    if (comisiones && comisiones.length > 0) {
+      const { data: mpConfig } = await supabase
+        .from('impuestos_configuracion')
+        .select('tasa, configuracion')
+        .eq('pais_id', empresa.pais_id)
+        .eq('codigo', 'COMISION_MERCADOPAGO')
+        .eq('activo', true)
+        .maybeSingle();
+
+      const tasaMP = mpConfig?.tasa ? parseFloat(mpConfig.tasa) / 100 : 0.07;
+      const divisionMPAliado = mpConfig?.configuracion?.division_porcentaje_aliado || 50.0;
+
+      comisiones.forEach((com: any) => {
+        const subtotalVenta = parseFloat(com.subtotal_venta);
+        const comisionMonto = parseFloat(com.comision_monto);
+
+        totalComisionApp += comisionMonto;
+
+        // Calcular comisión MP para esta venta
+        const comisionMPTotal = subtotalVenta * tasaMP;
+        const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
+        totalComisionMPAliado += comisionMPAliado;
+      });
+
+      console.log(`   Comisión App Total: $${totalComisionApp.toFixed(2)}`);
+      console.log(`   Comisión MP Aliado Total: $${totalComisionMPAliado.toFixed(2)}`);
+    }
+
     // Generar número de asiento
     const numeroAsiento = await generarNumeroAsiento(supabase, factura.empresa_id);
 
-    // Obtener IDs de cuentas
+    // Obtener IDs de cuentas básicas
     const cuentaCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '1212');
     const cuentaVentasId = await obtenerCuentaId(supabase, factura.empresa_id, '7011');
     const cuentaIvaId = await obtenerCuentaId(supabase, factura.empresa_id, '2113');
@@ -145,7 +187,6 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
       const errorMsg = `Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`;
       console.error('❌', errorMsg);
 
-      // Guardar error en la factura
       await supabase
         .from('facturas_venta')
         .update({
@@ -155,6 +196,25 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         .eq('id', factura.id);
 
       throw new Error(errorMsg);
+    }
+
+    // Obtener IDs de cuentas de comisiones (si existen comisiones)
+    let cuentaComisionVentasId = null;
+    let cuentaComisionPorPagarId = null;
+    let cuentaComisionMPId = null;
+    let cuentaComisionMPPorPagarId = null;
+
+    if (totalComisionApp > 0 || totalComisionMPAliado > 0) {
+      cuentaComisionVentasId = await obtenerCuentaId(supabase, factura.empresa_id, '5211');
+      cuentaComisionPorPagarId = await obtenerCuentaId(supabase, factura.empresa_id, '2114');
+      cuentaComisionMPId = await obtenerCuentaId(supabase, factura.empresa_id, '5212');
+      cuentaComisionMPPorPagarId = await obtenerCuentaId(supabase, factura.empresa_id, '2115');
+
+      if (!cuentaComisionVentasId || !cuentaComisionPorPagarId || !cuentaComisionMPId || !cuentaComisionMPPorPagarId) {
+        console.warn('⚠️ Faltan cuentas de comisiones, se omitirá el registro de comisiones en el asiento');
+        totalComisionApp = 0;
+        totalComisionMPAliado = 0;
+      }
     }
 
     // Usar el usuario Sistema para operaciones automáticas
@@ -176,6 +236,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
           tipo: 'factura_venta',
           id: factura.id,
           numero: factura.numero_factura,
+          comisiones: comisiones?.length || 0,
         },
       })
       .select()
@@ -189,12 +250,12 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     console.log('✅ Asiento creado:', asiento.id);
 
     // Crear movimientos contables
-    // IMPORTANTE: Calcular IVA como diferencia para evitar descuadres por redondeo
     const total = parseFloat(factura.total);
     const subtotal = parseFloat(factura.subtotal);
-    const iva = total - subtotal; // ✅ Calculado como diferencia para cuadrar perfectamente
+    const iva = total - subtotal;
 
     const movimientos = [
+      // DEBE: Cuentas por Cobrar (el total que el cliente debe pagar)
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaCobrarId,
@@ -203,6 +264,7 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         credito: 0,
         descripcion: `Factura ${factura.numero_factura} - ${clienteNombre}`,
       },
+      // HABER: Ventas (subtotal sin IVA)
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaVentasId,
@@ -211,15 +273,61 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
         credito: subtotal,
         descripcion: `Factura ${factura.numero_factura} - ${clienteNombre}`,
       },
+      // HABER: IVA por Pagar
       {
         asiento_id: asiento.id,
         cuenta_id: cuentaIvaId,
         cuenta: '2113 - IVA por Pagar',
         debito: 0,
-        credito: iva, // ✅ Usa el IVA calculado como diferencia
+        credito: iva,
         descripcion: `IVA Factura ${factura.numero_factura}`,
       },
     ];
+
+    // AGREGAR MOVIMIENTOS DE COMISIONES SI EXISTEN
+    if (totalComisionApp > 0 && cuentaComisionVentasId && cuentaComisionPorPagarId) {
+      // DEBE: Gasto por Comisiones
+      movimientos.push({
+        asiento_id: asiento.id,
+        cuenta_id: cuentaComisionVentasId,
+        cuenta: '5211 - Comisiones de Ventas',
+        debito: totalComisionApp,
+        credito: 0,
+        descripcion: `Comisión partners - Factura ${factura.numero_factura}`,
+      });
+
+      // HABER: Comisiones por Pagar
+      movimientos.push({
+        asiento_id: asiento.id,
+        cuenta_id: cuentaComisionPorPagarId,
+        cuenta: '2114 - Comisiones por Pagar - Partners',
+        debito: 0,
+        credito: totalComisionApp,
+        descripcion: `Comisión por pagar - Factura ${factura.numero_factura}`,
+      });
+    }
+
+    if (totalComisionMPAliado > 0 && cuentaComisionMPId && cuentaComisionMPPorPagarId) {
+      // DEBE: Gasto por Comisión MercadoPago
+      movimientos.push({
+        asiento_id: asiento.id,
+        cuenta_id: cuentaComisionMPId,
+        cuenta: '5212 - Comisiones MercadoPago',
+        debito: totalComisionMPAliado,
+        credito: 0,
+        descripcion: `Comisión MP aliado - Factura ${factura.numero_factura}`,
+      });
+
+      // HABER: Comisión MercadoPago por Pagar
+      movimientos.push({
+        asiento_id: asiento.id,
+        cuenta_id: cuentaComisionMPPorPagarId,
+        cuenta: '2115 - Comisiones MercadoPago por Pagar',
+        debito: 0,
+        credito: totalComisionMPAliado,
+        descripcion: `Comisión MP por pagar - Factura ${factura.numero_factura}`,
+      });
+    }
 
     const { error: movError } = await supabase
       .from('movimientos_contables')
@@ -240,6 +348,8 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
 
       return;
     }
+
+    console.log(`✅ ${movimientos.length} movimientos contables creados`);
 
     // Marcar como exitoso
     await supabase
