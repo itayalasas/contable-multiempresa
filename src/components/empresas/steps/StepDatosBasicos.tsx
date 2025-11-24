@@ -53,10 +53,15 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
 
       console.log('🌍 Cargando datos para:', countryName, '(', countryIso2, ')');
 
-      // 1. Cargar ciudades desde API externa
-      const citiesData = await getCitiesByCountry(countryIso2);
-      setCities(citiesData);
-      console.log('✅ Ciudades cargadas:', citiesData.length);
+      // 1. Intentar cargar ciudades desde API externa (opcional)
+      try {
+        const citiesData = await getCitiesByCountry(countryIso2);
+        setCities(citiesData);
+        console.log('✅ Ciudades cargadas:', citiesData.length);
+      } catch (error) {
+        console.warn('⚠️ API de ciudades no disponible, continuando sin ciudades');
+        setCities([]);
+      }
 
       // 2. Buscar país en Supabase por nombre
       const paisSupabase = await paisesSupabaseService.getPaisByNombre(countryName);
@@ -67,16 +72,23 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
         // Actualizar el pais_id en el formulario
         onChange({ ...data, pais_id: paisSupabase.id });
 
-        // 3. Cargar tipos de contribuyente usando el pais_id de Supabase
-        const tipos = await nomencladoresUruguayService.getTiposContribuyente(paisSupabase.id);
-        setTiposContribuyente(tipos);
-        console.log('✅ Tipos de contribuyente cargados:', tipos.length);
+        // 3. Intentar cargar tipos de contribuyente (opcional)
+        try {
+          const tipos = await nomencladoresUruguayService.getTiposContribuyente(paisSupabase.id);
+          setTiposContribuyente(tipos);
+          console.log('✅ Tipos de contribuyente cargados:', tipos.length);
+        } catch (error) {
+          console.warn('⚠️ Tipos de contribuyente no disponibles, usando valores por defecto');
+          // Usar tipos de contribuyente por defecto
+          setTiposContribuyente([
+            { id: 'default-sa', codigo: 'SA', nombre: 'Sociedad Anónima', activo: true, fecha_creacion: new Date().toISOString() },
+            { id: 'default-srl', codigo: 'SRL', nombre: 'Sociedad de Responsabilidad Limitada', activo: true, fecha_creacion: new Date().toISOString() },
+            { id: 'default-uni', codigo: 'UNI', nombre: 'Unipersonal', activo: true, fecha_creacion: new Date().toISOString() },
+          ]);
+        }
       } else {
         console.warn('⚠️ País no encontrado en Supabase:', countryName);
-        console.log('💡 Cargando todos los tipos de contribuyente...');
-        const tipos = await nomencladoresUruguayService.getTiposContribuyente();
-        setTiposContribuyente(tipos);
-        console.log('✅ Tipos de contribuyente cargados (todos):', tipos.length);
+        setTiposContribuyente([]);
       }
     } catch (error) {
       console.error('❌ Error cargando datos del país:', error);
@@ -309,16 +321,19 @@ export const StepDatosBasicos: React.FC<StepDatosBasicosProps> = ({ data, onChan
             />
           </div>
 
-          {/* Ciudad - Searchable Select */}
-          <SearchableSelect
-            label="Ciudad"
-            options={cityOptions}
-            value={data.ciudad || ''}
-            onChange={(value) => handleChange('ciudad', value)}
-            placeholder="Buscar ciudad..."
-            loading={loadingCities}
-            disabled={!data.pais_iso2}
-          />
+          {/* Ciudad */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ciudad
+            </label>
+            <input
+              type="text"
+              value={data.ciudad || ''}
+              onChange={(e) => handleChange('ciudad', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Ingrese la ciudad"
+            />
+          </div>
         </div>
       </div>
 
