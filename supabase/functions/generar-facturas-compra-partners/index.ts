@@ -291,7 +291,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             moneda: 'UYU',
             observaciones: `Factura de compra: ${facturaCompra.serie}-${facturaCompra.numero_factura}`,
             referencia: facturaCompra.id,
-            creado_por: 'system',
+            creado_por: null,
           })
           .select()
           .single();
