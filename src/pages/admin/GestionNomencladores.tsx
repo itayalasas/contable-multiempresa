@@ -24,7 +24,6 @@ import { NomencladorModal } from '../../components/admin/NomencladorModal';
 type NomencladorTipo =
   | 'tipo_documento_identidad'
   | 'tipo_documento_factura'
-  | 'tipo_impuesto'
   | 'forma_pago'
   | 'tipo_moneda'
   | 'banco'
@@ -52,13 +51,6 @@ const TABS: TabConfig[] = [
     icon: FileText,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50'
-  },
-  {
-    id: 'tipo_impuesto',
-    label: 'Impuestos',
-    icon: Percent,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50'
   },
   {
     id: 'forma_pago',
@@ -96,14 +88,16 @@ function GestionNomencladores() {
   const {
     tiposDocumentoIdentidad,
     tiposDocumentoFactura,
-    tiposImpuesto,
     formasPago,
     tiposMovimientoTesoreria,
     tiposMoneda,
     bancos,
     loading,
     estadisticas,
-    recargarDatos
+    recargarDatos,
+    guardarNomenclador,
+    actualizarNomenclador,
+    eliminarNomenclador
   } = useNomencladoresAdmin(paisActual?.id);
 
   const [activeTab, setActiveTab] = useState<NomencladorTipo>('banco');
@@ -149,7 +143,7 @@ function GestionNomencladores() {
       `el ${getTabConfig(activeTab).label.toLowerCase()} "${item.nombre || item.codigo}"`,
       async () => {
         try {
-          // TODO: Implementar eliminación
+          await eliminarNomenclador(activeTab, item.id);
           showSuccess('Eliminado', 'El elemento ha sido eliminado exitosamente');
           await recargarDatos();
         } catch (error) {
@@ -161,11 +155,13 @@ function GestionNomencladores() {
 
   const handleGuardar = async (data: any) => {
     try {
-      // TODO: Implementar guardado
-      showSuccess(
-        selectedItem ? 'Actualizado' : 'Creado',
-        `El elemento ha sido ${selectedItem ? 'actualizado' : 'creado'} exitosamente`
-      );
+      if (selectedItem) {
+        await actualizarNomenclador(activeTab, selectedItem.id, data);
+        showSuccess('Actualizado', 'El elemento ha sido actualizado exitosamente');
+      } else {
+        await guardarNomenclador(activeTab, data);
+        showSuccess('Creado', 'El elemento ha sido creado exitosamente');
+      }
       setShowModal(false);
       await recargarDatos();
     } catch (error) {
@@ -183,8 +179,6 @@ function GestionNomencladores() {
         return tiposDocumentoIdentidad;
       case 'tipo_documento_factura':
         return tiposDocumentoFactura;
-      case 'tipo_impuesto':
-        return tiposImpuesto;
       case 'forma_pago':
         return formasPago;
       case 'tipo_moneda':

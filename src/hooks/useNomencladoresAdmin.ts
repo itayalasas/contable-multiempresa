@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  TipoDocumentoIdentidad, 
+import {
+  TipoDocumentoIdentidad,
   TipoDocumentoFactura,
   TipoImpuesto,
   FormaPago,
@@ -8,8 +8,7 @@ import {
   TipoMoneda,
   Banco
 } from '../types/nomencladores';
-import { NomencladoresService } from '../services/firebase/nomencladores';
-import { SeedDataNomencladoresService } from '../services/firebase/seedDataNomencladores';
+import { nomencladoresSupabaseService } from '../services/supabase/nomencladores';
 
 export const useNomencladoresAdmin = (paisId: string | undefined) => {
   const [tiposDocumentoIdentidad, setTiposDocumentoIdentidad] = useState<TipoDocumentoIdentidad[]>([]);
@@ -28,54 +27,69 @@ export const useNomencladoresAdmin = (paisId: string | undefined) => {
     porPais: Record<string, number>;
   } | null>(null);
 
-  // Cargar datos inicialmente
   const cargarDatos = useCallback(async () => {
     if (!paisId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('🔄 Cargando nomencladores para país:', paisId);
 
-      // Los nomencladores se cargan desde Supabase, usar datos mock temporalmente
-      // TODO: Migrar a servicio de Supabase
-      const tiposDocIdentidad = NomencladoresService.getMockTiposDocumentoIdentidad(paisId);
-      const tiposDocFactura = NomencladoresService.getMockTiposDocumentoFactura(paisId);
-      const tiposImp = NomencladoresService.getMockTiposImpuesto(paisId);
-      const formasDePago = NomencladoresService.getMockFormasPago(paisId);
-      const tiposMovTesoreria = NomencladoresService.getMockTiposMovimientoTesoreria(paisId);
-      const tiposMon = NomencladoresService.getMockTiposMoneda(paisId);
-      const bancosData = NomencladoresService.getMockBancos(paisId);
-      const stats = await SeedDataNomencladoresService.getEstadisticasNomencladores();
-      
-      // Eliminar duplicados por ID
-      const uniqueTiposDocIdentidad = removeDuplicatesById(tiposDocIdentidad);
-      const uniqueTiposDocFactura = removeDuplicatesById(tiposDocFactura);
-      const uniqueTiposImp = removeDuplicatesById(tiposImp);
-      const uniqueFormasDePago = removeDuplicatesById(formasDePago);
-      const uniqueTiposMovTesoreria = removeDuplicatesById(tiposMovTesoreria);
-      const uniqueTiposMon = removeDuplicatesById(tiposMon);
-      const uniqueBancos = removeDuplicatesById(bancosData);
-      
-      console.log(`✅ Datos cargados y filtrados: 
-        - ${uniqueTiposDocIdentidad.length} tipos de documento
-        - ${uniqueTiposDocFactura.length} tipos de factura
-        - ${uniqueTiposImp.length} tipos de impuesto
-        - ${uniqueFormasDePago.length} formas de pago
-        - ${uniqueTiposMon.length} tipos de moneda
-        - ${uniqueBancos.length} bancos
-        - ${uniqueTiposMovTesoreria.length} tipos de movimiento de tesorería
+      console.log('🔄 Cargando nomencladores desde Supabase para país:', paisId);
+
+      const [
+        tiposDocIdentidad,
+        tiposDocFactura,
+        tiposImp,
+        formasDePago,
+        tiposMovTesoreria,
+        tiposMon,
+        bancosData
+      ] = await Promise.all([
+        nomencladoresSupabaseService.getTiposDocumentoIdentidad(paisId),
+        nomencladoresSupabaseService.getTiposDocumentoFactura(paisId),
+        nomencladoresSupabaseService.getTiposImpuesto(paisId),
+        nomencladoresSupabaseService.getFormasPago(paisId),
+        nomencladoresSupabaseService.getTiposMovimiento(paisId),
+        nomencladoresSupabaseService.getTiposMoneda(paisId),
+        nomencladoresSupabaseService.getBancos(paisId)
+      ]);
+
+      console.log(`✅ Datos cargados desde Supabase:
+        - ${tiposDocIdentidad.length} tipos de documento
+        - ${tiposDocFactura.length} tipos de factura
+        - ${tiposImp.length} tipos de impuesto
+        - ${formasDePago.length} formas de pago
+        - ${tiposMon.length} tipos de moneda
+        - ${bancosData.length} bancos
+        - ${tiposMovTesoreria.length} tipos de movimiento de tesorería
       `);
-      
-      setTiposDocumentoIdentidad(uniqueTiposDocIdentidad);
-      setTiposDocumentoFactura(uniqueTiposDocFactura);
-      setTiposImpuesto(uniqueTiposImp);
-      setFormasPago(uniqueFormasDePago);
-      setTiposMovimientoTesoreria(uniqueTiposMovTesoreria);
-      setTiposMoneda(uniqueTiposMon);
-      setBancos(uniqueBancos);
-      setEstadisticas(stats);
+
+      setTiposDocumentoIdentidad(tiposDocIdentidad);
+      setTiposDocumentoFactura(tiposDocFactura);
+      setTiposImpuesto(tiposImp);
+      setFormasPago(formasDePago);
+      setTiposMovimientoTesoreria(tiposMovTesoreria);
+      setTiposMoneda(tiposMon);
+      setBancos(bancosData);
+
+      setEstadisticas({
+        totalPaises: 1,
+        totalNomencladores: tiposDocIdentidad.length + tiposDocFactura.length +
+                          tiposImp.length + formasDePago.length + tiposMon.length +
+                          bancosData.length + tiposMovTesoreria.length,
+        porTipo: {
+          tipo_documento_identidad: tiposDocIdentidad.length,
+          tipo_documento_factura: tiposDocFactura.length,
+          tipo_impuesto: tiposImp.length,
+          forma_pago: formasDePago.length,
+          tipo_moneda: tiposMon.length,
+          bancos: bancosData.length,
+          tipo_movimiento_tesoreria: tiposMovTesoreria.length
+        },
+        porPais: { [paisId]: tiposDocIdentidad.length + tiposDocFactura.length +
+                             tiposImp.length + formasDePago.length + tiposMon.length +
+                             bancosData.length + tiposMovTesoreria.length }
+      });
     } catch (err) {
       console.error('❌ Error al cargar nomencladores:', err);
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -84,18 +98,28 @@ export const useNomencladoresAdmin = (paisId: string | undefined) => {
     }
   }, [paisId]);
 
-  // Función para eliminar duplicados por ID
-  const removeDuplicatesById = <T extends { id: string }>(items: T[]): T[] => {
-    const uniqueMap = new Map<string, T>();
-    items.forEach(item => {
-      if (!uniqueMap.has(item.id)) {
-        uniqueMap.set(item.id, item);
-      }
-    });
-    return Array.from(uniqueMap.values());
-  };
+  const guardarNomenclador = useCallback(
+    async (tipo: string, datos: any) => {
+      if (!paisId) throw new Error('No hay país seleccionado');
+      return await nomencladoresSupabaseService.crearNomenclador(tipo, paisId, datos);
+    },
+    [paisId]
+  );
 
-  // Cargar datos cuando cambie el país
+  const actualizarNomenclador = useCallback(
+    async (tipo: string, id: string, datos: any) => {
+      return await nomencladoresSupabaseService.actualizarNomenclador(tipo, id, datos);
+    },
+    []
+  );
+
+  const eliminarNomenclador = useCallback(
+    async (tipo: string, id: string) => {
+      return await nomencladoresSupabaseService.eliminarNomenclador(tipo, id);
+    },
+    []
+  );
+
   useEffect(() => {
     if (paisId) {
       cargarDatos();
@@ -103,7 +127,6 @@ export const useNomencladoresAdmin = (paisId: string | undefined) => {
   }, [paisId, cargarDatos]);
 
   return {
-    // Estado
     tiposDocumentoIdentidad,
     tiposDocumentoFactura,
     tiposImpuesto,
@@ -114,9 +137,10 @@ export const useNomencladoresAdmin = (paisId: string | undefined) => {
     loading,
     error,
     estadisticas,
-    
-    // Utilidades
     recargarDatos: cargarDatos,
-    limpiarError: () => setError(null)
+    limpiarError: () => setError(null),
+    guardarNomenclador,
+    actualizarNomenclador,
+    eliminarNomenclador
   };
 };

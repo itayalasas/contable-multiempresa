@@ -164,5 +164,98 @@ export const nomencladoresSupabaseService = {
       swift: item.swift,
       activo: item.activo
     }));
+  },
+
+  async crearNomenclador(
+    tipo: string,
+    paisId: string,
+    datos: any
+  ): Promise<any> {
+    const tablaMap: Record<string, string> = {
+      tipo_documento_identidad: 'tipo_documento_identidad',
+      tipo_documento_factura: 'tipo_documento_factura',
+      forma_pago: 'forma_pago',
+      tipo_moneda: 'tipo_moneda',
+      banco: 'bancos',
+      tipo_movimiento_tesoreria: 'tipo_movimiento_tesoreria'
+    };
+
+    const tabla = tablaMap[tipo];
+    if (!tabla) throw new Error(`Tipo de nomenclador no válido: ${tipo}`);
+
+    const payload = {
+      pais_id: paisId,
+      codigo: datos.codigo,
+      nombre: datos.nombre,
+      descripcion: datos.descripcion || null,
+      activo: datos.activo !== false,
+      ...datos
+    };
+
+    const { data, error } = await supabase
+      .from(tabla)
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async actualizarNomenclador(
+    tipo: string,
+    id: string,
+    datos: any
+  ): Promise<any> {
+    const tablaMap: Record<string, string> = {
+      tipo_documento_identidad: 'tipo_documento_identidad',
+      tipo_documento_factura: 'tipo_documento_factura',
+      forma_pago: 'forma_pago',
+      tipo_moneda: 'tipo_moneda',
+      banco: 'bancos',
+      tipo_movimiento_tesoreria: 'tipo_movimiento_tesoreria'
+    };
+
+    const tabla = tablaMap[tipo];
+    if (!tabla) throw new Error(`Tipo de nomenclador no válido: ${tipo}`);
+
+    const payload = {
+      codigo: datos.codigo,
+      nombre: datos.nombre,
+      descripcion: datos.descripcion || null,
+      activo: datos.activo,
+      ...datos
+    };
+
+    const { data, error } = await supabase
+      .from(tabla)
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async eliminarNomenclador(tipo: string, id: string): Promise<void> {
+    const tablaMap: Record<string, string> = {
+      tipo_documento_identidad: 'tipo_documento_identidad',
+      tipo_documento_factura: 'tipo_documento_factura',
+      forma_pago: 'forma_pago',
+      tipo_moneda: 'tipo_moneda',
+      banco: 'bancos',
+      tipo_movimiento_tesoreria: 'tipo_movimiento_tesoreria'
+    };
+
+    const tabla = tablaMap[tipo];
+    if (!tabla) throw new Error(`Tipo de nomenclador no válido: ${tipo}`);
+
+    const { error } = await supabase
+      .from(tabla)
+      .update({ activo: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 };

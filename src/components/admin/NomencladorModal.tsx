@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, CheckCircle } from 'lucide-react';
 
 interface NomencladorModalProps {
-  isOpen: boolean;
   onClose: () => void;
   onSave: (data: any) => Promise<void>;
   tipo: string;
@@ -11,7 +10,6 @@ interface NomencladorModalProps {
 }
 
 export const NomencladorModal: React.FC<NomencladorModalProps> = ({
-  isOpen,
   onClose,
   onSave,
   tipo,
@@ -45,32 +43,30 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
         paisId: paisId
       };
       
-      // Agregar campos específicos según tipo
       switch (tipo) {
-        case 'tiposImpuesto':
-          defaultData.porcentaje = 0;
-          defaultData.tipo = 'IVA';
-          break;
-        case 'tiposMoneda':
+        case 'tipo_moneda':
           defaultData.simbolo = '';
           defaultData.esPrincipal = false;
           break;
-        case 'tiposMovimientoTesoreria':
+        case 'tipo_movimiento_tesoreria':
           defaultData.afectaSaldo = true;
           defaultData.requiereReferencia = false;
           break;
-        case 'formasPago':
+        case 'forma_pago':
           defaultData.requiereBanco = false;
           defaultData.requiereReferencia = false;
           defaultData.requiereFecha = false;
           break;
-        case 'tiposDocumentoFactura':
+        case 'tipo_documento_factura':
           defaultData.requiereImpuesto = true;
           defaultData.requiereCliente = true;
           defaultData.afectaInventario = true;
           defaultData.afectaContabilidad = true;
           defaultData.prefijo = '';
           defaultData.formato = '';
+          break;
+        case 'banco':
+          defaultData.swift = '';
           break;
       }
       
@@ -95,18 +91,15 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
 
   const getTipoNombre = () => {
     switch (tipo) {
-      case 'tiposDocumentoIdentidad': return 'Tipo de Documento de Identidad';
-      case 'tiposDocumentoFactura': return 'Tipo de Documento de Factura';
-      case 'tiposImpuesto': return 'Tipo de Impuesto';
-      case 'formasPago': return 'Forma de Pago';
-      case 'tiposMovimientoTesoreria': return 'Tipo de Movimiento de Tesorería';
-      case 'tiposMoneda': return 'Tipo de Moneda';
-      case 'bancos': return 'Banco';
+      case 'tipo_documento_identidad': return 'Tipo de Documento de Identidad';
+      case 'tipo_documento_factura': return 'Tipo de Documento de Factura';
+      case 'forma_pago': return 'Forma de Pago';
+      case 'tipo_movimiento_tesoreria': return 'Tipo de Movimiento de Tesorería';
+      case 'tipo_moneda': return 'Tipo de Moneda';
+      case 'banco': return 'Banco';
       default: return 'Nomenclador';
     }
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -169,8 +162,25 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
             />
           </div>
           
+          {/* Campo específico para Bancos */}
+          {tipo === 'banco' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Código SWIFT
+              </label>
+              <input
+                type="text"
+                value={formData.swift || ''}
+                onChange={(e) => setFormData({...formData, swift: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Ej: BROU1234"
+                disabled={saving}
+              />
+            </div>
+          )}
+
           {/* Campos específicos según tipo */}
-          {tipo === 'tiposImpuesto' && (
+          {tipo === 'tipo_impuesto' && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -210,7 +220,7 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
             </div>
           )}
           
-          {tipo === 'tiposMoneda' && (
+          {tipo === 'tipo_moneda' && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -242,7 +252,7 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
             </div>
           )}
           
-          {tipo === 'tiposMovimientoTesoreria' && (
+          {tipo === 'tipo_movimiento_tesoreria' && (
             <div className="space-y-3">
               <div className="flex items-center">
                 <input
@@ -274,7 +284,7 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
             </div>
           )}
           
-          {tipo === 'formasPago' && (
+          {tipo === 'forma_pago' && (
             <div className="space-y-3">
               <div className="flex items-center">
                 <input
@@ -320,7 +330,7 @@ export const NomencladorModal: React.FC<NomencladorModalProps> = ({
             </div>
           )}
           
-          {tipo === 'tiposDocumentoFactura' && (
+          {tipo === 'tipo_documento_factura' && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
