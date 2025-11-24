@@ -43,7 +43,7 @@ export const FacturaPagarModal: React.FC<FacturaPagarModalProps> = ({
   });
 
   const [items, setItems] = useState<ItemFactura[]>([
-    { id: '1', descripcion: '', cantidad: 1, precioUnitario: 0, descuento: 0, impuesto: 18, total: 0 }
+    { id: '1', descripcion: '', cantidad: 1, precioUnitario: 0, descuento: 0, impuesto: 0, total: 0 }
   ]);
 
   const [saving, setSaving] = useState(false);
@@ -133,7 +133,7 @@ export const FacturaPagarModal: React.FC<FacturaPagarModalProps> = ({
       cantidad: 1,
       precioUnitario: 0,
       descuento: 0,
-      impuesto: 18,
+      impuesto: 0,
       total: 0
     };
     setItems([...items, newItem]);
@@ -398,7 +398,7 @@ export const FacturaPagarModal: React.FC<FacturaPagarModalProps> = ({
                       <td className="px-4 py-2">
                         <input
                           type="number"
-                          value={item.impuesto || 18}
+                          value={item.impuesto ?? 0}
                           onChange={(e) => updateItem(index, 'impuesto', parseFloat(e.target.value) || 0)}
                           className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:ring-1 focus:ring-red-500"
                           min="0"
