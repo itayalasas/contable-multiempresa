@@ -156,7 +156,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
       try {
         const { data: comisionesPendientes } = await supabase
           .from('comisiones_partners')
-          .select('id')
+          .select('id, monto_comision')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha', periodo.fecha_inicio)
           .lte('fecha', periodo.fecha_fin)
@@ -164,12 +164,70 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
         const cantidadComisionesPendientes = comisionesPendientes?.length || 0;
         if (cantidadComisionesPendientes > 0) {
-          errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar. Ve a Compras > Comisiones Partners.`);
+          const totalPendiente = comisionesPendientes?.reduce((sum, c) => sum + parseFloat(c.monto_comision || '0'), 0) || 0;
+          errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar por $${totalPendiente.toFixed(2)}. Ve a Compras > Comisiones.`);
+        }
+
+        // Validar comisiones facturadas pero sin generar cuenta por pagar
+        const { data: comisionesFacturadas } = await supabase
+          .from('comisiones_partners')
+          .select('id, monto_comision')
+          .eq('empresa_id', empresaActual.id)
+          .gte('fecha', periodo.fecha_inicio)
+          .lte('fecha', periodo.fecha_fin)
+          .eq('estado', 'facturada');
+
+        const cantidadComisionesFacturadas = comisionesFacturadas?.length || 0;
+        if (cantidadComisionesFacturadas > 0) {
+          const totalFacturado = comisionesFacturadas?.reduce((sum, c) => sum + parseFloat(c.monto_comision || '0'), 0) || 0;
+          errores.push(`Hay ${cantidadComisionesFacturadas} comisión(es) facturada(s) pendiente(s) de generar cuenta por pagar por $${totalFacturado.toFixed(2)}. Ve a Compras > Comisiones y genera las cuentas por pagar.`);
         }
       } catch (error: any) {
         // Ignorar si la tabla no existe
         if (!error.message?.includes('does not exist')) {
           console.warn('Error validando comisiones:', error);
+        }
+      }
+
+      // Validar cuentas por cobrar pendientes
+      try {
+        const { data: cuentasPorCobrarPendientes } = await supabase
+          .from('cuentas_por_cobrar')
+          .select('id, monto_total')
+          .eq('empresa_id', empresaActual.id)
+          .gte('fecha_emision', periodo.fecha_inicio)
+          .lte('fecha_emision', periodo.fecha_fin)
+          .eq('estado', 'pendiente');
+
+        const cantidadCxCPendientes = cuentasPorCobrarPendientes?.length || 0;
+        if (cantidadCxCPendientes > 0) {
+          const totalPendiente = cuentasPorCobrarPendientes?.reduce((sum, c) => sum + parseFloat(c.monto_total || '0'), 0) || 0;
+          advertencias.push(`Hay ${cantidadCxCPendientes} cuenta(s) por cobrar pendiente(s) por $${totalPendiente.toFixed(2)}.`);
+        }
+      } catch (error: any) {
+        if (!error.message?.includes('does not exist')) {
+          console.warn('Error validando cuentas por cobrar:', error);
+        }
+      }
+
+      // Validar cuentas por pagar pendientes
+      try {
+        const { data: cuentasPorPagarPendientes } = await supabase
+          .from('cuentas_por_pagar')
+          .select('id, monto_total')
+          .eq('empresa_id', empresaActual.id)
+          .gte('fecha_emision', periodo.fecha_inicio)
+          .lte('fecha_emision', periodo.fecha_fin)
+          .eq('estado', 'pendiente');
+
+        const cantidadCxPPendientes = cuentasPorPagarPendientes?.length || 0;
+        if (cantidadCxPPendientes > 0) {
+          const totalPendiente = cuentasPorPagarPendientes?.reduce((sum, c) => sum + parseFloat(c.monto_total || '0'), 0) || 0;
+          advertencias.push(`Hay ${cantidadCxPPendientes} cuenta(s) por pagar pendiente(s) por $${totalPendiente.toFixed(2)}.`);
+        }
+      } catch (error: any) {
+        if (!error.message?.includes('does not exist')) {
+          console.warn('Error validando cuentas por pagar:', error);
         }
       }
 
