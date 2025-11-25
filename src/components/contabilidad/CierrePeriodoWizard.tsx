@@ -154,38 +154,50 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
       // Validar comisiones pendientes (solo si la tabla existe)
       try {
-        const { data: comisionesPendientes } = await supabase
+        const { data: comisionesPendientes, error: errorPendientes } = await supabase
           .from('comisiones_partners')
-          .select('id, monto_comision')
+          .select('id, comision_monto')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha', periodo.fecha_inicio)
           .lte('fecha', periodo.fecha_fin)
-          .eq('estado', 'pendiente');
+          .eq('estado_comision', 'pendiente');
 
-        const cantidadComisionesPendientes = comisionesPendientes?.length || 0;
-        if (cantidadComisionesPendientes > 0) {
-          const totalPendiente = comisionesPendientes?.reduce((sum, c) => sum + parseFloat(c.monto_comision || '0'), 0) || 0;
-          errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar por $${totalPendiente.toFixed(2)}. Ve a Compras > Comisiones.`);
+        if (errorPendientes) {
+          console.error('Error al consultar comisiones pendientes:', errorPendientes);
+          errores.push(`Error al validar comisiones pendientes: ${errorPendientes.message}`);
+        } else {
+          const cantidadComisionesPendientes = comisionesPendientes?.length || 0;
+          if (cantidadComisionesPendientes > 0) {
+            const totalPendiente = comisionesPendientes?.reduce((sum, c) => sum + parseFloat(c.comision_monto || '0'), 0) || 0;
+            errores.push(`Hay ${cantidadComisionesPendientes} comisión(es) pendiente(s) de facturar por $${totalPendiente.toFixed(2)}. Ve a Compras > Comisiones.`);
+          }
         }
 
         // Validar comisiones facturadas pero sin generar cuenta por pagar
-        const { data: comisionesFacturadas } = await supabase
+        const { data: comisionesFacturadas, error: errorFacturadas } = await supabase
           .from('comisiones_partners')
-          .select('id, monto_comision')
+          .select('id, comision_monto')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha', periodo.fecha_inicio)
           .lte('fecha', periodo.fecha_fin)
-          .eq('estado', 'facturada');
+          .eq('estado_comision', 'facturada')
+          .is('factura_compra_id', null);
 
-        const cantidadComisionesFacturadas = comisionesFacturadas?.length || 0;
-        if (cantidadComisionesFacturadas > 0) {
-          const totalFacturado = comisionesFacturadas?.reduce((sum, c) => sum + parseFloat(c.monto_comision || '0'), 0) || 0;
-          errores.push(`Hay ${cantidadComisionesFacturadas} comisión(es) facturada(s) pendiente(s) de generar cuenta por pagar por $${totalFacturado.toFixed(2)}. Ve a Compras > Comisiones y genera las cuentas por pagar.`);
+        if (errorFacturadas) {
+          console.error('Error al consultar comisiones facturadas:', errorFacturadas);
+          errores.push(`Error al validar comisiones facturadas: ${errorFacturadas.message}`);
+        } else {
+          const cantidadComisionesFacturadas = comisionesFacturadas?.length || 0;
+          if (cantidadComisionesFacturadas > 0) {
+            const totalFacturado = comisionesFacturadas?.reduce((sum, c) => sum + parseFloat(c.comision_monto || '0'), 0) || 0;
+            errores.push(`Hay ${cantidadComisionesFacturadas} comisión(es) facturada(s) pendiente(s) de generar cuenta por pagar por $${totalFacturado.toFixed(2)}. Ve a Compras > Comisiones y genera las cuentas por pagar.`);
+          }
         }
       } catch (error: any) {
         // Ignorar si la tabla no existe
         if (!error.message?.includes('does not exist')) {
-          console.warn('Error validando comisiones:', error);
+          console.error('Error validando comisiones:', error);
+          errores.push(`Error inesperado al validar comisiones: ${error.message || 'Error desconocido'}`);
         }
       }
 
