@@ -131,6 +131,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
     console.log('🔍 Buscando comisiones con criterios:');
     console.log('  - empresa_id:', empresaId);
     console.log('  - estado_comision: facturada');
+    console.log('  - estado_pago: facturada (NO pendiente NI pagada)');
     console.log('  - factura_venta_comision_id: NOT NULL');
     console.log('  - factura_compra_id: NULL');
     if (partnerId) console.log('  - partner_id:', partnerId);
@@ -143,6 +144,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
       `)
       .eq('empresa_id', empresaId)
       .eq('estado_comision', 'facturada')
+      .eq('estado_pago', 'facturada')
       .not('factura_venta_comision_id', 'is', null)
       .is('factura_compra_id', null);
 
