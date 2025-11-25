@@ -230,9 +230,16 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
           .maybeSingle();
 
         let siguienteNumero: string;
-        if (ultimaFactura) {
-          const ultimoNum = parseInt(ultimaFactura.numero_factura);
-          siguienteNumero = String(ultimoNum + 1).padStart(8, '0');
+        if (ultimaFactura && ultimaFactura.numero_factura) {
+          // Solo parsear si el número de factura es un número válido
+          const numeroStr = String(ultimaFactura.numero_factura).trim();
+          if (/^\d+$/.test(numeroStr)) {
+            const ultimoNum = parseInt(numeroStr);
+            siguienteNumero = String(ultimoNum + 1).padStart(8, '0');
+          } else {
+            // Si no es un número válido, empezar desde 1
+            siguienteNumero = '00000001';
+          }
         } else {
           siguienteNumero = '00000001';
         }
