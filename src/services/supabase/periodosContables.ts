@@ -353,6 +353,52 @@ export const periodosContablesService = {
 
     console.log('✅ Todas las comisiones están procesadas correctamente');
 
+    // NUEVA VALIDACIÓN: Tesorería
+    console.log('Validando tesorería del período...');
+    const { data: validacionTesoreria, error: tesoreriaError } = await supabase
+      .rpc('validar_tesoreria_periodo', {
+        p_empresa_id: periodo.empresa_id,
+        p_fecha_inicio: periodo.fecha_inicio,
+        p_fecha_fin: periodo.fecha_fin
+      });
+
+    if (tesoreriaError) {
+      console.error('Error validando tesorería:', tesoreriaError);
+      throw new Error('Error al validar tesorería: ' + tesoreriaError.message);
+    }
+
+    if (validacionTesoreria && validacionTesoreria.length > 0) {
+      const resultado = validacionTesoreria[0];
+
+      if (!resultado.valido) {
+        const errores: string[] = [];
+
+        if (resultado.movimientos_sin_asiento > 0) {
+          errores.push(
+            `${resultado.movimientos_sin_asiento} movimiento(s) de tesorería sin asiento contable`
+          );
+        }
+
+        if (resultado.cuentas_descuadradas > 0) {
+          const detalles = resultado.detalles?.cuentas_problema || [];
+          const cuentasDescuadradas = detalles.map((c: any) =>
+            `${c.nombre} (${c.numero_cuenta}): Saldo actual $${c.saldo_actual} vs Calculado $${c.saldo_calculado}, Diferencia: $${c.diferencia}`
+          ).join('; ');
+
+          errores.push(
+            `${resultado.cuentas_descuadradas} cuenta(s) bancaria(s) descuadrada(s): ${cuentasDescuadradas}`
+          );
+        }
+
+        throw new Error(
+          `No se puede cerrar el período - Problemas en Tesorería: ${errores.join('. ')}. ` +
+          'Verifica que todos los movimientos bancarios estén contabilizados y los saldos cuadren.'
+        );
+      }
+    }
+
+    console.log('✅ Tesorería validada correctamente');
+
     // Validar que no hay asientos sin confirmar
     const { data: asientosNoConfirmados, error: asientosError } = await supabase
       .from('asientos_contables')
@@ -375,6 +421,24 @@ export const periodosContablesService = {
     // Reutilizar los totales ya calculados en la validación de cuadratura
     const cantidadAsientos = asientosConfirmados ? asientosConfirmados.length : 0;
 
+    // Generar snapshots de saldos bancarios
+    console.log('Generando snapshots de saldos bancarios...');
+    const { data: snapshotsResult, error: snapshotsError } = await supabase
+      .rpc('generar_snapshots_saldos_periodo', {
+        p_periodo_id: periodoId,
+        p_empresa_id: periodo.empresa_id,
+        p_fecha_inicio: periodo.fecha_inicio,
+        p_fecha_fin: periodo.fecha_fin
+      });
+
+    if (snapshotsError) {
+      console.error('Error generando snapshots:', snapshotsError);
+      throw new Error('Error al generar snapshots de saldos: ' + snapshotsError.message);
+    }
+
+    const snapshotsCreados = snapshotsResult || 0;
+    console.log(`✅ ${snapshotsCreados} snapshot(s) de saldos bancarios generados`);
+
     // Actualizar el período
     const { error: updateError } = await supabase
       .from('periodos_contables')
@@ -386,6 +450,8 @@ export const periodosContablesService = {
         total_debitos: totalDebitos,
         total_creditos: totalCreditos,
         cantidad_asientos: cantidadAsientos,
+        tesoreria_cerrada: true,
+        fecha_cierre_tesoreria: new Date().toISOString(),
         fecha_modificacion: new Date().toISOString()
       })
       .eq('id', periodoId);

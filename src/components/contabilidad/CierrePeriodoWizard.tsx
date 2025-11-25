@@ -35,6 +35,9 @@ interface ValidacionResult {
   facturasVentaSinContabilizar?: number;
   facturasCompraSinContabilizar?: number;
   facturasConError?: number;
+  movimientosSinAsiento?: number;
+  cuentasDescuadradas?: number;
+  totalMovimientos?: number;
 }
 
 type Step = 'validacion' | 'ajustes' | 'confirmar' | 'cerrar';
@@ -170,6 +173,43 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         }
       }
 
+      // Validar tesorería
+      let movimientosSinAsiento = 0;
+      let cuentasDescuadradas = 0;
+      let totalMovimientos = 0;
+
+      try {
+        const { data: validacionTesoreria } = await supabase
+          .rpc('validar_tesoreria_periodo', {
+            p_empresa_id: empresaActual.id,
+            p_fecha_inicio: periodo.fecha_inicio,
+            p_fecha_fin: periodo.fecha_fin
+          });
+
+        if (validacionTesoreria && validacionTesoreria.length > 0) {
+          const resultado = validacionTesoreria[0];
+          movimientosSinAsiento = resultado.movimientos_sin_asiento || 0;
+          cuentasDescuadradas = resultado.cuentas_descuadradas || 0;
+          totalMovimientos = resultado.total_movimientos || 0;
+
+          if (movimientosSinAsiento > 0) {
+            errores.push(`Hay ${movimientosSinAsiento} movimiento(s) de tesorería sin asiento contable`);
+          }
+
+          if (cuentasDescuadradas > 0) {
+            const detalles = resultado.detalles?.cuentas_problema || [];
+            const cuentasProblema = detalles.slice(0, 3).map((c: any) =>
+              `${c.nombre} (Dif: $${c.diferencia})`
+            ).join(', ');
+            errores.push(
+              `Hay ${cuentasDescuadradas} cuenta(s) bancaria(s) descuadrada(s): ${cuentasProblema}${cuentasDescuadradas > 3 ? '...' : ''}`
+            );
+          }
+        }
+      } catch (error: any) {
+        console.warn('Error validando tesorería:', error);
+      }
+
       setValidacion({
         valido: errores.length === 0,
         errores,
@@ -180,7 +220,10 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         totalCreditos,
         facturasVentaSinContabilizar,
         facturasCompraSinContabilizar,
-        facturasConError: cantidadFacturasConError
+        facturasConError: cantidadFacturasConError,
+        movimientosSinAsiento,
+        cuentasDescuadradas,
+        totalMovimientos
       });
     } catch (error) {
       console.error('Error validando período:', error);
