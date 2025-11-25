@@ -471,12 +471,15 @@ export default function Facturas() {
       return;
     }
 
-    const confirmar = window.confirm(
-      `¿Deseas generar asientos contables para ${facturasSinAsiento.length} factura(s)?\n\n` +
-      `Esto puede tomar unos momentos.`
+    mostrarConfirmacion(
+      'Generación de Asientos Contables',
+      `Se generarán asientos contables para ${facturasSinAsiento.length} factura(s) pendiente(s).\n\n` +
+      `Este proceso puede tardar algunos momentos. ¿Desea continuar?`,
+      () => ejecutarRegeneracionMasiva(facturasSinAsiento)
     );
+  };
 
-    if (!confirmar) return;
+  const ejecutarRegeneracionMasiva = async (facturasSinAsiento: FacturaVenta[]) => {
 
     setRegenerandoAsiento('masivo');
     let exitosos = 0;
