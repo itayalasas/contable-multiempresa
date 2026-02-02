@@ -153,7 +153,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: empresa } = await supabase
       .from('empresas')
-      .select('pais_id, razon_social, rut, numero_documento, numero_identificacion, direccion, telefono, email')
+      .select('pais_id, razon_social, numero_identificacion, direccion, telefono, email, nombre')
       .eq('id', factura.empresa_id)
       .maybeSingle();
 
@@ -449,8 +449,8 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
 
   // Construir datos del emisor (empresa)
   const issuer = {
-    razon_social: empresa?.razon_social || 'Empresa',
-    rut: empresa?.rut || empresa?.numero_identificacion || empresa?.numero_documento || '',
+    razon_social: empresa?.razon_social || empresa?.nombre || 'Empresa',
+    rut: empresa?.numero_identificacion || '',
     serie: factura.serie || factura.dgi_serie || 'A',
     fecha_emision: factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString()),
     moneda: factura.moneda || 'UYU',

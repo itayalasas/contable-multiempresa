@@ -347,10 +347,11 @@ async function handleOrder(
     const esEnCentavos = payload.metadata?.amounts_in_cents === true || payload.order.amounts_in_cents === true;
     const divisor = esEnCentavos ? 100 : 1;
 
-    const subtotal = (payload.order.subtotal || 0) / divisor;
-    const descuento = (payload.order.discount || 0) / divisor;
-    const impuestos = (payload.order.tax || 0) / divisor;
+    // Los totales de Dogcatify vienen CON IVA INCLUIDO
     const total = (payload.order.total || 0) / divisor;
+    const impuestos = (payload.order.tax || 0) / divisor;
+    const subtotal = total - impuestos; // Subtotal sin IVA
+    const descuento = (payload.order.discount || 0) / divisor;
 
     const estadosPagados = ['paid', 'approved', 'completed', 'confirmed'];
     const estaPagada = estadosPagados.includes(payload.order.payment_status?.toLowerCase() || '');
@@ -406,8 +407,16 @@ async function handleOrder(
     for (let i = 0; i < payload.items.length; i++) {
       const item = payload.items[i];
 
-      const itemUnitPrice = (item.unit_price || 0) / divisor;
-      const itemSubtotal = item.subtotal ? item.subtotal / divisor : (item.quantity * itemUnitPrice);
+      // Los precios de Dogcatify vienen CON IVA INCLUIDO
+      const itemTotalConIva = (item.total || 0) / divisor;
+      const itemTaxRate = item.tax_rate || 0.22;
+
+      // Calcular base imponible (precio sin IVA)
+      const itemSubtotalSinIva = itemTotalConIva / (1 + itemTaxRate);
+      const itemTaxAmount = itemTotalConIva - itemSubtotalSinIva;
+
+      // Precio unitario sin IVA
+      const itemUnitPrice = itemSubtotalSinIva / item.quantity;
 
       // Calcular descuento: puede venir como monto o como porcentaje
       let itemDescuento = 0;
@@ -416,16 +425,14 @@ async function handleOrder(
       if (item.discount && item.discount > 0) {
         // Si viene descuento como monto
         itemDescuento = item.discount / divisor;
-        itemDescuentoPorcentaje = itemSubtotal > 0 ? (itemDescuento / itemSubtotal) * 100 : 0;
+        itemDescuentoPorcentaje = itemSubtotalSinIva > 0 ? (itemDescuento / itemSubtotalSinIva) * 100 : 0;
       } else if (item.discount_percentage && item.discount_percentage > 0) {
         // Si viene descuento como porcentaje
         itemDescuentoPorcentaje = item.discount_percentage;
-        itemDescuento = itemSubtotal * (itemDescuentoPorcentaje / 100);
+        itemDescuento = itemSubtotalSinIva * (itemDescuentoPorcentaje / 100);
       }
 
-      const itemTaxRate = item.tax_rate || 0.22;
-      const itemTaxAmount = item.tax_amount ? item.tax_amount / divisor : (itemSubtotal - itemDescuento) * itemTaxRate;
-      const itemTotal = (item.total || 0) / divisor;
+      const itemTotal = itemTotalConIva;
 
       const { error: itemError } = await supabase
         .from('facturas_venta_items')
@@ -440,7 +447,7 @@ async function handleOrder(
           descuento_monto: itemDescuento.toFixed(2),
           tasa_iva: itemTaxRate.toFixed(4),
           monto_iva: itemTaxAmount.toFixed(2),
-          subtotal: itemSubtotal.toFixed(2),
+          subtotal: itemSubtotalSinIva.toFixed(2),
           total: itemTotal.toFixed(2),
           metadata: {
             item_id: item.item_id,

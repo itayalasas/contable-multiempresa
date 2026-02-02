@@ -1,0 +1,54 @@
+{
+  "event": "order.created",
+  "empresa_id": "a2fb84eb-c91c-4f3e-88c3-4a9c3420009e",
+  "timestamp": "2025-10-21T14:30:00Z",
+  "order": {
+    "order_id": "effebf29-6e2f-48e8-86b7-8b58ae25f744",
+    "order_number": "ORD-TEST-012",
+    "created_at": "2025-10-21T14:30:00Z",
+    "status": "completed",
+    "total": 1586.00,
+    "subtotal": 1300.00,
+    "tax": 286.00,
+    "currency": "UYU",
+    "payment_status": "paid"
+  },
+  "customer": {
+    "customer_id": "CUST-TEST-001",
+    "name": "Cliente de Prueba",
+    "email": "prueba@dogcatify.com",
+    "phone": "+598 99 123 456"
+  },
+  "items": [
+    {
+      "sku": "COLLAR-PERRO-M",
+      "name": "Collar para Perro Mediano",
+      "quantity": 2,
+      "unit_price": 500.00,
+      "total": 1220.00,
+      "partner": {
+        "partner_id": "PARTNER-VET-CENTRO",
+        "name": "Veterinaria Centro",
+        "email": "admin@vetcentro.com.uy",
+        "document_type": "RUT",
+        "document_number": "217654320018",
+        "commission_percentage": 15.00
+      }
+    },
+    {
+      "sku": "JUGUETE-GATO-001",
+      "name": "Juguete para Gatos",
+      "quantity": 1,
+      "unit_price": 300.00,
+      "total": 366.00,
+      "partner": {
+        "partner_id": "PARTNER-PETSHOP-SUR",
+        "name": "Pet Shop del Sur",
+        "email": "ventas@petshopsur.com.uy",
+        "document_type": "RUT",
+        "document_number": "215432190017",
+        "commission_percentage": 12.00
+      }
+    }
+  ]
+}
