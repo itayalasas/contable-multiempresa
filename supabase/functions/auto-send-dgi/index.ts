@@ -207,6 +207,20 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ [AutoSendDGI] Factura enviada exitosamente a DGI');
 
+    // Enviar PDF por email al cliente si tiene email
+    if (cliente.email) {
+      console.log('📧 [AutoSendDGI] Enviando PDF por email a:', cliente.email);
+      try {
+        await enviarPDFPorEmail(factura, items, cliente, config, resultadoDGI, empresa);
+        console.log('✅ [AutoSendDGI] PDF enviado exitosamente por email');
+      } catch (emailError: any) {
+        console.error('⚠️ [AutoSendDGI] Error al enviar email (no crítico):', emailError.message);
+        // No lanzamos el error, el email es complementario
+      }
+    } else {
+      console.log('ℹ️ [AutoSendDGI] Cliente sin email, no se envía PDF');
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -394,6 +408,145 @@ function determinarIndicadorFacturacion(tasaIva: string | number | null): number
   if (tasa === 0.10) { return 2; }
   else if (tasa === 0.22) { return 3; }
   else { return 4; }
+}
+
+async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, config: any, resultadoDGI: any, empresa: any): Promise<void> {
+  console.log('📧 [EmailPDF] Preparando envío de PDF por email...');
+
+  const apiUrl = Deno.env.get('DGI_PDF_EMAIL_URL') || 'https://api.flowbridge.site/functions/v1/api-gateway/8e328251-0ddd-4791-8a2f-fbead1c1a4ad';
+  const apiKey = Deno.env.get('DGI_PDF_EMAIL_KEY') || 'pub_4ad2144926ac5b6958cab586ee87ef1653db370d3cf332d5d218b86b21007173';
+
+  // Construir items para el PDF
+  const itemsPDF = items.map((item, index) => {
+    const cantidad = parseFloat(item.cantidad || 0);
+    const precioUnitario = parseFloat(item.precio_unitario || 0);
+    const tasaIva = parseFloat(item.tasa_iva || 0);
+
+    // Calcular descuento en monto
+    let descuentoMonto = 0;
+    if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
+      descuentoMonto = (precioUnitario * cantidad * parseFloat(item.descuento_porcentaje)) / 100;
+    } else if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
+      descuentoMonto = parseFloat(item.descuento_monto);
+    }
+
+    const lineSubtotal = (precioUnitario * cantidad) - descuentoMonto;
+    const iva = lineSubtotal * tasaIva;
+    const total = lineSubtotal + iva;
+
+    return {
+      numero: index + 1,
+      descripcion: item.descripcion || '',
+      cantidad: cantidad,
+      precio_unitario: precioUnitario,
+      descuento: descuentoMonto,
+      line_subtotal: lineSubtotal,
+      iva_porcentaje: tasaIva * 100,
+      iva: iva,
+      total: total
+    };
+  });
+
+  // Construir datos del emisor (empresa)
+  const issuer = {
+    razon_social: empresa?.razon_social || 'Empresa',
+    rut: empresa?.rut || empresa?.numero_documento || '',
+    serie: factura.serie || factura.dgi_serie || 'A',
+    fecha_emision: factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString()),
+    moneda: factura.moneda || 'UYU',
+    subtotal: parseFloat(factura.subtotal || 0),
+    iva: parseFloat(factura.total_iva || 0),
+    total: parseFloat(factura.total || 0),
+    numero_cfe: factura.numero_factura || '',
+    direccion: empresa?.direccion || '',
+    ciudad: empresa?.ciudad || 'Montevideo',
+    telefono: empresa?.telefono || '',
+    email: empresa?.email || ''
+  };
+
+  // Construir totales
+  const totals = {
+    subtotal: parseFloat(factura.subtotal || 0),
+    tax_label: 'IVA (22%)',
+    tax_amount: parseFloat(factura.total_iva || 0),
+    grand_total: parseFloat(factura.total || 0)
+  };
+
+  // Construir response_payload con los datos de DGI
+  const dgiData = resultadoDGI.data || {};
+  const qrCode = dgiData.qr_code || `https://dgi.gub.uy/cfe/consulta?cfe=${factura.numero_factura}&serie=${factura.serie || 'A'}&cae=${resultadoDGI.cae}`;
+
+  const responsePayload = {
+    cae: resultadoDGI.cae || dgiData.cae || dgiData.CAE || '',
+    qr_code: qrCode,
+    success: true,
+    approved: true,
+    tipo_cfe: dgiData.tipo_comprobante || '101',
+    reference: factura.numero_factura || '',
+    serie_cfe: factura.serie || factura.dgi_serie || 'A',
+    dgi_estado: 'aprobado',
+    numero_cfe: factura.numero_factura || '',
+    dgi_mensaje: resultadoDGI.mensaje || 'Comprobante aprobado correctamente',
+    dgi_id_efactura: dgiData.id || '',
+    vencimiento_cae: dgiData.vencimiento_cae || dgiData.fecha_vencimiento || '',
+    dgi_fecha_validacion: resultadoDGI.fecha || new Date().toISOString(),
+    dgi_codigo_autorizacion: resultadoDGI.cae || ''
+  };
+
+  // Datos adicionales
+  const datosAdicionales: any = {
+    forma_pago: factura.estado === 'pagada' ? 'paid' : 'credit'
+  };
+
+  if (factura.observaciones) {
+    datosAdicionales.observaciones = factura.observaciones;
+  }
+
+  if (factura.metadata?.order_id) {
+    datosAdicionales.observaciones = `Factura generada automáticamente desde orden ${factura.metadata.order_id}`;
+  }
+
+  // Construir payload completo
+  const payload = {
+    data: {
+      items: itemsPDF,
+      issuer: issuer,
+      totals: totals,
+      response_payload: responsePayload,
+      datos_adicionales: datosAdicionales
+    },
+    order_id: factura.metadata?.order_id || factura.id,
+    recipient_email: cliente.email,
+    wait_for_invoice: false,
+    pdf_template_name: 'invoice_email_service'
+  };
+
+  console.log('📋 [EmailPDF] Payload construido:', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Integration-Key': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    console.log('📥 [EmailPDF] Respuesta status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [EmailPDF] Error response:', errorText);
+      throw new Error(`Error al enviar PDF por email: ${response.status} - ${errorText}`);
+    }
+
+    const resultado = await response.json();
+    console.log('✅ [EmailPDF] Respuesta exitosa:', resultado);
+  } catch (error: any) {
+    console.error('❌ [EmailPDF] Error al enviar:', error.message);
+    throw error;
+  }
 }
 
 async function enviarADGI(jsonCFE: any, config: any): Promise<any> {
