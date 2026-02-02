@@ -153,7 +153,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: empresa } = await supabase
       .from('empresas')
-      .select('pais_id, razon_social, rut, numero_documento')
+      .select('pais_id, razon_social, rut, numero_documento, numero_identificacion, direccion, telefono, email')
       .eq('id', factura.empresa_id)
       .maybeSingle();
 
@@ -438,7 +438,7 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
       numero: index + 1,
       descripcion: item.descripcion || '',
       cantidad: cantidad,
-      precio_unitario: precioUnitario,
+      precio_unitario: precioUnitario, // Ya está incluido correctamente
       descuento: descuentoMonto,
       line_subtotal: lineSubtotal,
       iva_porcentaje: tasaIva * 100,
@@ -450,7 +450,7 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
   // Construir datos del emisor (empresa)
   const issuer = {
     razon_social: empresa?.razon_social || 'Empresa',
-    rut: empresa?.rut || empresa?.numero_documento || '',
+    rut: empresa?.rut || empresa?.numero_identificacion || empresa?.numero_documento || '',
     serie: factura.serie || factura.dgi_serie || 'A',
     fecha_emision: factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString()),
     moneda: factura.moneda || 'UYU',
@@ -459,7 +459,7 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     total: parseFloat(factura.total || 0),
     numero_cfe: factura.numero_factura || '',
     direccion: empresa?.direccion || '',
-    ciudad: empresa?.ciudad || 'Montevideo',
+    ciudad: 'Montevideo', // Dato fijo por ahora, la tabla empresas no tiene ciudad
     telefono: empresa?.telefono || '',
     email: empresa?.email || ''
   };
@@ -502,7 +502,10 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     datosAdicionales.observaciones = factura.observaciones;
   }
 
-  if (factura.metadata?.order_id) {
+  // Usar order_number si existe, sino order_id
+  if (factura.metadata?.order_number) {
+    datosAdicionales.observaciones = `Factura generada automáticamente desde orden ${factura.metadata.order_number}`;
+  } else if (factura.metadata?.order_id) {
     datosAdicionales.observaciones = `Factura generada automáticamente desde orden ${factura.metadata.order_id}`;
   }
 
