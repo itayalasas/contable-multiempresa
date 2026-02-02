@@ -490,7 +490,10 @@ async function handleOrder(
       success: true,
       factura_id: factura.id,
       numero_factura: factura.numero_factura,
+      serie: factura.serie,
       cliente_id: clienteId,
+      order_id: payload.order.order_id,
+      order_number: payload.order.order_number || payload.order.order_id,
       comisiones_registradas: comisionesCreadas.length,
       comision_ids: comisionesCreadas,
     };
