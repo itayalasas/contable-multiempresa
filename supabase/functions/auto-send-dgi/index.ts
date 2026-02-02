@@ -207,11 +207,47 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ [AutoSendDGI] Factura enviada exitosamente a DGI');
 
+    // Consultar si hay partner asociado para usar sus datos como emisor
+    const { data: comisionPartner } = await supabase
+      .from('comisiones_partners')
+      .select(`
+        partner_id,
+        partners_aliados (
+          razon_social,
+          nombre_comercial,
+          documento,
+          tipo_documento,
+          email,
+          telefono,
+          direccion,
+          ciudad
+        )
+      `)
+      .eq('factura_venta_id', facturaId)
+      .limit(1)
+      .maybeSingle();
+
+    let emisorDatos = empresa;
+
+    if (comisionPartner?.partners_aliados) {
+      console.log('🤝 [AutoSendDGI] Factura con partner asociado, usando datos del partner como emisor');
+      const partner = comisionPartner.partners_aliados;
+      emisorDatos = {
+        razon_social: partner.razon_social,
+        nombre: partner.nombre_comercial || partner.razon_social,
+        numero_identificacion: partner.documento,
+        direccion: partner.direccion || '',
+        telefono: partner.telefono || '',
+        email: partner.email || '',
+        pais_id: empresa?.pais_id,
+      };
+    }
+
     // Enviar PDF por email al cliente si tiene email
     if (cliente.email) {
       console.log('📧 [AutoSendDGI] Enviando PDF por email a:', cliente.email);
       try {
-        await enviarPDFPorEmail(factura, items, cliente, config, resultadoDGI, empresa);
+        await enviarPDFPorEmail(factura, items, cliente, config, resultadoDGI, emisorDatos);
         console.log('✅ [AutoSendDGI] PDF enviado exitosamente por email');
       } catch (emailError: any) {
         console.error('⚠️ [AutoSendDGI] Error al enviar email (no crítico):', emailError.message);
@@ -422,6 +458,8 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     const precioUnitario = parseFloat(item.precio_unitario || 0);
     const tasaIva = parseFloat(item.tasa_iva || 0);
 
+    console.log(`📦 [EmailPDF] Item ${index + 1}: cantidad=${cantidad}, precio_unitario=${precioUnitario}, tasa_iva=${tasaIva}`);
+
     // Calcular descuento en monto
     let descuentoMonto = 0;
     if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
@@ -434,24 +472,27 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     const iva = lineSubtotal * tasaIva;
     const total = lineSubtotal + iva;
 
-    return {
+    const itemPDF = {
       numero: index + 1,
       descripcion: item.descripcion || '',
       cantidad: cantidad,
-      precio_unitario: precioUnitario, // Ya está incluido correctamente
+      precio_unitario: precioUnitario,
       descuento: descuentoMonto,
       line_subtotal: lineSubtotal,
       iva_porcentaje: tasaIva * 100,
       iva: iva,
       total: total
     };
+
+    console.log(`📦 [EmailPDF] Item ${index + 1} PDF:`, JSON.stringify(itemPDF));
+    return itemPDF;
   });
 
-  // Construir datos del emisor (empresa)
+  // Construir datos del emisor (empresa o partner)
   const issuer = {
     razon_social: empresa?.razon_social || empresa?.nombre || 'Empresa',
     rut: empresa?.numero_identificacion || '',
-    serie: factura.serie || factura.dgi_serie || 'A',
+    serie: factura.dgi_serie || factura.serie || 'A', // Prioridad a dgi_serie que es la serie real de DGI
     fecha_emision: factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString()),
     moneda: factura.moneda || 'UYU',
     subtotal: parseFloat(factura.subtotal || 0),
@@ -459,7 +500,7 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     total: parseFloat(factura.total || 0),
     numero_cfe: factura.numero_factura || '',
     direccion: empresa?.direccion || '',
-    ciudad: 'Montevideo', // Dato fijo por ahora, la tabla empresas no tiene ciudad
+    ciudad: empresa?.ciudad || 'Montevideo',
     telefono: empresa?.telefono || '',
     email: empresa?.email || ''
   };
@@ -495,7 +536,7 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
 
   // Datos adicionales
   const datosAdicionales: any = {
-    forma_pago: factura.estado === 'pagada' ? 'paid' : 'credit'
+    forma_pago: factura.estado === 'pagada' ? 'Contado' : 'Crédito'
   };
 
   if (factura.observaciones) {
