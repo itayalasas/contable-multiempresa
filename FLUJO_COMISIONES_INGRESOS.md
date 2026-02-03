@@ -1,4 +1,14 @@
-# Flujo Completo de Comisiones e Ingresos
+# ⚠️ DOCUMENTO OBSOLETO
+
+**NOTA IMPORTANTE:** Este documento describía un modelo INCORRECTO donde las comisiones se trataban como gastos.
+
+👉 **Ver el documento actualizado:** `FLUJO_COMISIONES_INGRESOS_CORREGIDO.md`
+
+El modelo correcto trata las comisiones como **INGRESOS** de la aplicación, no como gastos.
+
+---
+
+# Flujo Completo de Comisiones e Ingresos (OBSOLETO)
 
 ## 📊 Ejemplo Numérico
 

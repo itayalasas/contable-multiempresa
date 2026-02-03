@@ -199,18 +199,16 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     }
 
     // Obtener IDs de cuentas de comisiones (si existen comisiones)
-    let cuentaComisionVentasId = null;
-    let cuentaComisionPorPagarId = null;
-    let cuentaComisionMPId = null;
-    let cuentaComisionMPPorPagarId = null;
+    let cuentaComisionesPorCobrarId = null;
+    let cuentaIngresosComisionAppId = null;
+    let cuentaIngresosComisionMPId = null;
 
     if (totalComisionApp > 0 || totalComisionMPAliado > 0) {
-      cuentaComisionVentasId = await obtenerCuentaId(supabase, factura.empresa_id, '5211');
-      cuentaComisionPorPagarId = await obtenerCuentaId(supabase, factura.empresa_id, '2114');
-      cuentaComisionMPId = await obtenerCuentaId(supabase, factura.empresa_id, '5212');
-      cuentaComisionMPPorPagarId = await obtenerCuentaId(supabase, factura.empresa_id, '2115');
+      cuentaComisionesPorCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '1213');
+      cuentaIngresosComisionAppId = await obtenerCuentaId(supabase, factura.empresa_id, '7012');
+      cuentaIngresosComisionMPId = await obtenerCuentaId(supabase, factura.empresa_id, '7013');
 
-      if (!cuentaComisionVentasId || !cuentaComisionPorPagarId || !cuentaComisionMPId || !cuentaComisionMPPorPagarId) {
+      if (!cuentaComisionesPorCobrarId || !cuentaIngresosComisionAppId || !cuentaIngresosComisionMPId) {
         console.warn('⚠️ Faltan cuentas de comisiones, se omitirá el registro de comisiones en el asiento');
         totalComisionApp = 0;
         totalComisionMPAliado = 0;
@@ -285,48 +283,43 @@ async function generarAsientoFacturaVenta(supabase: any, factura: any) {
     ];
 
     // AGREGAR MOVIMIENTOS DE COMISIONES SI EXISTEN
-    if (totalComisionApp > 0 && cuentaComisionVentasId && cuentaComisionPorPagarId) {
-      // DEBE: Gasto por Comisiones
+    // Las comisiones son INGRESOS de la aplicación (DogCatify ya pagó al partner)
+    const totalComisiones = totalComisionApp + totalComisionMPAliado;
+
+    if (totalComisiones > 0 && cuentaComisionesPorCobrarId && cuentaIngresosComisionAppId && cuentaIngresosComisionMPId) {
+      // DEBE: Comisiones por Cobrar (dinero que nos debe el marketplace)
       movimientos.push({
         asiento_id: asiento.id,
-        cuenta_id: cuentaComisionVentasId,
-        cuenta: '5211 - Comisiones de Ventas',
-        debito: totalComisionApp,
+        cuenta_id: cuentaComisionesPorCobrarId,
+        cuenta: '1213 - Comisiones por Cobrar - Marketplace',
+        debito: totalComisiones,
         credito: 0,
-        descripcion: `Comisión partners - Factura ${factura.numero_factura}`,
+        descripcion: `Comisiones ganadas - Factura ${factura.numero_factura}`,
       });
 
-      // HABER: Comisiones por Pagar
-      movimientos.push({
-        asiento_id: asiento.id,
-        cuenta_id: cuentaComisionPorPagarId,
-        cuenta: '2114 - Comisiones por Pagar - Partners',
-        debito: 0,
-        credito: totalComisionApp,
-        descripcion: `Comisión por pagar - Factura ${factura.numero_factura}`,
-      });
-    }
+      // HABER: Ingreso por Comisiones App
+      if (totalComisionApp > 0) {
+        movimientos.push({
+          asiento_id: asiento.id,
+          cuenta_id: cuentaIngresosComisionAppId,
+          cuenta: '7012 - Ingresos por Comisiones Marketplace',
+          debito: 0,
+          credito: totalComisionApp,
+          descripcion: `Ingreso comisión marketplace - Factura ${factura.numero_factura}`,
+        });
+      }
 
-    if (totalComisionMPAliado > 0 && cuentaComisionMPId && cuentaComisionMPPorPagarId) {
-      // DEBE: Gasto por Comisión MercadoPago
-      movimientos.push({
-        asiento_id: asiento.id,
-        cuenta_id: cuentaComisionMPId,
-        cuenta: '5212 - Comisiones MercadoPago',
-        debito: totalComisionMPAliado,
-        credito: 0,
-        descripcion: `Comisión MP aliado - Factura ${factura.numero_factura}`,
-      });
-
-      // HABER: Comisión MercadoPago por Pagar
-      movimientos.push({
-        asiento_id: asiento.id,
-        cuenta_id: cuentaComisionMPPorPagarId,
-        cuenta: '2115 - Comisiones MercadoPago por Pagar',
-        debito: 0,
-        credito: totalComisionMPAliado,
-        descripcion: `Comisión MP por pagar - Factura ${factura.numero_factura}`,
-      });
+      // HABER: Ingreso por Comisiones MercadoPago
+      if (totalComisionMPAliado > 0) {
+        movimientos.push({
+          asiento_id: asiento.id,
+          cuenta_id: cuentaIngresosComisionMPId,
+          cuenta: '7013 - Ingresos por Comisiones Procesamiento Pagos',
+          debito: 0,
+          credito: totalComisionMPAliado,
+          descripcion: `Ingreso comisión procesamiento - Factura ${factura.numero_factura}`,
+        });
+      }
     }
 
     const { error: movError } = await supabase
