@@ -28,6 +28,7 @@ import { asientosSupabaseService } from '../../services/supabase/asientos';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { SearchableAccountSelector } from '../../components/common/SearchableAccountSelector';
+import { Pagination } from '../../components/common/Pagination';
 import { useModals } from '../../hooks/useModals';
 import { useAsientosContables } from '../../hooks/useAsientosContables';
 
@@ -58,6 +59,10 @@ function AsientosContables() {
   const [insertingTestData, setInsertingTestData] = useState(false);
   const [savingForm, setSavingForm] = useState(false);
   const [deletingAsientos, setDeletingAsientos] = useState<Set<string>>(new Set());
+
+  // Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Hook para modales
   const {
@@ -136,13 +141,31 @@ function AsientosContables() {
     }
   };
 
-  const filteredAsientos = asientos.filter(asiento => {
+  const todosAsientosFiltrados = asientos.filter(asiento => {
     const matchesSearch = asiento.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          asiento.numero.toString().includes(searchTerm) ||
                          asiento.referencia?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesPeriod = !selectedPeriod || asiento.fecha.includes(selectedPeriod);
     return matchesSearch && matchesPeriod;
   });
+
+  const totalItems = todosAsientosFiltrados.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const filteredAsientos = todosAsientosFiltrados.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedPeriod]);
 
   const openModal = async (type: 'create' | 'edit' | 'view', asiento?: AsientoContable) => {
     setModalType(type);
@@ -512,7 +535,7 @@ function AsientosContables() {
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-400" />
             <span className="text-sm text-gray-600">
-              {filteredAsientos.length} asientos encontrados
+              {totalItems} asientos encontrados
             </span>
           </div>
           <div className="flex justify-end">
@@ -709,6 +732,16 @@ function AsientosContables() {
                 })}
               </tbody>
             </table>
+
+            {todosAsientosFiltrados.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
+            )}
           </div>
         )}
       </div>

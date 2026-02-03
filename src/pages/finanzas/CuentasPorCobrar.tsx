@@ -31,6 +31,7 @@ import { useNomencladores } from '../../hooks/useNomencladores';
 import { FacturaPorCobrar, Cliente, EstadoFactura } from '../../types/cuentasPorCobrar';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
+import { Pagination } from '../../components/common/Pagination';
 import { useModals } from '../../hooks/useModals';
 import { FacturaModal } from '../../components/finanzas/FacturaModal';
 import { ClienteModal } from '../../components/finanzas/ClienteModal';
@@ -71,6 +72,8 @@ function CuentasPorCobrar() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEstado, setSelectedEstado] = useState<EstadoFactura | ''>('');
   const [selectedCliente, setSelectedCliente] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [showFacturaModal, setShowFacturaModal] = useState(false);
@@ -103,7 +106,7 @@ function CuentasPorCobrar() {
   }, [paisActual?.id, recargarNomencladores]);
 
   // Filtrado de facturas
-  const facturasFiltradas = facturas.filter(factura => {
+  const todasFacturasFiltradas = facturas.filter(factura => {
     const matchesSearch = (factura.numero?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
                          (factura.cliente?.nombre?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
                          (factura.descripcion?.toLowerCase() || '').includes(searchTerm.toLowerCase());
@@ -120,6 +123,24 @@ function CuentasPorCobrar() {
     
     return matchesSearch && matchesEstado && matchesCliente && matchesFecha;
   });
+
+  const totalItems = todasFacturasFiltradas.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const facturasFiltradas = todasFacturasFiltradas.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedEstado, selectedCliente]);
 
   const handleNuevaFactura = () => {
     setSelectedFactura(null);
@@ -406,7 +427,7 @@ function CuentasPorCobrar() {
 
           <div className="mt-4 flex justify-between items-center">
             <div className="text-sm text-gray-600">
-              Mostrando {facturasFiltradas.length} de {facturas.length} facturas
+              Total: {totalItems} facturas
             </div>
             <div className="flex space-x-2">
               <button className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
@@ -588,6 +609,16 @@ function CuentasPorCobrar() {
                   })}
                 </tbody>
               </table>
+
+              {todasFacturasFiltradas.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={handlePageChange}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                />
+              )}
             </div>
           )}
         </div>
