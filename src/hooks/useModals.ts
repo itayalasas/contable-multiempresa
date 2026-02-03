@@ -110,10 +110,10 @@ export const useModals = () => {
     showNotification({ title, message, type: 'info' });
   };
 
-  const confirmDelete = (itemName: string, onConfirm: () => void | Promise<void>) => {
+  const confirmDelete = (title: string, message: string, onConfirm: () => void | Promise<void>) => {
     showConfirm({
-      title: 'Confirmar Eliminación',
-      message: `¿Está seguro de que desea eliminar "${itemName}"? Esta acción no se puede deshacer.`,
+      title: title,
+      message: message,
       type: 'danger',
       confirmText: 'Eliminar',
       cancelText: 'Cancelar',

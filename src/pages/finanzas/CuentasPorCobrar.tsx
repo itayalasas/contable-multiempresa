@@ -166,15 +166,18 @@ function CuentasPorCobrar() {
   };
 
   const handleEliminarFactura = (factura: FacturaPorCobrar) => {
-    confirmDelete(factura.numero, async () => {
-      try {
-        await eliminarFactura(factura.id);
-        showSuccess(
-          'Factura eliminada',
-          `La factura ${factura.numero} ha sido eliminada exitosamente.`
-        );
-      } catch (error) {
-        showError(
+    confirmDelete(
+      'Confirmar Eliminación',
+      `¿Está seguro de que desea eliminar la factura "${factura.numero}"? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          await eliminarFactura(factura.id);
+          showSuccess(
+            'Factura eliminada',
+            `La factura ${factura.numero} ha sido eliminada exitosamente.`
+          );
+        } catch (error) {
+          showError(
           'Error al eliminar factura',
           error instanceof Error ? error.message : 'Error desconocido'
         );

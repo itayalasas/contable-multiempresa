@@ -472,16 +472,19 @@ function ConfiguracionMapeoArchivos() {
   // Eliminar configuración
   const handleDelete = (config: ConfiguracionMapeo) => {
     if (!empresaActual?.id) return;
-    
-    confirmDelete(config.nombre, async () => {
-      try {
-        await mapeoService.eliminarConfiguracion(empresaActual.id, config.id);
-        showSuccess(
-          'Configuración eliminada',
-          `La configuración "${config.nombre}" ha sido eliminada exitosamente.`
-        );
-        await cargarConfiguraciones();
-      } catch (error) {
+
+    confirmDelete(
+      'Confirmar Eliminación',
+      `¿Está seguro de que desea eliminar "${config.nombre}"? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          await mapeoService.eliminarConfiguracion(empresaActual.id, config.id);
+          showSuccess(
+            'Configuración eliminada',
+            `La configuración "${config.nombre}" ha sido eliminada exitosamente.`
+          );
+          await cargarConfiguraciones();
+        } catch (error) {
         console.error('Error eliminando configuración:', error);
         showError(
           'Error al eliminar',

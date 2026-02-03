@@ -131,16 +131,19 @@ function PlanCuentas() {
 
   const handleDelete = async (cuenta: PlanCuenta) => {
     if (!empresaActual?.id) return;
-    
-    confirmDelete(cuenta.nombre, async () => {
-      try {
-        // Agregar a la lista de cuentas siendo eliminadas
-        setDeletingCuentas(prev => new Set([...prev, cuenta.id]));
-        
-        // Eliminación optimista - se remueve inmediatamente de la UI
-        await eliminarCuenta(cuenta.id);
-        
-        showSuccess(
+
+    confirmDelete(
+      'Confirmar Eliminación',
+      `¿Está seguro de que desea eliminar la cuenta "${cuenta.nombre}"? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          // Agregar a la lista de cuentas siendo eliminadas
+          setDeletingCuentas(prev => new Set([...prev, cuenta.id]));
+
+          // Eliminación optimista - se remueve inmediatamente de la UI
+          await eliminarCuenta(cuenta.id);
+
+          showSuccess(
           'Cuenta eliminada',
           `La cuenta "${cuenta.nombre}" ha sido eliminada exitosamente.`
         );

@@ -258,15 +258,18 @@ export const GestionEmpresas: React.FC = () => {
   };
 
   const handleDeleteEmpresa = (empresa: Empresa) => {
-    confirmDelete(empresa.nombre, async () => {
-      try {
-        // Aquí iría la lógica de eliminación real
-        console.log('Eliminando empresa:', empresa.id);
-        showSuccess('Empresa eliminada', `La empresa "${empresa.nombre}" ha sido eliminada exitosamente.`);
-        await cargarDatos();
-      } catch (error) {
-        showError('Error al eliminar', 'No se pudo eliminar la empresa');
-      }
+    confirmDelete(
+      'Confirmar Eliminación',
+      `¿Está seguro de que desea eliminar "${empresa.nombre}"? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          // Aquí iría la lógica de eliminación real
+          console.log('Eliminando empresa:', empresa.id);
+          showSuccess('Empresa eliminada', `La empresa "${empresa.nombre}" ha sido eliminada exitosamente.`);
+          await cargarDatos();
+        } catch (error) {
+          showError('Error al eliminar', 'No se pudo eliminar la empresa');
+        }
     });
   };
 

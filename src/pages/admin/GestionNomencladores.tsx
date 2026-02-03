@@ -140,7 +140,8 @@ function GestionNomencladores() {
 
   const handleEliminar = (item: any) => {
     confirmDelete(
-      `el ${getTabConfig(activeTab).label.toLowerCase()} "${item.nombre || item.codigo}"`,
+      'Confirmar Eliminación',
+      `¿Está seguro de que desea eliminar el ${getTabConfig(activeTab).label.toLowerCase()} "${item.nombre || item.codigo}"? Esta acción no se puede deshacer.`,
       async () => {
         try {
           await eliminarNomenclador(activeTab, item.id);

@@ -162,11 +162,12 @@ function ConciliacionBancaria() {
   // Revertir conciliación
   const handleRevertirConciliacion = (movimientoBancario: any, movimientoContable: any) => {
     confirmDelete(
-      'esta conciliación',
+      'Confirmar Reversión',
+      '¿Está seguro de que desea revertir esta conciliación? Esta acción no se puede deshacer.',
       async () => {
         try {
           await revertirConciliacion(movimientoBancario.id, movimientoContable.id);
-          
+
           showSuccess(
             'Conciliación revertida',
             'La conciliación ha sido revertida exitosamente'

@@ -395,16 +395,19 @@ function AsientosContables() {
 
   const handleDelete = async (asiento: AsientoContable) => {
     if (!empresaActual?.id) return;
-    
-    confirmDelete(asiento.numero, async () => {
-      try {
-        // Agregar a la lista de asientos siendo eliminados
-        setDeletingAsientos(prev => new Set([...prev, asiento.id]));
-        
-        // Eliminación optimista - se remueve inmediatamente de la UI
-        await eliminarAsiento(asiento.id);
-        
-        showSuccess(
+
+    confirmDelete(
+      'Confirmar Eliminación',
+      `¿Está seguro de que desea eliminar el asiento "${asiento.numero}"? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          // Agregar a la lista de asientos siendo eliminados
+          setDeletingAsientos(prev => new Set([...prev, asiento.id]));
+
+          // Eliminación optimista - se remueve inmediatamente de la UI
+          await eliminarAsiento(asiento.id);
+
+          showSuccess(
           'Asiento eliminado',
           `El asiento "${asiento.numero}" ha sido eliminado exitosamente.`
         );
