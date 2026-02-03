@@ -489,10 +489,14 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
   });
 
   // Construir datos del emisor (empresa o partner)
+  // La serie real viene de DGI en resultadoDGI.data.serie
+  const dgiData = resultadoDGI.data || {};
+  const serieReal = dgiData.serie || factura.dgi_serie || factura.serie || 'A';
+
   const issuer = {
     razon_social: empresa?.razon_social || empresa?.nombre || 'Empresa',
     rut: empresa?.numero_identificacion || '',
-    serie: factura.dgi_serie || factura.serie || 'A', // Prioridad a dgi_serie que es la serie real de DGI
+    serie: serieReal, // Usar la serie que devolvió DGI
     fecha_emision: factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString()),
     moneda: factura.moneda || 'UYU',
     subtotal: parseFloat(factura.subtotal || 0),
@@ -514,8 +518,8 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
   };
 
   // Construir response_payload con los datos de DGI
-  const dgiData = resultadoDGI.data || {};
-  const qrCode = dgiData.qr_code || `https://dgi.gub.uy/cfe/consulta?cfe=${factura.numero_factura}&serie=${factura.serie || 'A'}&cae=${resultadoDGI.cae}`;
+  // serieReal ya está definida arriba, la reutilizamos
+  const qrCode = dgiData.qr_code || `https://dgi.gub.uy/cfe/consulta?cfe=${factura.numero_factura}&serie=${serieReal}&cae=${resultadoDGI.cae}`;
 
   const responsePayload = {
     cae: resultadoDGI.cae || dgiData.cae || dgiData.CAE || '',
@@ -524,7 +528,7 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     approved: true,
     tipo_cfe: dgiData.tipo_comprobante || '101',
     reference: factura.numero_factura || '',
-    serie_cfe: factura.serie || factura.dgi_serie || 'A',
+    serie_cfe: serieReal,
     dgi_estado: 'aprobado',
     numero_cfe: factura.numero_factura || '',
     dgi_mensaje: resultadoDGI.mensaje || 'Comprobante aprobado correctamente',
