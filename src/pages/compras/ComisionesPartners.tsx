@@ -354,11 +354,19 @@ export default function ComisionesPartners() {
         <div className="flex gap-3">
           <button
             onClick={() => setShowGenerarModal(true)}
-            disabled={generandoFacturas}
+            disabled={generandoFacturas || generandoFacturasCompra}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
           >
             <Play className="w-5 h-5" />
             {generandoFacturas ? 'Generando...' : '1. Generar Facturas a Clientes'}
+          </button>
+          <button
+            onClick={() => setShowGenerarCompraModal(true)}
+            disabled={generandoFacturas || generandoFacturasCompra}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+          >
+            <FileText className="w-5 h-5" />
+            {generandoFacturasCompra ? 'Generando...' : '2. Generar Facturas de Compra'}
           </button>
         </div>
       </div>
@@ -602,6 +610,18 @@ export default function ComisionesPartners() {
         />
       )}
 
+      {showGenerarCompraModal && (
+        <ConfirmModal
+          isOpen={showGenerarCompraModal}
+          onClose={() => !generandoFacturasCompra && setShowGenerarCompraModal(false)}
+          onConfirm={generarFacturasCompraAhora}
+          title="Generar Facturas de Compra a Partners"
+          message="¿Deseas generar las facturas de compra para las comisiones facturadas? Esto creará cuentas por pagar para cada partner que tenga comisiones facturadas pendientes de registrar como compra."
+          confirmText="Generar"
+          cancelText="Cancelar"
+          loading={generandoFacturasCompra}
+        />
+      )}
 
       <NotificationModal
         isOpen={notification.show}
