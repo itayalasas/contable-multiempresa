@@ -199,6 +199,17 @@ export function useTesoreria(empresaId: string | undefined) {
     }
   };
 
+  const eliminarMovimiento = async (movimientoId: string) => {
+    try {
+      const resultado = await tesoreriaSupabaseService.deleteMovimiento(movimientoId);
+      await cargarDatos(); // Recargar datos para actualizar saldos
+      return resultado;
+    } catch (err: any) {
+      console.error('Error eliminando movimiento:', err);
+      throw err;
+    }
+  };
+
   return {
     cuentas,
     movimientos,
@@ -209,6 +220,7 @@ export function useTesoreria(empresaId: string | undefined) {
     actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
+    eliminarMovimiento,
     recargarDatos: cargarDatos,
   };
 }

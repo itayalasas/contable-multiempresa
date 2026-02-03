@@ -253,4 +253,68 @@ export const tesoreriaSupabaseService = {
 
     if (error) throw error;
   },
+
+  async deleteMovimiento(movimientoId: string): Promise<{
+    success: boolean;
+    tieneAsiento: boolean;
+    asientoInfo?: { numero: string; fecha: string };
+  }> {
+    // Primero verificar si tiene asiento contable asociado
+    const { data: movimiento, error: movError } = await supabase
+      .from('movimientos_tesoreria')
+      .select('asiento_contable_id')
+      .eq('id', movimientoId)
+      .single();
+
+    if (movError) throw movError;
+
+    let tieneAsiento = false;
+    let asientoInfo = undefined;
+
+    if (movimiento?.asiento_contable_id) {
+      tieneAsiento = true;
+
+      // Obtener información del asiento
+      const { data: asiento } = await supabase
+        .from('asientos_contables')
+        .select('numero, fecha')
+        .eq('id', movimiento.asiento_contable_id)
+        .single();
+
+      if (asiento) {
+        asientoInfo = {
+          numero: asiento.numero,
+          fecha: asiento.fecha
+        };
+      }
+
+      // Eliminar primero los detalles del asiento
+      await supabase
+        .from('detalle_asiento')
+        .delete()
+        .eq('asiento_id', movimiento.asiento_contable_id);
+
+      // Eliminar el asiento contable
+      await supabase
+        .from('asientos_contables')
+        .delete()
+        .eq('id', movimiento.asiento_contable_id);
+    }
+
+    // Eliminar el movimiento
+    // El trigger trg_after_delete_movimiento_tesoreria actualizará automáticamente
+    // el saldo de la cuenta bancaria
+    const { error: deleteError } = await supabase
+      .from('movimientos_tesoreria')
+      .delete()
+      .eq('id', movimientoId);
+
+    if (deleteError) throw deleteError;
+
+    return {
+      success: true,
+      tieneAsiento,
+      asientoInfo
+    };
+  },
 };

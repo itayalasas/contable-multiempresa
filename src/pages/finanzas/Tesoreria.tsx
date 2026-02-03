@@ -26,6 +26,7 @@ function Tesoreria() {
     actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
+    eliminarMovimiento,
     recargarDatos
   } = useTesoreria(empresaActual?.id);
   
@@ -102,9 +103,26 @@ function Tesoreria() {
   };
 
   const handleEliminarMovimiento = (movimiento: any) => {
-    showError(
-      'Función no disponible',
-      'La eliminación de movimientos no está disponible actualmente'
+    confirmDelete(
+      '¿Eliminar movimiento?',
+      `¿Estás seguro de que deseas eliminar este movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          const resultado = await eliminarMovimiento(movimiento.id);
+
+          let mensaje = 'El movimiento ha sido eliminado exitosamente.';
+          if (resultado.tieneAsiento && resultado.asientoInfo) {
+            mensaje += ` También se eliminó el asiento contable ${resultado.asientoInfo.numero} asociado.`;
+          }
+
+          showSuccess('Movimiento eliminado', mensaje);
+        } catch (error) {
+          showError(
+            'Error al eliminar',
+            error instanceof Error ? error.message : 'No se pudo eliminar el movimiento'
+          );
+        }
+      }
     );
   };
 
