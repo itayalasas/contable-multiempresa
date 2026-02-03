@@ -86,13 +86,21 @@ Deno.serve(async (req: Request) => {
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Pagado=${totalPagado}/${total}`);
 
     // 5. Generar asiento contable (si está configurado)
+    let asientoId = null;
     let mensajeAsiento = '';
     try {
-      await generarAsientoCobro(supabase, factura, pago, pagoData.id);
+      asientoId = await generarAsientoCobro(supabase, factura, pago, pagoData.id);
       mensajeAsiento = 'con asiento contable';
     } catch (asientoError) {
       console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
       mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+    }
+
+    // 6. Registrar movimiento en tesorería (actualiza saldo automáticamente)
+    try {
+      await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId);
+    } catch (tesoreriaError) {
+      console.warn('⚠️ No se pudo registrar movimiento de tesorería:', tesoreriaError.message);
     }
 
     return new Response(
@@ -236,9 +244,80 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
 
     console.log(`✅ Asiento contable ${numeroAsiento} generado exitosamente`);
 
+    return asiento.id;
+
   } catch (error) {
     console.error('❌ Error generando asiento de cobro:', error);
     throw error;
+  }
+}
+
+async function registrarMovimientoTesoreria(
+  supabase: any,
+  factura: any,
+  pago: any,
+  pagoId: string,
+  asientoId: string | null
+) {
+  try {
+    console.log('💰 [Tesorería] Registrando movimiento bancario...');
+
+    // Si el pago ya tiene un ID de cuenta bancaria, usarlo directamente
+    let cuentaBancariaId = pago.cuentaBancariaId;
+
+    if (!cuentaBancariaId) {
+      console.warn('⚠️ No se proporcionó ID de cuenta bancaria');
+      return;
+    }
+
+    // Verificar que la cuenta bancaria existe
+    const { data: cuenta, error: cuentaError } = await supabase
+      .from('cuentas_bancarias')
+      .select('id, nombre')
+      .eq('id', cuentaBancariaId)
+      .eq('empresa_id', factura.empresa_id)
+      .maybeSingle();
+
+    if (cuentaError || !cuenta) {
+      console.warn('⚠️ No se encontró cuenta bancaria con ID:', cuentaBancariaId);
+      return;
+    }
+
+    console.log('✅ Usando cuenta bancaria:', cuenta.nombre);
+
+    // Registrar movimiento de INGRESO (entra dinero)
+    const { error: movError } = await supabase
+      .from('movimientos_tesoreria')
+      .insert({
+        empresa_id: factura.empresa_id,
+        cuenta_bancaria_id: cuentaBancariaId,
+        tipo_movimiento: 'INGRESO',
+        fecha: pago.fechaPago,
+        monto: pago.monto,
+        descripcion: `Cobro factura ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
+        referencia: pago.referencia || factura.numero_factura,
+        beneficiario: factura.cliente?.razon_social || 'Cliente',
+        categoria: 'COBRO_CLIENTE',
+        asiento_contable_id: asientoId,
+        documento_origen_tipo: 'pago_cliente',
+        documento_origen_id: pagoId,
+        metadata: {
+          tipo_pago: pago.tipoPago,
+          factura_id: factura.id,
+        },
+      });
+
+    if (movError) {
+      console.error('⚠️ Error registrando movimiento de tesorería:', movError.message);
+      // No lanzar error, solo advertir
+      return;
+    }
+
+    console.log('✅ Movimiento de tesorería registrado - Saldo bancario actualizado automáticamente');
+
+  } catch (error) {
+    console.error('⚠️ Error en tesorería (no crítico):', error);
+    // No lanzar error para no bloquear el cobro
   }
 }
 
