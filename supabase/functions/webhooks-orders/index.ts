@@ -486,6 +486,50 @@ async function handleOrder(
 
     console.log(`💰 [Order] Comisiones registradas: ${comisionesCreadas.length}`);
 
+    // 🚀 Envío automático a DGI
+    try {
+      console.log('🚀 [Order] Iniciando envío automático a DGI para factura:', factura.id);
+
+      // Verificar si la empresa tiene auto-send habilitado
+      const { data: autoSendConfig } = await supabase
+        .from('empresas_auto_send_dgi')
+        .select('auto_send_enabled')
+        .eq('empresa_id', payload.empresa_id)
+        .maybeSingle();
+
+      if (autoSendConfig?.auto_send_enabled) {
+        console.log('✅ [Order] Auto-send habilitado, enviando a DGI...');
+
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const autoSendUrl = `${supabaseUrl}/functions/v1/auto-send-dgi`;
+
+        // Llamada asíncrona para no bloquear la respuesta
+        fetch(autoSendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ facturaId: factura.id }),
+        }).then(async (response) => {
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ [Order] Factura enviada a DGI exitosamente:', result);
+          } else {
+            const errorText = await response.text();
+            console.error('⚠️ [Order] Error al enviar a DGI (no crítico):', errorText);
+          }
+        }).catch((error) => {
+          console.error('⚠️ [Order] Error en llamada a auto-send-dgi (no crítico):', error.message);
+        });
+
+        console.log('🔄 [Order] Envío a DGI iniciado en background');
+      } else {
+        console.log('ℹ️ [Order] Auto-send DGI deshabilitado para esta empresa');
+      }
+    } catch (autoSendError) {
+      console.error('⚠️ [Order] Error verificando auto-send (no crítico):', autoSendError);
+    }
+
     return {
       success: true,
       factura_id: factura.id,

@@ -9,10 +9,11 @@ El sistema de envío automático a DGI está completamente configurado y funcion
 ### 1. Automático por Defecto
 Cuando una nueva factura se crea a través del webhook de Dogcatify:
 - ✅ Se crea la factura en el sistema con `dgi_enviada = false`
-- ✅ Un trigger de base de datos detecta la nueva factura
-- ✅ Llama automáticamente a la edge function `auto-send-dgi`
+- ✅ El webhook verifica si el auto-envío está habilitado para la empresa
+- ✅ Llama automáticamente a la edge function `auto-send-dgi` en background
 - ✅ La factura se envía a DGI sin intervención manual
 - ✅ Se actualiza el estado `dgi_enviada = true` y se guarda el CAE
+- ⚡ El proceso es completamente asíncrono y no bloquea la respuesta del webhook
 
 ### 2. Solo Manual en Caso de Error
 Si el envío automático falla por alguna razón:
@@ -68,17 +69,17 @@ WHERE empresa_id = 'ID_DE_TU_EMPRESA';
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. TRIGGER SE ACTIVA AUTOMÁTICAMENTE                       │
-│     trg_auto_send_dgi                                       │
+│  3. WEBHOOK VERIFICA AUTO-SEND                              │
+│     ✓ Consulta empresas_auto_send_dgi                       │
 │     ✓ Verifica auto_send_enabled = true                     │
-│     ✓ Verifica dgi_enviada = false                          │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. TRIGGER LLAMA A EDGE FUNCTION                           │
+│  4. WEBHOOK LLAMA A EDGE FUNCTION (Async)                   │
 │     POST /functions/v1/auto-send-dgi                        │
 │     body: { facturaId: "xxx" }                              │
+│     ⚡ No bloquea respuesta del webhook                      │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -164,18 +165,19 @@ DO UPDATE SET auto_send_enabled = true;
 ## Configuración Técnica
 
 ### Base de Datos
-- **Tabla:** `empresas_auto_send_dgi`
-- **Trigger:** `trg_auto_send_dgi`
-- **Función:** `trigger_auto_send_dgi()`
-- **Extensión:** `pg_net` v0.19.5
+- **Tabla:** `empresas_auto_send_dgi` (controla si auto-envío está habilitado)
+- **Campo:** `auto_send_enabled` (boolean)
 
 ### Edge Functions
-- **Auto-send:** `/functions/v1/auto-send-dgi`
-- **Webhook:** `/functions/v1/webhooks-orders`
+- **Webhook:** `/functions/v1/webhooks-orders` (crea factura y dispara envío automático)
+- **Auto-send:** `/functions/v1/auto-send-dgi` (envía factura a DGI)
 
 ### URLs
-- **Supabase URL:** Configurada en `sistema_configuracion`
+- **Supabase URL:** Variable de entorno `SUPABASE_URL`
 - **DGI API:** Configurada en `empresas_config_cfe`
+
+### Implementación
+El webhook verifica la configuración `auto_send_enabled` y si está habilitada, hace una llamada HTTP asíncrona (fetch) a la edge function `auto-send-dgi`. Esta llamada no bloquea la respuesta del webhook, permitiendo que Dogcatify reciba confirmación inmediata mientras el envío a DGI se procesa en segundo plano.
 
 ## Soporte
 
