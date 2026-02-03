@@ -32,6 +32,7 @@ import { useNomencladores } from '../../hooks/useNomencladores';
 import { FacturaPorPagar, Proveedor, EstadoFactura } from '../../types/cuentasPorPagar';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
+import { Pagination } from '../../components/common/Pagination';
 import { useModals } from '../../hooks/useModals';
 import { FacturaPagarModal } from '../../components/finanzas/FacturaPagarModal';
 import { ProveedorModal } from '../../components/finanzas/ProveedorModal';
@@ -74,6 +75,8 @@ function CuentasPorPagar() {
   const [selectedProveedor, setSelectedProveedor] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const [showFacturaModal, setShowFacturaModal] = useState(false);
   const [showProveedorModal, setShowProveedorModal] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
@@ -104,13 +107,13 @@ function CuentasPorPagar() {
   }, [paisActual?.id, recargarNomencladores]);
 
   // Filtrado de facturas
-  const facturasFiltradas = facturas.filter(factura => {
+  const todasFacturasFiltradas = facturas.filter(factura => {
     const matchesSearch = factura.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          factura.proveedor.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          factura.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesEstado = !selectedEstado || factura.estado === selectedEstado;
     const matchesProveedor = !selectedProveedor || factura.proveedorId === selectedProveedor;
-    
+
     let matchesFecha = true;
     if (fechaDesde && fechaHasta) {
       const fechaFactura = new Date(factura.fechaEmision);
@@ -118,9 +121,27 @@ function CuentasPorPagar() {
       const hasta = new Date(fechaHasta);
       matchesFecha = fechaFactura >= desde && fechaFactura <= hasta;
     }
-    
+
     return matchesSearch && matchesEstado && matchesProveedor && matchesFecha;
   });
+
+  const totalItems = todasFacturasFiltradas.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const facturasFiltradas = todasFacturasFiltradas.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedEstado, selectedProveedor]);
 
   const handleNuevaFactura = () => {
     setSelectedFactura(null);
@@ -589,6 +610,16 @@ function CuentasPorPagar() {
                   })}
                 </tbody>
               </table>
+
+              {todasFacturasFiltradas.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={handlePageChange}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                />
+              )}
             </div>
           )}
         </div>

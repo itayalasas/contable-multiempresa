@@ -15,6 +15,7 @@ import FacturaModal from '../../components/ventas/FacturaModal';
 import { FacturaDetalleModal } from '../../components/ventas/FacturaDetalleModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
+import { Pagination } from '../../components/common/Pagination';
 
 export default function Facturas() {
   const { empresaActual } = useSesion();
@@ -41,6 +42,8 @@ export default function Facturas() {
   const [busqueda, setBusqueda] = useState('');
   const [enviandoDGI, setEnviandoDGI] = useState<string | null>(null);
   const [regenerandoAsiento, setRegenerandoAsiento] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   useEffect(() => {
     if (empresaActual) {
@@ -70,6 +73,10 @@ export default function Facturas() {
       };
     }
   }, [empresaActual]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroEstado, busqueda]);
 
   const cargarFacturas = async () => {
     if (!empresaActual) return;
@@ -521,7 +528,7 @@ export default function Facturas() {
     setNotification({ show: true, type, title, message });
   };
 
-  const facturasFiltradas = facturas.filter((factura) => {
+  const todasFacturasFiltradas = facturas.filter((factura) => {
     const cumpleFiltroEstado =
       filtroEstado === 'todos' || factura.estado === filtroEstado;
     const cumpleBusqueda =
@@ -530,6 +537,20 @@ export default function Facturas() {
       factura.cliente?.numero_documento.toLowerCase().includes(busqueda.toLowerCase());
     return cumpleFiltroEstado && cumpleBusqueda;
   });
+
+  const totalItems = todasFacturasFiltradas.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const facturasFiltradas = todasFacturasFiltradas.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1);
+  };
 
   const getEstadoBadge = (estado: string) => {
     const badges = {
@@ -1037,6 +1058,16 @@ export default function Facturas() {
                 ))}
               </tbody>
             </table>
+
+            {todasFacturasFiltradas.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
+            )}
           </div>
         )}
       </div>
