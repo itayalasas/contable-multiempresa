@@ -228,12 +228,12 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
       // Validar cuentas por pagar pendientes
       try {
         const { data: cuentasPorPagarPendientes } = await supabase
-          .from('cuentas_por_pagar')
+          .from('v_cuentas_por_pagar')
           .select('id, monto_total')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha_emision', periodo.fecha_inicio)
           .lte('fecha_emision', periodo.fecha_fin)
-          .eq('estado', 'pendiente');
+          .in('estado_cxp', ['PENDIENTE', 'PARCIAL', 'VENCIDA']);
 
         const cantidadCxPPendientes = cuentasPorPagarPendientes?.length || 0;
         if (cantidadCxPPendientes > 0) {

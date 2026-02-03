@@ -553,6 +553,67 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
             </div>
           )}
 
+          {/* Cuentas Bancarias Descuadradas */}
+          {detalles.cuentasBancariasDescuadradas.length > 0 && (
+            <div className="border border-red-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('cuentas-descuadradas')}
+                className="w-full p-4 bg-red-50 flex items-center justify-between hover:bg-red-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <span className="font-semibold text-red-900">
+                    Cuentas Bancarias Descuadradas ({detalles.cuentasBancariasDescuadradas.length})
+                  </span>
+                </div>
+                {expandedSections.has('cuentas-descuadradas') ? (
+                  <ChevronDown className="h-5 w-5 text-red-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-red-600" />
+                )}
+              </button>
+              {expandedSections.has('cuentas-descuadradas') && (
+                <div className="p-4 space-y-2">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Acción requerida:</strong> El saldo contable de las cuentas bancarias no coincide con el saldo real.
+                      Esto puede deberse a movimientos de tesorería que no se han reflejado correctamente o a errores de conciliación.
+                      Ve a Finanzas → Tesorería para revisar los movimientos.
+                    </p>
+                  </div>
+                  {detalles.cuentasBancariasDescuadradas.map((cuenta) => (
+                    <div key={cuenta.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{cuenta.nombre}</div>
+                        <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                          <div>
+                            <span className="text-gray-600">Saldo Real:</span>
+                            <div className="font-medium text-gray-900">${cuenta.saldo_fisico.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Saldo Contable:</span>
+                            <div className="font-medium text-gray-900">${cuenta.saldo_contable.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <span className="text-red-600">Diferencia:</span>
+                            <div className="font-semibold text-red-700">${cuenta.diferencia.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navegarA('/finanzas/tesoreria')}
+                        className="ml-4 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                      >
+                        Ver Tesorería
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {totalErrores === 0 && (
             <div className="text-center py-12">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
