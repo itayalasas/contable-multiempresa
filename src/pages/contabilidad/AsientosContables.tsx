@@ -314,7 +314,7 @@ function AsientosContables() {
 
     try {
       setSavingForm(true);
-      
+
       const asientoData: Omit<AsientoContable, 'id' | 'fechaCreacion'> = {
         numero: formData.numero,
         fecha: formData.fecha,
@@ -329,21 +329,22 @@ function AsientosContables() {
         creadoPor: usuario?.id || 'sistema'
       };
 
+      let asientoGuardado;
       if (modalType === 'create') {
-        // Actualización optimista - se agrega inmediatamente a la UI
-        await crearAsiento(asientoData);
-        showSuccess(
-          'Asiento creado',
-          `El asiento "${formData.numero}" ha sido creado exitosamente.`
-        );
+        asientoGuardado = await crearAsiento(asientoData);
       } else if (modalType === 'edit' && selectedAsiento) {
-        // Actualización optimista - se actualiza inmediatamente en la UI
-        await actualizarAsiento(selectedAsiento.id, asientoData);
-        showSuccess(
-          'Asiento actualizado',
-          `El asiento "${formData.numero}" ha sido actualizado exitosamente.`
-        );
+        asientoGuardado = await actualizarAsiento(selectedAsiento.id, asientoData);
       }
+
+      // Recargar asientos para obtener el estado actualizado
+      await recargarAsientos();
+
+      // Mostrar mensaje apropiado
+      // Nota: El trigger puede cambiar el estado a 'descuadrado' si detecta un problema
+      showSuccess(
+        modalType === 'create' ? 'Asiento creado' : 'Asiento actualizado',
+        `El asiento "${formData.numero}" ha sido ${modalType === 'create' ? 'creado' : 'actualizado'} exitosamente.`
+      );
 
       setShowModal(false);
       await resetForm();
