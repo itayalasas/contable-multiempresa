@@ -360,14 +360,6 @@ export default function ComisionesPartners() {
             <Play className="w-5 h-5" />
             {generandoFacturas ? 'Generando...' : '1. Generar Facturas a Clientes'}
           </button>
-          <button
-            onClick={() => setShowGenerarCompraModal(true)}
-            disabled={generandoFacturasCompra}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-          >
-            <DollarSign className="w-5 h-5" />
-            {generandoFacturasCompra ? 'Generando...' : '2. Generar Cuentas por Pagar'}
-          </button>
         </div>
       </div>
 
@@ -610,18 +602,6 @@ export default function ComisionesPartners() {
         />
       )}
 
-      {showGenerarCompraModal && (
-        <ConfirmModal
-          isOpen={showGenerarCompraModal}
-          onClose={() => !generandoFacturasCompra && setShowGenerarCompraModal(false)}
-          onConfirm={generarFacturasCompraAhora}
-          title="Generar Cuentas por Pagar a Partners"
-          message="¿Deseas generar las facturas de compra y cuentas por pagar a partners? Esto convertirá las comisiones facturadas en cuentas por pagar, descontando retenciones y comisiones del sistema."
-          confirmText="Generar"
-          cancelText="Cancelar"
-          loading={generandoFacturasCompra}
-        />
-      )}
 
       <NotificationModal
         isOpen={notification.show}

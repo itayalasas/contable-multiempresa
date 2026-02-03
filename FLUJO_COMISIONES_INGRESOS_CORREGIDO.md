@@ -1,5 +1,10 @@
 # Flujo Correcto de Comisiones como INGRESOS
 
+> ⚠️ **IMPORTANTE:** Se eliminó la funcionalidad incorrecta "Generar Cuentas por Pagar a Partners"
+> Ver detalles en: `FUNCIONALIDAD_INCORRECTA_ELIMINADA.md`
+
+# Flujo Correcto de Comisiones como INGRESOS
+
 ## 🎯 Concepto Clave
 
 **Las comisiones son INGRESOS de la aplicación, NO gastos que hay que pagar.**
