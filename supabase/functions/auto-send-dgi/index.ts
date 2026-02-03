@@ -545,8 +545,10 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
 
   // Usar order_number si existe, sino order_id
   if (factura.metadata?.order_number) {
+    datosAdicionales.numero_orden = factura.metadata.order_number;
     datosAdicionales.observaciones = `Factura generada automáticamente desde orden ${factura.metadata.order_number}`;
   } else if (factura.metadata?.order_id) {
+    datosAdicionales.numero_orden = factura.metadata.order_id;
     datosAdicionales.observaciones = `Factura generada automáticamente desde orden ${factura.metadata.order_id}`;
   }
 
