@@ -728,5 +728,139 @@ export const periodosContablesService = {
     const dias = Math.ceil(diferencia / (1000 * 60 * 60 * 24));
 
     return dias > 0 ? dias : 0;
+  },
+
+  async validarCierreSecuencial(periodoId: string): Promise<{
+    valido: boolean;
+    mensaje: string;
+    periodosAbiertosAnteriores: number;
+  }> {
+    const { data, error } = await supabase
+      .rpc('validar_cierre_secuencial', { p_periodo_id: periodoId });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return {
+        valido: false,
+        mensaje: 'Error al validar el cierre secuencial',
+        periodosAbiertosAnteriores: 0
+      };
+    }
+
+    const resultado = data[0];
+    return {
+      valido: resultado.valido,
+      mensaje: resultado.mensaje,
+      periodosAbiertosAnteriores: resultado.periodos_abiertos_anteriores
+    };
+  },
+
+  async validarEjercicioParaCierre(ejercicioId: string): Promise<{
+    valido: boolean;
+    mensaje: string;
+    periodosTotales: number;
+    periodosCerrados: number;
+    periodosAbiertos: number;
+  }> {
+    const { data, error } = await supabase
+      .rpc('validar_ejercicio_para_cierre', { p_ejercicio_id: ejercicioId });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return {
+        valido: false,
+        mensaje: 'Error al validar el ejercicio',
+        periodosTotales: 0,
+        periodosCerrados: 0,
+        periodosAbiertos: 0
+      };
+    }
+
+    const resultado = data[0];
+    return {
+      valido: resultado.valido,
+      mensaje: resultado.mensaje,
+      periodosTotales: resultado.periodos_totales,
+      periodosCerrados: resultado.periodos_cerrados,
+      periodosAbiertos: resultado.periodos_abiertos
+    };
+  },
+
+  async cerrarEjercicioFiscal(
+    ejercicioId: string,
+    usuarioId: string,
+    motivo?: string,
+    observaciones?: string
+  ): Promise<{
+    success: boolean;
+    mensaje: string;
+    periodosCerrados: number;
+  }> {
+    const { data, error } = await supabase
+      .rpc('cerrar_ejercicio_fiscal', {
+        p_ejercicio_id: ejercicioId,
+        p_usuario_id: usuarioId,
+        p_motivo: motivo,
+        p_observaciones: observaciones
+      });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      throw new Error('No se pudo cerrar el ejercicio fiscal');
+    }
+
+    const resultado = data[0];
+
+    if (!resultado.success) {
+      throw new Error(resultado.mensaje);
+    }
+
+    return {
+      success: resultado.success,
+      mensaje: resultado.mensaje,
+      periodosCerrados: resultado.periodos_cerrados
+    };
+  },
+
+  async reabrirEjercicioFiscal(
+    ejercicioId: string,
+    usuarioId: string,
+    motivo: string,
+    observaciones?: string
+  ): Promise<{
+    success: boolean;
+    mensaje: string;
+  }> {
+    if (!motivo || motivo.trim() === '') {
+      throw new Error('El motivo de reapertura es obligatorio');
+    }
+
+    const { data, error } = await supabase
+      .rpc('reabrir_ejercicio_fiscal', {
+        p_ejercicio_id: ejercicioId,
+        p_usuario_id: usuarioId,
+        p_motivo: motivo,
+        p_observaciones: observaciones
+      });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      throw new Error('No se pudo reabrir el ejercicio fiscal');
+    }
+
+    const resultado = data[0];
+
+    if (!resultado.success) {
+      throw new Error(resultado.mensaje);
+    }
+
+    return {
+      success: resultado.success,
+      mensaje: resultado.mensaje
+    };
   }
 };

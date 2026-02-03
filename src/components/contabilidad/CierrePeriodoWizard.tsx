@@ -9,13 +9,15 @@ import {
   TrendingUp,
   TrendingDown,
   Calculator,
-  Loader2
+  Loader2,
+  ListChecks
 } from 'lucide-react';
 import { PeriodoContable } from '../../services/supabase/periodosContables';
 import { asientosSupabaseService } from '../../services/supabase/asientos';
 import { balanceComprobacionService } from '../../services/supabase/balanceComprobacion';
 import { supabase } from '../../config/supabase';
 import { useSesion } from '../../context/SesionContext';
+import { DetalleErroresCierre } from './DetalleErroresCierre';
 
 interface CierrePeriodoWizardProps {
   periodo: PeriodoContable;
@@ -53,6 +55,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
   const [observaciones, setObservaciones] = useState('');
   const [showAjusteInfo, setShowAjusteInfo] = useState<string | null>(null);
   const [cantidadAsientos, setCantidadAsientos] = useState(0);
+  const [showDetalleErrores, setShowDetalleErrores] = useState(false);
 
   useEffect(() => {
     if (currentStep === 'validacion') {
@@ -65,6 +68,17 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
     setLoading(true);
     try {
+      // Primero validar cierre secuencial
+      const { periodosContablesService } = await import('../../services/supabase/periodosContables');
+      const validacionSecuencial = await periodosContablesService.validarCierreSecuencial(periodo.id);
+
+      const errores: string[] = [];
+      const advertencias: string[] = [];
+
+      if (!validacionSecuencial.valido) {
+        errores.push(`⚠️ CIERRE NO SECUENCIAL: ${validacionSecuencial.mensaje}`);
+      }
+
       const asientos = await asientosSupabaseService.getAsientosByEmpresaFechas(
         empresaActual.id,
         periodo.fecha_inicio,
@@ -89,9 +103,6 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
       const totalCreditos = asientos.reduce((sum, a) =>
         sum + a.movimientos.reduce((s, m) => s + (m.credito || 0), 0), 0
       );
-
-      const errores: string[] = [];
-      const advertencias: string[] = [];
 
       if (asientosBorrador > 0) {
         errores.push(`Hay ${asientosBorrador} asiento(s) en estado borrador que deben confirmarse`);
@@ -403,6 +414,13 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
                       <li key={idx} className="text-sm text-red-700">• {error}</li>
                     ))}
                   </ul>
+                  <button
+                    onClick={() => setShowDetalleErrores(true)}
+                    className="mt-3 flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                  >
+                    <ListChecks className="w-4 h-4" />
+                    Ver Detalle Completo de Errores
+                  </button>
                 </div>
               </div>
             </div>
@@ -698,6 +716,14 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
   return (
     <>
+      {showDetalleErrores && empresaActual?.id && (
+        <DetalleErroresCierre
+          periodo={periodo}
+          empresaId={empresaActual.id}
+          onClose={() => setShowDetalleErrores(false)}
+        />
+      )}
+
       {showAjusteInfo && ajusteContent && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
