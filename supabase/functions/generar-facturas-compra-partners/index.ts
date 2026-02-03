@@ -410,7 +410,23 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (updateError) throw updateError;
 
-        console.log('ℹ️ NO se genera asiento contable (ya existen asientos de facturas de venta validadas por DGI)');
+        console.log('📝 Generando asiento contable para factura de compra...');
+
+        try {
+          await generarAsientoContableFacturaCompra(
+            supabase,
+            empresaId,
+            empresa.pais_id,
+            facturaCompra,
+            partner,
+            totalAPagarSinIVA,
+            ivaComisiones,
+            totalAPagar
+          );
+          console.log('✅ Asiento contable generado exitosamente');
+        } catch (asientoError: any) {
+          console.error('⚠️ Error generando asiento contable:', asientoError.message);
+        }
 
         facturasGeneradas++;
         cuentasPorPagarGeneradas++;
@@ -485,4 +501,165 @@ async function crearActualizarProveedor(supabase: any, empresaId: string, partne
   if (error) throw error;
 
   return nuevoProveedor.id;
+}
+
+async function generarAsientoContableFacturaCompra(
+  supabase: any,
+  empresaId: string,
+  paisId: string,
+  facturaCompra: any,
+  partner: any,
+  subtotal: number,
+  iva: number,
+  total: number
+) {
+  try {
+    console.log('📝 [Asiento] Generando para factura compra:', facturaCompra.numero_factura);
+
+    const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
+    const numeroAsiento = await generarNumeroAsiento(supabase, empresaId);
+
+    const cuentaGastoPartnersId = await obtenerCuentaId(supabase, empresaId, '612001');
+    const cuentaIvaId = await obtenerCuentaId(supabase, empresaId, '2113');
+    const cuentaPorPagarId = await obtenerCuentaId(supabase, empresaId, '213002');
+
+    if (!cuentaGastoPartnersId || !cuentaIvaId || !cuentaPorPagarId) {
+      const cuentasFaltantes = [];
+      if (!cuentaGastoPartnersId) cuentasFaltantes.push('612001 (Comisiones a Partners)');
+      if (!cuentaIvaId) cuentasFaltantes.push('2113 (IVA por Pagar)');
+      if (!cuentaPorPagarId) cuentasFaltantes.push('213002 (Cuentas por Pagar - Partners)');
+
+      const errorMsg = `Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`;
+      console.error('❌ [Asiento]', errorMsg);
+
+      await supabase
+        .from('facturas_compra')
+        .update({
+          asiento_generado: false,
+          asiento_error: errorMsg
+        })
+        .eq('id', facturaCompra.id);
+
+      return;
+    }
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert({
+        empresa_id: empresaId,
+        pais_id: paisId,
+        numero: numeroAsiento,
+        fecha: facturaCompra.fecha_emision,
+        descripcion: `Factura Compra ${facturaCompra.serie}-${facturaCompra.numero_factura} - ${partner.razon_social}`,
+        referencia: `FCOMP-${facturaCompra.numero_factura}`,
+        estado: 'confirmado',
+        creado_por: SISTEMA_USER_ID,
+        documento_soporte: {
+          tipo: 'factura_compra',
+          id: facturaCompra.id,
+          numero: facturaCompra.numero_factura,
+          serie: facturaCompra.serie,
+        },
+      })
+      .select()
+      .single();
+
+    if (asientoError) throw asientoError;
+
+    const movimientos = [
+      {
+        asiento_id: asiento.id,
+        cuenta_id: cuentaGastoPartnersId,
+        cuenta: '612001 - Comisiones a Partners',
+        debito: parseFloat(subtotal.toFixed(2)),
+        credito: 0,
+        descripcion: `Servicios ${partner.razon_social}`,
+      },
+      {
+        asiento_id: asiento.id,
+        cuenta_id: cuentaIvaId,
+        cuenta: '2113 - IVA Compras',
+        debito: parseFloat(iva.toFixed(2)),
+        credito: 0,
+        descripcion: `IVA Factura ${facturaCompra.serie}-${facturaCompra.numero_factura}`,
+      },
+      {
+        asiento_id: asiento.id,
+        cuenta_id: cuentaPorPagarId,
+        cuenta: '213002 - Cuentas por Pagar - Partners',
+        debito: 0,
+        credito: parseFloat(total.toFixed(2)),
+        descripcion: `Factura ${facturaCompra.serie}-${facturaCompra.numero_factura} - ${partner.razon_social}`,
+      },
+    ];
+
+    const { error: movError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientos);
+
+    if (movError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movError;
+    }
+
+    await supabase
+      .from('facturas_compra')
+      .update({
+        asiento_generado: true,
+        asiento_contable_id: asiento.id,
+        asiento_error: null
+      })
+      .eq('id', facturaCompra.id);
+
+    console.log('✅ [Asiento] Generado exitosamente:', numeroAsiento);
+  } catch (error: any) {
+    console.error('❌ [Asiento] Error:', error);
+
+    const errorMsg = error.message || JSON.stringify(error);
+    await supabase
+      .from('facturas_compra')
+      .update({
+        asiento_generado: false,
+        asiento_error: errorMsg.substring(0, 500)
+      })
+      .eq('id', facturaCompra.id);
+
+    throw error;
+  }
+}
+
+async function generarNumeroAsiento(supabase: any, empresaId: string): Promise<string> {
+  const { data: ultimoAsiento } = await supabase
+    .from('asientos_contables')
+    .select('numero')
+    .eq('empresa_id', empresaId)
+    .order('numero', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!ultimoAsiento) return 'ASI-00001';
+
+  const match = ultimoAsiento.numero.match(/ASI-(\d+)/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return `ASI-${String(num + 1).padStart(5, '0')}`;
+  }
+
+  return `ASI-${Date.now().toString().slice(-5)}`;
+}
+
+async function obtenerCuentaId(supabase: any, empresaId: string, codigo: string): Promise<string | null> {
+  const { data: cuenta } = await supabase
+    .from('plan_cuentas')
+    .select('id, nombre')
+    .eq('empresa_id', empresaId)
+    .eq('codigo', codigo)
+    .maybeSingle();
+
+  if (!cuenta) {
+    console.warn(`⚠️ [Asiento] No se encontró cuenta con código ${codigo} para empresa ${empresaId}`);
+    return null;
+  }
+
+  return cuenta.id;
 }

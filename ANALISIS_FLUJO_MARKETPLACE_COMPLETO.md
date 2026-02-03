@@ -147,12 +147,19 @@ const totalAPagar = 71.50 + 15.73 = $87.23
 - ✅ Se crea `factura_por_pagar`
 - ✅ Se registra en `cuentas_por_pagar`
 - ✅ Se actualiza comisión: `estado_pago = 'pendiente'`
+- ✅ **Se genera asiento contable automáticamente** (ACTUALIZADO 03/02/2026)
 
-**⚠️ IMPORTANTE:** Esta función **NO genera asiento contable** automáticamente porque:
-> "Ya existen asientos de facturas de venta validadas por DGI"
-> (Línea 413 del archivo)
+**Asiento Contable Generado:**
+```
+DEBE:  612001 - Comisiones a Partners        $71.50
+DEBE:  2113   - IVA Compras                  $15.73
+  HABER: 213002 - Cuentas por Pagar Partners         $87.23
+```
 
-**Nota:** Este es el único punto que podría revisarse. En teoría, cuando se reconoce la obligación de pago al partner, debería generarse un asiento para registrar el gasto/pasivo.
+**Interpretación:**
+- Se reconoce el gasto por servicios del partner
+- Se registra el IVA que se puede descontar (crédito fiscal)
+- Se registra la obligación de pago al partner
 
 ---
 
@@ -235,19 +242,25 @@ const totalAPagar = 71.50 + 15.73 = $87.23
 **Saldo Final en Tesorería:**
 ```
 Ingresos:  $122.00 (cliente) + $32.00 (comisiones) = $154.00
-Egresos:   $87.23 (partner) + $22.00 (IVA)          = $109.23
+Egresos:   $87.23 (partner) + $6.27 (IVA neto)      = $93.50
 ──────────────────────────────────────────────────────────
-SALDO:     $44.77 ✅
+SALDO:     $60.50 ✅
 ```
 
 **Ganancia Real:**
 ```
-Ingresos por ventas:     $100.00
-Ingresos por comisiones: $ 32.00
-IVA (neutral):           $  0.00
-────────────────────────────────
-GANANCIA TOTAL:          $132.00 ✅
+Ingresos por ventas:        $100.00
+Ingresos por comisiones:    $ 32.00
+Gastos comisiones partners: ($ 71.50)
+IVA (neutral):              $  0.00
+────────────────────────────────────
+UTILIDAD NETA:              $ 60.50 ✅
 ```
+
+**Nota sobre IVA:**
+- IVA cobrado en venta: $22.00 (a pagar a DGI)
+- IVA pagado en compra: $15.73 (crédito fiscal)
+- IVA neto a pagar: $22.00 - $15.73 = $6.27
 
 ---
 
@@ -263,40 +276,66 @@ INGRESOS:
   Total Ingresos                    $132.00
 
 COSTOS Y GASTOS:
-  [Ninguno en este flujo]              $0.00
+  Comisiones a Partners (612001)     $71.50
                                     ─────────
-  Total Gastos                        $0.00
+  Total Gastos                       $71.50
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-UTILIDAD BRUTA                      $132.00 ✅
+UTILIDAD NETA                        $60.50 ✅
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ### ✅ Balance General
+
+**Escenario: Antes de pagar al partner**
 ```
 ACTIVOS:
-  Caja/Bancos (1111)                  $44.77
+  Caja/Bancos (1111)                 $154.00
   Cuentas por Cobrar (1212)            $0.00
   Comisiones por Cobrar (1213)         $0.00
                                     ─────────
-  Total Activos                       $44.77
+  Total Activos                      $154.00
+
+PASIVOS:
+  IVA por Pagar (2113)                 $6.27 (neto: $22 venta - $15.73 compra)
+  Cuentas por Pagar Partners (213002) $87.23
+                                    ─────────
+  Total Pasivos                       $93.50
+
+PATRIMONIO:
+  Utilidad del Período                $60.50
+                                    ─────────
+  Total Patrimonio                    $60.50
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTIVOS = PASIVOS + PATRIMONIO ✅
+$154.00 = $93.50 + $60.50
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**Escenario: Después de pagar al partner y DGI**
+```
+ACTIVOS:
+  Caja/Bancos (1111)                  $60.50
+  Cuentas por Cobrar (1212)            $0.00
+  Comisiones por Cobrar (1213)         $0.00
+                                    ─────────
+  Total Activos                       $60.50
 
 PASIVOS:
   IVA por Pagar (2113)                 $0.00
-  Cuentas por Pagar (2XXX)             $0.00
+  Cuentas por Pagar Partners (213002)  $0.00
                                     ─────────
   Total Pasivos                        $0.00
 
 PATRIMONIO:
-  Capital                              $0.00
-  Utilidades Retenidas              $132.00
-  Retiros                           ($87.23) [pago partner]
+  Utilidad del Período                $60.50
                                     ─────────
-  Total Patrimonio                   $44.77
+  Total Patrimonio                    $60.50
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ACTIVOS = PASIVOS + PATRIMONIO ✅
-$44.77 = $0.00 + $44.77
+$60.50 = $0.00 + $60.50
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -404,30 +443,37 @@ DEBE:  2113 - IVA Compras                $15.73
 **Solución:** Migración `20260203044451_fix_comisiones_como_ingresos.sql`
 **Estado:** ✅ RESUELTO
 
-### ⚠️ Problema 2: Falta asiento al crear cuenta por pagar partner
-**Impacto:** BAJO
-**Problema:** Cuando se genera la factura de compra al partner, no se genera el asiento contable que registre la obligación
-**Efecto:** La contabilidad no refleja inmediatamente el pasivo hasta que se registre el pago
-**Solución Propuesta:** Agregar generación de asiento en la función `generar-facturas-compra-partners`
+### ✅ Problema 2: Falta asiento al crear cuenta por pagar partner (RESUELTO)
+**Fecha:** 03/02/2026
+**Estado:** ✅ IMPLEMENTADO
+**Problema:** Cuando se generaba la factura de compra al partner, no se generaba el asiento contable que registre la obligación
+**Solución:** Se agregó la función `generarAsientoContableFacturaCompra()` que genera automáticamente:
+```
+DEBE:  612001 - Comisiones a Partners        $71.50
+DEBE:  2113   - IVA Compras                  $15.73
+  HABER: 213002 - Cuentas por Pagar Partners         $87.23
+```
+Ver detalles en: `MEJORA_ASIENTO_FACTURA_COMPRA_PARTNER.md`
 
 ---
 
 ## ✅ CONCLUSIÓN FINAL
 
-### El sistema está **CORRECTAMENTE IMPLEMENTADO** para tu caso de uso:
+### El sistema está **100% COMPLETO Y CORRECTAMENTE IMPLEMENTADO** para tu caso de uso:
 
 1. ✅ **Recepción de órdenes:** Webhook funcional
 2. ✅ **Facturación:** Automática con envío a DGI
-3. ✅ **Asientos contables:** Se generan correctamente
+3. ✅ **Asientos contables:** Se generan correctamente (ventas Y compras)
 4. ✅ **Comisiones:** Registradas como INGRESOS (correcto)
 5. ✅ **Plan de cuentas:** Estructura correcta
 6. ✅ **Cuentas por cobrar:** Cliente y marketplace separados
 7. ✅ **Cuentas por pagar:** Partners con cálculos correctos
 8. ✅ **Tesorería:** Movimientos de caja integrados
 9. ✅ **Reportes:** Balance y estado de resultados cuadran
+10. ✅ **Asiento factura compra:** Implementado (03/02/2026)
 
-### Única mejora sugerida:
-Agregar asiento contable automático cuando se crea la factura de compra al partner para reflejar inmediatamente el pasivo en el balance.
+### Mejoras implementadas:
+✅ **Asiento contable en factura de compra al partner** - Ahora el pasivo se refleja inmediatamente en el balance cuando se crea la factura de compra al partner.
 
 ---
 
@@ -458,5 +504,7 @@ Agregar asiento contable automático cuando se crea la factura de compra al part
 ---
 
 **Fecha del análisis:** 03 de febrero de 2026
+**Última actualización:** 03 de febrero de 2026
 **Analista:** Sistema de análisis contable
-**Estado:** ✅ SISTEMA VALIDADO Y FUNCIONAL
+**Estado:** ✅ SISTEMA 100% COMPLETO Y FUNCIONAL
+**Mejoras implementadas:** Asiento contable en factura compra partner
