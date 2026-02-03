@@ -49,6 +49,7 @@ function AsientosContables() {
   
   const [cuentas, setCuentas] = useState<PlanCuenta[]>([]);
   const [cuentasLoading, setCuentasLoading] = useState(false);
+  const [periodos, setPeriodos] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -87,6 +88,7 @@ function AsientosContables() {
   useEffect(() => {
     if (empresaActual?.id) {
       loadCuentas();
+      loadPeriodos();
     }
   }, [empresaActual?.id]);
 
@@ -101,7 +103,7 @@ function AsientosContables() {
       console.log('✅ Cuentas cargadas exitosamente:', cuentasData.length, 'cuentas');
 
       setCuentas(cuentasData);
-      
+
       if (cuentasData.length === 0) {
         showError(
           'No hay cuentas disponibles',
@@ -116,6 +118,26 @@ function AsientosContables() {
       );
     } finally {
       setCuentasLoading(false);
+    }
+  };
+
+  const loadPeriodos = async () => {
+    if (!empresaActual?.id) return;
+
+    try {
+      const { periodosContablesService } = await import('../../services/supabase/periodosContables');
+      const periodosData = await periodosContablesService.getPeriodosByEmpresa(empresaActual.id);
+
+      // Ordenar por fecha de inicio descendente (más reciente primero)
+      const periodosOrdenados = periodosData.sort((a, b) =>
+        new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime()
+      );
+
+      setPeriodos(periodosOrdenados);
+
+      console.log('✅ Periodos cargados:', periodosOrdenados.length);
+    } catch (error) {
+      console.error('❌ Error loading periodos:', error);
     }
   };
 
@@ -145,7 +167,19 @@ function AsientosContables() {
     const matchesSearch = asiento.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          asiento.numero.toString().includes(searchTerm) ||
                          asiento.referencia?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPeriod = !selectedPeriod || asiento.fecha.includes(selectedPeriod);
+
+    // Filtrar por periodo seleccionado
+    let matchesPeriod = true;
+    if (selectedPeriod) {
+      const periodo = periodos.find(p => p.id === selectedPeriod);
+      if (periodo) {
+        const fechaAsiento = new Date(asiento.fecha);
+        const fechaInicio = new Date(periodo.fecha_inicio);
+        const fechaFin = new Date(periodo.fecha_fin);
+        matchesPeriod = fechaAsiento >= fechaInicio && fechaAsiento <= fechaFin;
+      }
+    }
+
     return matchesSearch && matchesPeriod;
   });
 
@@ -529,8 +563,16 @@ function AsientosContables() {
               className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent appearance-none"
             >
               <option value="">Todos los períodos</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
+              {periodos.map(periodo => {
+                const fechaInicio = new Date(periodo.fecha_inicio).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
+                const fechaFin = new Date(periodo.fecha_fin).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
+                const estadoBadge = periodo.estado === 'abierto' ? '🟢' : periodo.estado === 'cerrado' ? '🔴' : '⚫';
+                return (
+                  <option key={periodo.id} value={periodo.id}>
+                    {estadoBadge} {periodo.nombre} - {fechaInicio} a {fechaFin}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div className="flex items-center gap-2">

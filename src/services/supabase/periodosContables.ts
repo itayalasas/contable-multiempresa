@@ -177,6 +177,17 @@ export const periodosContablesService = {
     return data;
   },
 
+  async getPeriodosByEmpresa(empresaId: string): Promise<PeriodoContable[]> {
+    const { data, error } = await supabase
+      .from('periodos_contables')
+      .select('*')
+      .eq('empresa_id', empresaId)
+      .order('fecha_inicio', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async cerrarPeriodo(
     periodoId: string,
     usuarioId: string,
