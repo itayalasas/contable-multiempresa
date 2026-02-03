@@ -676,14 +676,17 @@ function AsientosContables() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          asiento.estado === 'confirmado' 
+                          asiento.estado === 'confirmado'
                             ? 'bg-green-100 text-green-800'
                             : asiento.estado === 'borrador'
                             ? 'bg-yellow-100 text-yellow-800'
+                            : asiento.estado === 'descuadrado'
+                            ? 'bg-orange-100 text-orange-800'
                             : 'bg-red-100 text-red-800'
                         }`}>
-                          {asiento.estado === 'confirmado' ? 'Confirmado' : 
-                           asiento.estado === 'borrador' ? 'Borrador' : 'Anulado'}
+                          {asiento.estado === 'confirmado' ? 'Confirmado' :
+                           asiento.estado === 'borrador' ? 'Borrador' :
+                           asiento.estado === 'descuadrado' ? 'Descuadrado' : 'Anulado'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -791,11 +794,17 @@ function AsientosContables() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Estado</label>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        selectedAsiento.estado === 'confirmado' 
+                        selectedAsiento.estado === 'confirmado'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          : selectedAsiento.estado === 'borrador'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : selectedAsiento.estado === 'descuadrado'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-red-100 text-red-800'
                       }`}>
-                        {selectedAsiento.estado === 'confirmado' ? 'Confirmado' : 'Borrador'}
+                        {selectedAsiento.estado === 'confirmado' ? 'Confirmado' :
+                         selectedAsiento.estado === 'borrador' ? 'Borrador' :
+                         selectedAsiento.estado === 'descuadrado' ? 'Descuadrado' : 'Anulado'}
                       </span>
                     </div>
                     <div>

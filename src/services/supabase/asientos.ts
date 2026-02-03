@@ -29,7 +29,7 @@ export const asientosSupabaseService = {
       fecha: asiento.fecha,
       descripcion: asiento.descripcion,
       referencia: asiento.referencia,
-      estado: asiento.estado as 'borrador' | 'confirmado' | 'anulado',
+      estado: asiento.estado as 'borrador' | 'confirmado' | 'anulado' | 'descuadrado',
       movimientos: asiento.movimientos_contables.map((mov: any) => ({
         id: mov.id,
         cuentaId: mov.cuenta_id,
@@ -79,7 +79,7 @@ export const asientosSupabaseService = {
       fecha: asiento.fecha,
       descripcion: asiento.descripcion,
       referencia: asiento.referencia,
-      estado: asiento.estado as 'borrador' | 'confirmado' | 'anulado',
+      estado: asiento.estado as 'borrador' | 'confirmado' | 'anulado' | 'descuadrado',
       movimientos: asiento.movimientos_contables.map((mov: any) => ({
         id: mov.id,
         cuentaId: mov.cuenta_id,
@@ -122,7 +122,7 @@ export const asientosSupabaseService = {
       fecha: data.fecha,
       descripcion: data.descripcion,
       referencia: data.referencia,
-      estado: data.estado as 'borrador' | 'confirmado' | 'anulado',
+      estado: data.estado as 'borrador' | 'confirmado' | 'anulado' | 'descuadrado',
       movimientos: data.movimientos_contables.map((mov: any) => ({
         id: mov.id,
         cuentaId: mov.cuenta_id,

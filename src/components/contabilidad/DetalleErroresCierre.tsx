@@ -81,7 +81,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
     setLoading(true);
     try {
       // 1. Asientos descuadrados
-      const { data: asientos } = await supabase
+      const { data: asientosDesc } = await supabase
         .from('asientos_contables')
         .select(`
           id,
@@ -93,28 +93,25 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         .eq('empresa_id', empresaId)
         .gte('fecha', periodo.fecha_inicio)
         .lte('fecha', periodo.fecha_fin)
-        .eq('estado', 'confirmado');
+        .eq('estado', 'descuadrado');
 
-      const asientosDescuadrados: AsientoDescuadrado[] = [];
-      const asientosBorrador: Array<{ id: string; numero: string; fecha: string; descripcion: string }> = [];
-
-      asientos?.forEach((asiento: any) => {
+      const asientosDescuadrados: AsientoDescuadrado[] = asientosDesc?.map((asiento: any) => {
         const totalDebitos = asiento.movimientos_contables?.reduce((sum: number, m: any) => sum + (parseFloat(m.debito) || 0), 0) || 0;
         const totalCreditos = asiento.movimientos_contables?.reduce((sum: number, m: any) => sum + (parseFloat(m.credito) || 0), 0) || 0;
         const diferencia = Math.abs(totalDebitos - totalCreditos);
 
-        if (diferencia > 0.01) {
-          asientosDescuadrados.push({
-            id: asiento.id,
-            numero: asiento.numero,
-            fecha: asiento.fecha,
-            descripcion: asiento.descripcion || '',
-            totalDebitos,
-            totalCreditos,
-            diferencia
-          });
-        }
-      });
+        return {
+          id: asiento.id,
+          numero: asiento.numero,
+          fecha: asiento.fecha,
+          descripcion: asiento.descripcion || '',
+          totalDebitos,
+          totalCreditos,
+          diferencia
+        };
+      }) || [];
+
+      const asientosBorrador: Array<{ id: string; numero: string; fecha: string; descripcion: string }> = [];
 
       // Asientos en borrador
       const { data: borradores } = await supabase

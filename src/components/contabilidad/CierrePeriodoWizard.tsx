@@ -87,15 +87,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
 
       setCantidadAsientos(asientos.length);
       const asientosBorrador = asientos.filter(a => a.estado === 'borrador').length;
-
-      let asientosDescuadrados = 0;
-      asientos.forEach(asiento => {
-        const totalDebitos = asiento.movimientos.reduce((sum, m) => sum + (m.debito || 0), 0);
-        const totalCreditos = asiento.movimientos.reduce((sum, m) => sum + (m.credito || 0), 0);
-        if (Math.abs(totalDebitos - totalCreditos) > 0.01) {
-          asientosDescuadrados++;
-        }
-      });
+      const asientosDescuadrados = asientos.filter(a => a.estado === 'descuadrado').length;
 
       const totalDebitos = asientos.reduce((sum, a) =>
         sum + a.movimientos.reduce((s, m) => s + (m.debito || 0), 0), 0

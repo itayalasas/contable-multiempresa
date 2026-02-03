@@ -141,7 +141,7 @@ export interface AsientoContable {
   fecha: string;
   descripcion: string;
   referencia?: string;
-  estado: 'borrador' | 'confirmado' | 'anulado';
+  estado: 'borrador' | 'confirmado' | 'anulado' | 'descuadrado';
   movimientos: MovimientoContable[];
   empresaId: string;
   paisId: string;
