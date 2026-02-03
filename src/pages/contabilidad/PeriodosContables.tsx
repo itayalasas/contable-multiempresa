@@ -42,6 +42,8 @@ export default function PeriodosContables() {
   const [showCierreWizard, setShowCierreWizard] = useState(false);
   const [showReabrirModal, setShowReabrirModal] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
+  const [showCerrarEjercicio, setShowCerrarEjercicio] = useState(false);
+  const [showReabrirEjercicio, setShowReabrirEjercicio] = useState(false);
   const [selectedPeriodo, setSelectedPeriodo] = useState<PeriodoContable | null>(null);
   const [historial, setHistorial] = useState<CierreContable[]>([]);
 
@@ -271,6 +273,66 @@ export default function PeriodosContables() {
     }
   };
 
+  const handleCerrarEjercicio = async () => {
+    if (!selectedEjercicio || !usuario?.id) return;
+
+    if (!cierreData.motivo || cierreData.motivo.trim() === '') {
+      showError('Error', 'El motivo de cierre es obligatorio');
+      return;
+    }
+
+    try {
+      const result = await periodosContablesService.cerrarEjercicioFiscal(
+        selectedEjercicio,
+        usuario.id,
+        cierreData.motivo,
+        cierreData.observaciones || undefined
+      );
+
+      if (result.success) {
+        showSuccess('Ejercicio cerrado', result.mensaje);
+        setShowCerrarEjercicio(false);
+        setCierreData({ motivo: '', observaciones: '' });
+        loadData();
+      } else {
+        showError('Error', result.mensaje);
+      }
+    } catch (error: any) {
+      console.error('Error cerrando ejercicio:', error);
+      showError('Error', error.message || 'No se pudo cerrar el ejercicio');
+    }
+  };
+
+  const handleReabrirEjercicio = async () => {
+    if (!selectedEjercicio || !usuario?.id) return;
+
+    if (!cierreData.motivo || cierreData.motivo.trim() === '') {
+      showError('Error', 'El motivo de reapertura es obligatorio');
+      return;
+    }
+
+    try {
+      const result = await periodosContablesService.reabrirEjercicioFiscal(
+        selectedEjercicio,
+        usuario.id,
+        cierreData.motivo,
+        cierreData.observaciones || undefined
+      );
+
+      if (result.success) {
+        showSuccess('Ejercicio reabierto', result.mensaje);
+        setShowReabrirEjercicio(false);
+        setCierreData({ motivo: '', observaciones: '' });
+        loadData();
+      } else {
+        showError('Error', result.mensaje);
+      }
+    } catch (error: any) {
+      console.error('Error reabriendo ejercicio:', error);
+      showError('Error', error.message || 'No se pudo reabrir el ejercicio');
+    }
+  };
+
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
       case 'abierto':
@@ -377,19 +439,43 @@ export default function PeriodosContables() {
 
       {ejercicios.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">Ver ejercicio:</label>
-            <select
-              value={selectedEjercicio || ''}
-              onChange={(e) => handleSelectEjercicio(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              {ejercicios.map((ej) => (
-                <option key={ej.id} value={ej.id}>
-                  {ej.anio} - {ej.estado}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">Ver ejercicio:</label>
+              <select
+                value={selectedEjercicio || ''}
+                onChange={(e) => handleSelectEjercicio(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                {ejercicios.map((ej) => (
+                  <option key={ej.id} value={ej.id}>
+                    {ej.anio} - {ej.estado}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedEjercicio && ejercicios.find(e => e.id === selectedEjercicio) && (
+              <div className="flex items-center gap-2">
+                {ejercicios.find(e => e.id === selectedEjercicio)?.estado === 'abierto' && (
+                  <button
+                    onClick={() => setShowCerrarEjercicio(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    <Lock className="h-4 w-4" />
+                    Cerrar Ejercicio Fiscal
+                  </button>
+                )}
+                {ejercicios.find(e => e.id === selectedEjercicio)?.estado === 'cerrado' && (
+                  <button
+                    onClick={() => setShowReabrirEjercicio(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    <Unlock className="h-4 w-4" />
+                    Reabrir Ejercicio Fiscal
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -754,6 +840,134 @@ export default function PeriodosContables() {
             showError('Error al cerrar período', message);
           }}
         />
+      )}
+
+      {showCerrarEjercicio && selectedEjercicio && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-red-100 p-3 rounded-lg">
+                <Lock className="h-6 w-6 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Cerrar Ejercicio Fiscal</h2>
+            </div>
+            <p className="text-gray-600 mb-4">
+              ¿Estás seguro que deseas cerrar el ejercicio fiscal <strong>{ejercicios.find(e => e.id === selectedEjercicio)?.anio}</strong>?
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-yellow-800">
+                Esta acción cerrará todos los períodos del ejercicio de forma definitiva.
+                Asegúrate de que todos los períodos estén cerrados antes de continuar.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Motivo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={cierreData.motivo}
+                  onChange={(e) => setCierreData({ ...cierreData, motivo: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Cierre anual contable"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones (opcional)</label>
+                <textarea
+                  value={cierreData.observaciones}
+                  onChange={(e) => setCierreData({ ...cierreData, observaciones: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows={3}
+                  placeholder="Observaciones adicionales..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleCerrarEjercicio}
+                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+              >
+                <Lock className="h-4 w-4" />
+                Cerrar Ejercicio
+              </button>
+              <button
+                onClick={() => {
+                  setShowCerrarEjercicio(false);
+                  setCierreData({ motivo: '', observaciones: '' });
+                }}
+                className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReabrirEjercicio && selectedEjercicio && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-orange-100 p-3 rounded-lg">
+                <Unlock className="h-6 w-6 text-orange-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Reabrir Ejercicio Fiscal</h2>
+            </div>
+            <p className="text-gray-600 mb-4">
+              ¿Estás seguro que deseas reabrir el ejercicio fiscal <strong>{ejercicios.find(e => e.id === selectedEjercicio)?.anio}</strong>?
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-yellow-800">
+                Esta acción reabrirá todos los períodos cerrados definitivamente del ejercicio.
+                Los períodos volverán a estado cerrado y podrás reabrirlos individualmente si es necesario.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Motivo de reapertura <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={cierreData.motivo}
+                  onChange={(e) => setCierreData({ ...cierreData, motivo: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Ajustes contables, corrección de errores, etc."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones (opcional)</label>
+                <textarea
+                  value={cierreData.observaciones}
+                  onChange={(e) => setCierreData({ ...cierreData, observaciones: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows={3}
+                  placeholder="Detalles de los ajustes a realizar..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleReabrirEjercicio}
+                className="flex-1 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center justify-center gap-2"
+              >
+                <Unlock className="h-4 w-4" />
+                Reabrir Ejercicio
+              </button>
+              <button
+                onClick={() => {
+                  setShowReabrirEjercicio(false);
+                  setCierreData({ motivo: '', observaciones: '' });
+                }}
+                className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <NotificationModal
