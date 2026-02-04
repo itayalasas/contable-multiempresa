@@ -320,7 +320,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         console.warn('Error validando tesorería:', error);
       }
 
-      setDetalles({
+      const detallesData = {
         asientosDescuadrados,
         asientosBorrador,
         facturasVentaSinContabilizar,
@@ -329,7 +329,21 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         comisionesPendientes,
         comisionesFacturadasSinCuentaPorPagar,
         cuentasBancariasDescuadradas
-      });
+      };
+
+      setDetalles(detallesData);
+
+      // Auto-expandir secciones con errores
+      const seccionesConErrores = new Set<string>();
+      if (asientosDescuadrados.length > 0) seccionesConErrores.add('asientos-descuadrados');
+      if (asientosBorrador.length > 0) seccionesConErrores.add('asientos-borrador');
+      if (facturasVentaSinContabilizar.length > 0) seccionesConErrores.add('facturas-venta');
+      if (facturasCompraSinContabilizar.length > 0) seccionesConErrores.add('facturas-compra');
+      if (facturasConError.length > 0) seccionesConErrores.add('facturas-con-error');
+      if (comisionesPendientes.length > 0) seccionesConErrores.add('comisiones-pendientes');
+      if (comisionesFacturadasSinCuentaPorPagar.length > 0) seccionesConErrores.add('comisiones-facturadas');
+      if (cuentasBancariasDescuadradas.length > 0) seccionesConErrores.add('cuentas-descuadradas');
+      setExpandedSections(seccionesConErrores);
     } catch (error) {
       console.error('Error cargando detalles:', error);
     } finally {
@@ -597,6 +611,150 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
                         className="ml-4 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
                       >
                         Ver Factura
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Facturas de Compra Sin Contabilizar */}
+          {detalles.facturasCompraSinContabilizar.length > 0 && (
+            <div className="border border-red-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('facturas-compra')}
+                className="w-full p-4 bg-red-50 flex items-center justify-between hover:bg-red-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <span className="font-semibold text-red-900">
+                    Facturas de Compra Sin Contabilizar ({detalles.facturasCompraSinContabilizar.length})
+                  </span>
+                </div>
+                {expandedSections.has('facturas-compra') ? (
+                  <ChevronDown className="h-5 w-5 text-red-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-red-600" />
+                )}
+              </button>
+              {expandedSections.has('facturas-compra') && (
+                <div className="p-4 space-y-2">
+                  {detalles.facturasCompraSinContabilizar.map((factura) => (
+                    <div key={factura.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{factura.serie}-{factura.numero_factura}</div>
+                        <div className="text-sm text-gray-600">{factura.proveedor_razon_social}</div>
+                        <div className="text-sm text-gray-900 mt-1">Total: ${factura.total.toFixed(2)}</div>
+                        {factura.asiento_error && (
+                          <div className="text-xs text-red-600 mt-1">Error: {factura.asiento_error}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => navegarA('/finanzas/cuentas-por-pagar')}
+                        className="ml-4 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                      >
+                        Ver Factura
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Facturas con Errores */}
+          {detalles.facturasConError.length > 0 && (
+            <div className="border border-red-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('facturas-con-error')}
+                className="w-full p-4 bg-red-50 flex items-center justify-between hover:bg-red-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <span className="font-semibold text-red-900">
+                    Facturas con Errores de Contabilización ({detalles.facturasConError.length})
+                  </span>
+                </div>
+                {expandedSections.has('facturas-con-error') ? (
+                  <ChevronDown className="h-5 w-5 text-red-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-red-600" />
+                )}
+              </button>
+              {expandedSections.has('facturas-con-error') && (
+                <div className="p-4 space-y-2">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Acción requerida:</strong> Estas facturas tienen errores al generar el asiento contable. Revísalas y corrígelas.
+                    </p>
+                  </div>
+                  {detalles.facturasConError.map((factura) => (
+                    <div key={factura.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{factura.serie}-{factura.numero_factura}</div>
+                        <div className="text-sm text-gray-600">{factura.cliente_razon_social}</div>
+                        <div className="text-sm text-gray-900 mt-1">Total: ${factura.total.toFixed(2)}</div>
+                        <div className="text-xs text-red-600 mt-1 bg-red-50 p-2 rounded">
+                          <strong>Error:</strong> {factura.asiento_error}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navegarA(`/ventas/facturas?factura=${factura.id}`)}
+                        className="ml-4 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                      >
+                        Ver Factura
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Comisiones Pendientes de Facturar */}
+          {detalles.comisionesPendientes.length > 0 && (
+            <div className="border border-red-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('comisiones-pendientes')}
+                className="w-full p-4 bg-red-50 flex items-center justify-between hover:bg-red-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <span className="font-semibold text-red-900">
+                    Comisiones Pendientes de Facturar ({detalles.comisionesPendientes.length})
+                  </span>
+                </div>
+                {expandedSections.has('comisiones-pendientes') ? (
+                  <ChevronDown className="h-5 w-5 text-red-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-red-600" />
+                )}
+              </button>
+              {expandedSections.has('comisiones-pendientes') && (
+                <div className="p-4 space-y-2">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Acción requerida:</strong> Debes facturar estas comisiones antes de cerrar el periodo. Ve a Compras → Comisiones Partners.
+                    </p>
+                  </div>
+                  {detalles.comisionesPendientes.map((comision) => (
+                    <div key={comision.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{comision.partner_razon_social}</div>
+                        <div className="text-sm text-gray-600">Orden: {comision.order_id || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">Fecha: {new Date(comision.fecha).toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-900 mt-1">Comisión: ${comision.comision_monto.toFixed(2)}</div>
+                        <div className="text-xs text-red-600 mt-1">Estado: {comision.estado_comision}</div>
+                      </div>
+                      <button
+                        onClick={() => navegarA('/compras/comisiones')}
+                        className="ml-4 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                      >
+                        Facturar
                         <ExternalLink className="h-3 w-3" />
                       </button>
                     </div>
