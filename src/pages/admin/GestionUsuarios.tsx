@@ -23,10 +23,34 @@ import { usuariosSupabaseService } from '../../services/supabase/usuarios';
 import { useAuth } from '../../context/AuthContext';
 import { useSesion } from '../../context/SesionContext';
 
+// Lista de permisos disponibles en el sistema
+const PERMISOS_DISPONIBLES = [
+  { id: 'contabilidad:asientos:crear', nombre: 'Crear Asientos Contables', categoria: 'Contabilidad' },
+  { id: 'contabilidad:asientos:editar', nombre: 'Editar Asientos Contables', categoria: 'Contabilidad' },
+  { id: 'contabilidad:asientos:eliminar', nombre: 'Eliminar Asientos Contables', categoria: 'Contabilidad' },
+  { id: 'contabilidad:asientos:ver', nombre: 'Ver Asientos Contables', categoria: 'Contabilidad' },
+  { id: 'contabilidad:cuentas:crear', nombre: 'Crear Cuentas', categoria: 'Contabilidad' },
+  { id: 'contabilidad:cuentas:editar', nombre: 'Editar Cuentas', categoria: 'Contabilidad' },
+  { id: 'ventas:facturas:crear', nombre: 'Crear Facturas de Venta', categoria: 'Ventas' },
+  { id: 'ventas:facturas:editar', nombre: 'Editar Facturas de Venta', categoria: 'Ventas' },
+  { id: 'ventas:facturas:eliminar', nombre: 'Eliminar Facturas de Venta', categoria: 'Ventas' },
+  { id: 'ventas:clientes:crear', nombre: 'Crear Clientes', categoria: 'Ventas' },
+  { id: 'ventas:clientes:editar', nombre: 'Editar Clientes', categoria: 'Ventas' },
+  { id: 'compras:facturas:crear', nombre: 'Crear Facturas de Compra', categoria: 'Compras' },
+  { id: 'compras:proveedores:crear', nombre: 'Crear Proveedores', categoria: 'Compras' },
+  { id: 'tesoreria:movimientos:crear', nombre: 'Crear Movimientos de Tesorería', categoria: 'Tesorería' },
+  { id: 'tesoreria:movimientos:eliminar', nombre: 'Eliminar Movimientos de Tesorería', categoria: 'Tesorería' },
+  { id: 'tesoreria:autorizar', nombre: 'Autorizar Eliminaciones', categoria: 'Tesorería' },
+  { id: 'reportes:ver', nombre: 'Ver Reportes', categoria: 'Reportes' },
+  { id: 'configuracion:general', nombre: 'Configuración General', categoria: 'Configuración' },
+  { id: 'usuarios:gestionar', nombre: 'Gestionar Usuarios', categoria: 'Administración' },
+  { id: 'empresas:gestionar', nombre: 'Gestionar Empresas', categoria: 'Administración' },
+];
+
 export const GestionUsuarios: React.FC = () => {
   const { usuario: usuarioActual } = useAuth();
   const { empresaActual } = useSesion();
-  
+
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [permisos, setPermisos] = useState<Permiso[]>([]);
@@ -82,9 +106,23 @@ export const GestionUsuarios: React.FC = () => {
 
       setUsuarios(usuariosData);
 
-      // TODO: Implementar roles y permisos desde Supabase
-      setRoles([]);
-      setPermisos([]);
+      // Cargar permisos predefinidos
+      const permisosFormateados = PERMISOS_DISPONIBLES.map(p => ({
+        id: p.id,
+        nombre: p.nombre,
+        descripcion: p.categoria,
+        categoria: p.categoria,
+        activo: true
+      }));
+      setPermisos(permisosFormateados);
+
+      // Roles predefinidos (puedes moverlos a la BD después)
+      setRoles([
+        { id: 'usuario', nombre: 'Usuario', permisos: ['contabilidad:asientos:ver', 'ventas:facturas:ver', 'reportes:ver'] },
+        { id: 'contador', nombre: 'Contador', permisos: ['contabilidad:asientos:crear', 'contabilidad:asientos:editar', 'contabilidad:asientos:ver', 'reportes:ver'] },
+        { id: 'admin', nombre: 'Administrador', permisos: PERMISOS_DISPONIBLES.map(p => p.id) },
+        { id: 'supervisor', nombre: 'Supervisor', permisos: ['tesoreria:autorizar', 'ventas:facturas:ver', 'compras:facturas:ver', 'reportes:ver'] },
+      ]);
     } catch (error) {
       console.error('❌ Error cargando datos:', error);
     } finally {
@@ -463,7 +501,7 @@ export const GestionUsuarios: React.FC = () => {
                   onChange={(e) => {
                     const newRol = e.target.value;
                     setFormData({
-                      ...formData, 
+                      ...formData,
                       rol: newRol,
                       permisos: getRolPermissions(newRol)
                     });
@@ -472,39 +510,54 @@ export const GestionUsuarios: React.FC = () => {
                 >
                   <option value="usuario">Usuario</option>
                   <option value="contador">Contador</option>
+                  <option value="supervisor">Supervisor</option>
                   <option value="admin">Administrador</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Permisos
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Permisos Personalizados
                 </label>
-                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2">
-                  {permisos.map((permiso) => (
-                    <label key={permiso.id} className="flex items-center space-x-2 py-1">
-                      <input
-                        type="checkbox"
-                        checked={formData.permisos.includes(permiso.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              permisos: [...formData.permisos, permiso.id]
-                            });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              permisos: formData.permisos.filter(p => p !== permiso.id)
-                            });
-                          }
-                        }}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm">{permiso.nombre}</span>
-                    </label>
+                <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-3 bg-gray-50">
+                  {Object.entries(
+                    PERMISOS_DISPONIBLES.reduce((acc, permiso) => {
+                      if (!acc[permiso.categoria]) acc[permiso.categoria] = [];
+                      acc[permiso.categoria].push(permiso);
+                      return acc;
+                    }, {} as Record<string, typeof PERMISOS_DISPONIBLES>)
+                  ).map(([categoria, permisosCategoria]) => (
+                    <div key={categoria} className="space-y-1">
+                      <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide border-b border-gray-300 pb-1">{categoria}</h4>
+                      {permisosCategoria.map((permiso) => (
+                        <label key={permiso.id} className="flex items-center space-x-2 py-1 pl-2 hover:bg-white rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.permisos.includes(permiso.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  permisos: [...formData.permisos, permiso.id]
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  permisos: formData.permisos.filter(p => p !== permiso.id)
+                                });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{permiso.nombre}</span>
+                        </label>
+                      ))}
+                    </div>
                   ))}
                 </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Los permisos se asignan automáticamente según el rol seleccionado, pero puedes personalizarlos
+                </p>
               </div>
 
               {modalType === 'create' && (

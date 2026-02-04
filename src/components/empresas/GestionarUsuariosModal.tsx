@@ -233,8 +233,8 @@ export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
                             disabled={saving}
                             className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                           >
-                            <option value="super_admin">Super Admin</option>
-                            <option value="admin_empresa">Admin Empresa</option>
+                            <option value="admin">Administrador</option>
+                            <option value="supervisor">Supervisor</option>
                             <option value="contador">Contador</option>
                             <option value="usuario">Usuario</option>
                           </select>
