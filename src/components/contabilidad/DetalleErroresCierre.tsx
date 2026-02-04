@@ -6,11 +6,13 @@ import {
   X,
   Loader2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Wrench
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import { PeriodoContable } from '../../services/supabase/periodosContables';
 import { useNavigate } from 'react-router-dom';
+import { tesoreriaSupabaseService } from '../../services/supabase/tesoreria';
 
 interface DetalleErroresCierreProps {
   periodo: PeriodoContable;
@@ -72,6 +74,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
   const [loading, setLoading] = useState(true);
   const [detalles, setDetalles] = useState<DetallesErrores | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [cuadrandoCuentas, setCuadrandoCuentas] = useState(false);
 
   useEffect(() => {
     cargarDetalles();
@@ -331,6 +334,29 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
     onClose();
   };
 
+  const cuadrarCuentasAutomaticamente = async () => {
+    if (!confirm('¿Desea cuadrar automáticamente las cuentas bancarias sin movimientos estableciendo su saldo en $0.00?')) {
+      return;
+    }
+
+    setCuadrandoCuentas(true);
+    try {
+      const resultado = await tesoreriaSupabaseService.cuadrarCuentasSinMovimientos(empresaId);
+
+      if (resultado.cuentasCorregidas > 0) {
+        alert(`Se cuadraron ${resultado.cuentasCorregidas} cuenta(s) bancaria(s) exitosamente.`);
+        await cargarDetalles();
+      } else {
+        alert('No se encontraron cuentas para cuadrar automáticamente.');
+      }
+    } catch (error) {
+      console.error('Error cuadrando cuentas:', error);
+      alert('Error al cuadrar cuentas bancarias. Por favor, intente nuevamente.');
+    } finally {
+      setCuadrandoCuentas(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
@@ -575,11 +601,31 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
               {expandedSections.has('cuentas-descuadradas') && (
                 <div className="p-4 space-y-2">
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                    <p className="text-sm text-red-800">
-                      <strong>Acción requerida:</strong> El saldo contable de las cuentas bancarias no coincide con el saldo real.
-                      Esto puede deberse a movimientos de tesorería que no se han reflejado correctamente o a errores de conciliación.
-                      Ve a Finanzas → Tesorería para revisar los movimientos.
-                    </p>
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm text-red-800 flex-1">
+                        <strong>Acción requerida:</strong> El saldo contable de las cuentas bancarias no coincide con el saldo real.
+                        Esto puede deberse a movimientos de tesorería que no se han reflejado correctamente o a errores de conciliación.
+                        Ve a Finanzas → Tesorería para revisar los movimientos.
+                      </p>
+                      <button
+                        onClick={cuadrarCuentasAutomaticamente}
+                        disabled={cuadrandoCuentas}
+                        className="ml-3 flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Cuadrar automáticamente cuentas sin movimientos estableciendo saldo en $0.00"
+                      >
+                        {cuadrandoCuentas ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Cuadrando...
+                          </>
+                        ) : (
+                          <>
+                            <Wrench className="h-4 w-4" />
+                            Cuadrar Automáticamente
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                   {detalles.cuentasBancariasDescuadradas.map((cuenta) => (
                     <div key={cuenta.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">

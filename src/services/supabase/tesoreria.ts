@@ -294,4 +294,99 @@ export const tesoreriaSupabaseService = {
       tieneAsiento,
     };
   },
+
+  async diagnosticarCuentasBancarias(empresaId: string): Promise<{
+    cuentasConProblemas: Array<{
+      id: string;
+      nombre: string;
+      numeroCuenta: string;
+      saldoActual: number;
+      saldoInicial: number;
+      totalMovimientos: number;
+      problema: string;
+    }>;
+    totalCuentas: number;
+    cuentasOk: number;
+  }> {
+    const cuentas = await this.getCuentasBancarias(empresaId);
+    const cuentasConProblemas = [];
+    let cuentasOk = 0;
+
+    for (const cuenta of cuentas) {
+      const { data: movimientos } = await supabase
+        .from('movimientos_tesoreria')
+        .select('id')
+        .eq('cuenta_bancaria_id', cuenta.id);
+
+      const totalMovimientos = movimientos?.length || 0;
+
+      if (totalMovimientos === 0 && Math.abs(cuenta.saldoActual) > 0.01) {
+        cuentasConProblemas.push({
+          id: cuenta.id,
+          nombre: cuenta.nombre,
+          numeroCuenta: cuenta.numeroCuenta,
+          saldoActual: cuenta.saldoActual,
+          saldoInicial: cuenta.saldoInicial,
+          totalMovimientos,
+          problema: 'Cuenta sin movimientos pero con saldo diferente de cero'
+        });
+      } else if (totalMovimientos === 0 && Math.abs(cuenta.saldoInicial) > 0.01) {
+        cuentasConProblemas.push({
+          id: cuenta.id,
+          nombre: cuenta.nombre,
+          numeroCuenta: cuenta.numeroCuenta,
+          saldoActual: cuenta.saldoActual,
+          saldoInicial: cuenta.saldoInicial,
+          totalMovimientos,
+          problema: 'Cuenta sin movimientos pero con saldo inicial diferente de cero'
+        });
+      } else {
+        cuentasOk++;
+      }
+    }
+
+    return {
+      cuentasConProblemas,
+      totalCuentas: cuentas.length,
+      cuentasOk
+    };
+  },
+
+  async cuadrarCuentasSinMovimientos(empresaId: string): Promise<{
+    cuentasCorregidas: number;
+    detalles: Array<{
+      nombre: string;
+      numeroCuenta: string;
+      saldoAnterior: number;
+      saldoNuevo: number;
+    }>;
+  }> {
+    const diagnostico = await this.diagnosticarCuentasBancarias(empresaId);
+    const detalles = [];
+
+    for (const cuenta of diagnostico.cuentasConProblemas) {
+      if (cuenta.totalMovimientos === 0) {
+        await supabase
+          .from('cuentas_bancarias')
+          .update({
+            saldo_inicial: 0,
+            saldo_actual: 0,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', cuenta.id);
+
+        detalles.push({
+          nombre: cuenta.nombre,
+          numeroCuenta: cuenta.numeroCuenta,
+          saldoAnterior: cuenta.saldoActual,
+          saldoNuevo: 0
+        });
+      }
+    }
+
+    return {
+      cuentasCorregidas: detalles.length,
+      detalles
+    };
+  },
 };
