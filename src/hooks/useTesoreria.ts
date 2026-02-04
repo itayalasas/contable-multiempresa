@@ -73,7 +73,6 @@ export function useTesoreria(empresaId: string | undefined) {
         concepto: mov.descripcion,
         referencia: mov.referencia,
         beneficiario: mov.beneficiario,
-        estado: mov.estado || 'CONFIRMADO',
       }));
 
       setCuentas(cuentasAdaptadas as any);
@@ -100,7 +99,7 @@ export function useTesoreria(empresaId: string | undefined) {
         .filter(m => m.tipoMovimiento === 'EGRESO')
         .reduce((sum, m) => sum + m.monto, 0);
 
-      const movimientosPendientes = movimientosData.filter(m => m.estado === 'PENDIENTE').length;
+      const movimientosPendientes = 0;
 
       // Distribución por tipo de cuenta
       const distribucionPorTipo: { [key: string]: number } = {};

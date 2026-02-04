@@ -31,7 +31,6 @@ interface MovimientoTesoreria {
   cuentaId: string;
   cuentaDestinoId?: string;
   referencia?: string;
-  estado: 'PENDIENTE' | 'CONCILIADO' | 'ANULADO';
   documentoRelacionado?: {
     tipo: string;
     id: string;
@@ -70,8 +69,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
     monto: 0,
     cuentaId: '',
     cuentaDestinoId: '',
-    referencia: '',
-    estado: 'PENDIENTE' as const
+    referencia: ''
   });
 
   // Estados para búsqueda de cuentas
@@ -93,8 +91,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
         monto: movimiento.monto,
         cuentaId: movimiento.cuentaId,
         cuentaDestinoId: movimiento.cuentaDestinoId || '',
-        referencia: movimiento.referencia || '',
-        estado: movimiento.estado
+        referencia: movimiento.referencia || ''
       });
       
       // Establecer los nombres de las cuentas para mostrar
@@ -121,8 +118,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
         monto: 0,
         cuentaId: defaultCuentaId,
         cuentaDestinoId: '',
-        referencia: '',
-        estado: 'PENDIENTE'
+        referencia: ''
       });
       
       // Establecer el nombre de la cuenta origen por defecto
@@ -559,23 +555,6 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
             )}
           </div>
 
-          {mode !== 'create' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado
-              </label>
-              <select
-                value={formData.estado}
-                onChange={(e) => setFormData({ ...formData, estado: e.target.value as any })}
-                className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={mode === 'view' || saving}
-              >
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="CONCILIADO">Conciliado</option>
-                <option value="ANULADO">Anulado</option>
-              </select>
-            </div>
-          )}
 
           {/* Resumen de la operación */}
           {mode !== 'view' && (

@@ -29,7 +29,6 @@ export interface MovimientoTesoreria {
   categoria: string | null;
   cuentaDestinoId: string | null;
   documentoSoporte: string | null;
-  estado: 'PENDIENTE' | 'CONFIRMADO' | 'CONCILIADO' | 'ANULADO';
   empresaId: string;
   creadoPor: string;
 }
@@ -155,7 +154,6 @@ export const tesoreriaSupabaseService = {
       categoria: mov.categoria,
       cuentaDestinoId: mov.metadata?.cuenta_destino_id || null,
       documentoSoporte: mov.documento_soporte,
-      estado: mov.estado as any,
       empresaId: mov.empresa_id,
       creadoPor: mov.creado_por,
     }));
@@ -180,7 +178,6 @@ export const tesoreriaSupabaseService = {
         beneficiario: movimiento.beneficiario,
         categoria: movimiento.categoria,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
-        estado: movimiento.estado,
         empresa_id: movimiento.empresaId,
         creado_por: movimiento.creadoPor,
       })
@@ -201,7 +198,6 @@ export const tesoreriaSupabaseService = {
       categoria: data.categoria,
       cuentaDestinoId: data.metadata?.cuenta_destino_id || null,
       documentoSoporte: data.documento_soporte,
-      estado: data.estado as any,
       empresaId: data.empresa_id,
       creadoPor: data.creado_por,
     };
@@ -214,7 +210,6 @@ export const tesoreriaSupabaseService = {
     if (updates.descripcion) updateData.descripcion = updates.descripcion;
     if (updates.referencia !== undefined) updateData.referencia = updates.referencia;
     if (updates.beneficiario !== undefined) updateData.beneficiario = updates.beneficiario;
-    if (updates.estado) updateData.estado = updates.estado;
 
     const { error } = await supabase
       .from('movimientos_tesoreria')
