@@ -389,4 +389,59 @@ export const tesoreriaSupabaseService = {
       detalles
     };
   },
+
+  async sincronizarTesoreriaCompleta(empresaId: string): Promise<{
+    movimientosCreados: number;
+    cuentasActualizadas: number;
+    pasos: Array<{
+      paso: string;
+      mensaje: string;
+      cantidad: number;
+    }>;
+  }> {
+    const { data, error } = await supabase
+      .rpc('ejecutar_sincronizacion_completa', {
+        p_empresa_id: empresaId
+      });
+
+    if (error) throw error;
+
+    const pasos = data || [];
+    const movimientosCreados = pasos.find((p: any) => p.paso === 'PASO 1 COMPLETADO')?.cantidad || 0;
+    const cuentasActualizadas = pasos.find((p: any) => p.paso === 'PASO 2 COMPLETADO')?.cantidad || 0;
+
+    return {
+      movimientosCreados,
+      cuentasActualizadas,
+      pasos
+    };
+  },
+
+  async previsualizarSincronizacion(empresaId: string): Promise<Array<{
+    tipoOperacion: string;
+    asientoNumero: string;
+    asientoFecha: string;
+    cuentaBancariaNombre: string;
+    tipoMovimiento: string;
+    monto: number;
+    descripcion: string;
+  }>> {
+    const { data, error } = await supabase
+      .rpc('sincronizar_tesoreria_desde_asientos', {
+        p_empresa_id: empresaId,
+        p_modo: 'PREVIEW'
+      });
+
+    if (error) throw error;
+
+    return (data || []).map((item: any) => ({
+      tipoOperacion: item.tipo_operacion,
+      asientoNumero: item.asiento_numero,
+      asientoFecha: item.asiento_fecha,
+      cuentaBancariaNombre: item.cuenta_bancaria_nombre,
+      tipoMovimiento: item.tipo_movimiento,
+      monto: parseFloat(item.monto || '0'),
+      descripcion: item.descripcion
+    }));
+  },
 };

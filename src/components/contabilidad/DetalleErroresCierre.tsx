@@ -78,9 +78,11 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
   const [detalles, setDetalles] = useState<DetallesErrores | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [cuadrandoCuentas, setCuadrandoCuentas] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
 
   // Estados para modales
   const [showConfirmCuadrar, setShowConfirmCuadrar] = useState(false);
+  const [showConfirmSincronizar, setShowConfirmSincronizar] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationConfig, setNotificationConfig] = useState<{
     title: string;
@@ -392,6 +394,43 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
     }
   };
 
+  const confirmarSincronizarCompleto = () => {
+    setShowConfirmSincronizar(true);
+  };
+
+  const ejecutarSincronizacionCompleta = async () => {
+    setShowConfirmSincronizar(false);
+    setSincronizando(true);
+
+    try {
+      const resultado = await tesoreriaSupabaseService.sincronizarTesoreriaCompleta(empresaId);
+
+      if (resultado.movimientosCreados > 0 || resultado.cuentasActualizadas > 0) {
+        mostrarNotificacion(
+          'Sincronización Completada',
+          `Se crearon ${resultado.movimientosCreados} movimiento(s) de tesorería y se actualizaron ${resultado.cuentasActualizadas} cuenta(s) bancaria(s). El sistema está ahora sincronizado.`,
+          'success'
+        );
+        await cargarDetalles();
+      } else {
+        mostrarNotificacion(
+          'Sistema Sincronizado',
+          'El sistema ya está sincronizado. No se requieren cambios.',
+          'info'
+        );
+      }
+    } catch (error) {
+      console.error('Error sincronizando:', error);
+      mostrarNotificacion(
+        'Error en Sincronización',
+        'Ocurrió un error al sincronizar el sistema. Por favor, contacte al administrador.',
+        'error'
+      );
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
@@ -636,30 +675,58 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
               {expandedSections.has('cuentas-descuadradas') && (
                 <div className="p-4 space-y-2">
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                    <div className="flex items-start justify-between">
-                      <p className="text-sm text-red-800 flex-1">
-                        <strong>Acción requerida:</strong> El saldo contable de las cuentas bancarias no coincide con el saldo real.
-                        Esto puede deberse a movimientos de tesorería que no se han reflejado correctamente o a errores de conciliación.
-                        Ve a Finanzas → Tesorería para revisar los movimientos.
-                      </p>
-                      <button
-                        onClick={confirmarCuadrarCuentas}
-                        disabled={cuadrandoCuentas}
-                        className="ml-3 flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cuadrar automáticamente cuentas sin movimientos estableciendo saldo en $0.00"
-                      >
-                        {cuadrandoCuentas ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Cuadrando...
-                          </>
-                        ) : (
-                          <>
-                            <Wrench className="h-4 w-4" />
-                            Cuadrar Automáticamente
-                          </>
-                        )}
-                      </button>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p className="text-sm text-red-800">
+                          <strong>Acción requerida:</strong> El saldo contable de las cuentas bancarias no coincide con el saldo real.
+                          Esto puede deberse a movimientos de tesorería que no se han reflejado correctamente.
+                        </p>
+                        <p className="text-xs text-red-700 mt-2">
+                          <strong>Opciones:</strong>
+                        </p>
+                        <ul className="text-xs text-red-700 mt-1 ml-4 list-disc">
+                          <li><strong>Sincronizar Sistema:</strong> Crea movimientos de tesorería basados en asientos contables existentes</li>
+                          <li><strong>Cuadrar Simple:</strong> Ajusta solo cuentas sin movimientos a $0.00</li>
+                        </ul>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={confirmarSincronizarCompleto}
+                          disabled={sincronizando || cuadrandoCuentas}
+                          className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Sincronizar todo el sistema creando movimientos de tesorería desde asientos contables"
+                        >
+                          {sincronizando ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Sincronizando...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4" />
+                              Sincronizar Sistema
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={confirmarCuadrarCuentas}
+                          disabled={cuadrandoCuentas || sincronizando}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Cuadrar automáticamente cuentas sin movimientos estableciendo saldo en $0.00"
+                        >
+                          {cuadrandoCuentas ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Cuadrando...
+                            </>
+                          ) : (
+                            <>
+                              <Wrench className="h-4 w-4" />
+                              Cuadrar Simple
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {detalles.cuentasBancariasDescuadradas.map((cuenta) => (
@@ -725,7 +792,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         </div>
       </div>
 
-      {/* Modal de confirmación */}
+      {/* Modal de confirmación - Cuadrar */}
       <ConfirmModal
         isOpen={showConfirmCuadrar}
         onClose={() => setShowConfirmCuadrar(false)}
@@ -734,6 +801,18 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         message="¿Desea cuadrar automáticamente las cuentas bancarias sin movimientos estableciendo su saldo en $0.00?"
         type="warning"
         confirmText="Sí, Cuadrar"
+        cancelText="Cancelar"
+      />
+
+      {/* Modal de confirmación - Sincronizar */}
+      <ConfirmModal
+        isOpen={showConfirmSincronizar}
+        onClose={() => setShowConfirmSincronizar(false)}
+        onConfirm={ejecutarSincronizacionCompleta}
+        title="Sincronizar Sistema Completo"
+        message="Esta acción creará movimientos de tesorería basados en los asientos contables existentes y recalculará todos los saldos. Esto sincronizará completamente el sistema. ¿Desea continuar?"
+        type="warning"
+        confirmText="Sí, Sincronizar"
         cancelText="Cancelar"
       />
 
