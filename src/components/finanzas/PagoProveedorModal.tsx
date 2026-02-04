@@ -55,6 +55,20 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
     }));
   }, [factura]);
 
+  // Auto-llenar banco y número de cuenta cuando se selecciona una cuenta bancaria del sistema
+  useEffect(() => {
+    if (formData.cuentaBancariaId && cuentas.length > 0) {
+      const cuentaSeleccionada = cuentas.find(c => c.id === formData.cuentaBancariaId);
+      if (cuentaSeleccionada) {
+        setFormData(prev => ({
+          ...prev,
+          banco: cuentaSeleccionada.banco || '',
+          numeroCuenta: cuentaSeleccionada.numero || ''
+        }));
+      }
+    }
+  }, [formData.cuentaBancariaId, cuentas]);
+
   const formatearMoneda = (cantidad: number) => {
     return new Intl.NumberFormat('es-PE', {
       style: 'currency',
@@ -301,38 +315,21 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
             )}
           </div>
 
-          {/* Campos condicionales según el tipo de pago */}
-          {requiereBanco && (
+          {/* Información de banco y número de cuenta (auto-llenados desde la cuenta seleccionada) */}
+          {formData.cuentaBancariaId && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Banco
                 </label>
-                {loadingNomencladores ? (
-                  <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
-                    Cargando bancos...
-                  </div>
-                ) : bancos.length > 0 ? (
-                  <SearchableSelect
-                    options={bancos.map(banco => ({
-                      value: banco.nombre,
-                      label: banco.nombre
-                    }))}
-                    value={formData.banco}
-                    onChange={(value) => setFormData({ ...formData, banco: value })}
-                    placeholder="Seleccionar banco..."
-                    disabled={saving || success}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.banco}
-                    onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Nombre del banco"
-                    disabled={saving || success}
-                  />
-                )}
+                <input
+                  type="text"
+                  value={formData.banco}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                  disabled
+                  placeholder="Auto-llenado desde cuenta"
+                />
+                <p className="text-xs text-gray-500 mt-1">Auto-llenado desde la cuenta bancaria seleccionada</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -341,10 +338,11 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
                 <input
                   type="text"
                   value={formData.numeroCuenta}
-                  onChange={(e) => setFormData({ ...formData, numeroCuenta: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  disabled={saving || success}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                  disabled
+                  placeholder="Auto-llenado desde cuenta"
                 />
+                <p className="text-xs text-gray-500 mt-1">Auto-llenado desde la cuenta bancaria seleccionada</p>
               </div>
             </div>
           )}
