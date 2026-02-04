@@ -129,7 +129,20 @@ export default function Facturas() {
     });
   };
 
+  const esFacturaComision = (factura: FacturaVenta): boolean => {
+    return factura.metadata?.tipo === 'factura_comisiones_partner' || factura.serie === 'COM';
+  };
+
   const handleMarcarComoPagada = (factura: FacturaVenta) => {
+    if (esFacturaComision(factura)) {
+      mostrarNotificacion(
+        'warning',
+        'Factura de Comisión',
+        'Las facturas de comisión se marcan automáticamente como pagadas cuando el cliente paga en el marketplace. No es necesario marcarlas manualmente.'
+      );
+      return;
+    }
+
     setConfirmModal({
       show: true,
       title: 'Marcar como Pagada',
@@ -751,10 +764,22 @@ export default function Facturas() {
                 {facturasFiltradas.map((factura) => (
                   <tr key={factura.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {factura.serie}-{factura.numero_factura}
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {factura.serie}-{factura.numero_factura}
+                          </div>
+                          <div className="text-xs text-gray-500">{factura.tipo_documento}</div>
+                        </div>
+                        {esFacturaComision(factura) && (
+                          <span
+                            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800"
+                            title="Factura de comisión generada automáticamente"
+                          >
+                            Comisión
+                          </span>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-500">{factura.tipo_documento}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{factura.cliente?.razon_social}</div>
@@ -905,12 +930,21 @@ export default function Facturas() {
                           </button>
                         )}
 
-                        {/* Marcar como pagada - solo pendiente */}
+                        {/* Marcar como pagada - solo pendiente y no comisiones */}
                         {factura.estado === 'pendiente' && (
                           <button
                             onClick={() => handleMarcarComoPagada(factura)}
-                            className="text-green-600 hover:text-green-900"
-                            title="Marcar como pagada"
+                            disabled={esFacturaComision(factura)}
+                            className={`relative group ${
+                              esFacturaComision(factura)
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-green-600 hover:text-green-900'
+                            }`}
+                            title={
+                              esFacturaComision(factura)
+                                ? 'Las facturas de comisión se cobran automáticamente'
+                                : 'Marcar como pagada'
+                            }
                           >
                             <svg
                               className="w-5 h-5"
@@ -925,6 +959,11 @@ export default function Facturas() {
                                 d="M5 13l4 4L19 7"
                               />
                             </svg>
+                            {esFacturaComision(factura) && (
+                              <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10 whitespace-normal">
+                                Factura de comisión: El cobro se registra automáticamente cuando el cliente paga en el marketplace. No marcar manualmente.
+                              </div>
+                            )}
                           </button>
                         )}
 
