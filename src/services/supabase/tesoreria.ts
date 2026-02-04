@@ -153,7 +153,7 @@ export const tesoreriaSupabaseService = {
       referencia: mov.referencia,
       beneficiario: mov.beneficiario,
       categoria: mov.categoria,
-      cuentaDestinoId: mov.cuenta_destino_id,
+      cuentaDestinoId: mov.metadata?.cuenta_destino_id || null,
       documentoSoporte: mov.documento_soporte,
       estado: mov.estado as any,
       empresaId: mov.empresa_id,
@@ -162,6 +162,12 @@ export const tesoreriaSupabaseService = {
   },
 
   async createMovimiento(movimiento: Omit<MovimientoTesoreria, 'id'>): Promise<MovimientoTesoreria> {
+    const metadata: any = {};
+
+    if (movimiento.tipoMovimiento === 'TRANSFERENCIA' && movimiento.cuentaDestinoId) {
+      metadata.cuenta_destino_id = movimiento.cuentaDestinoId;
+    }
+
     const { data, error } = await supabase
       .from('movimientos_tesoreria')
       .insert({
@@ -173,8 +179,7 @@ export const tesoreriaSupabaseService = {
         referencia: movimiento.referencia,
         beneficiario: movimiento.beneficiario,
         categoria: movimiento.categoria,
-        cuenta_destino_id: movimiento.cuentaDestinoId,
-        documento_soporte: movimiento.documentoSoporte,
+        metadata: Object.keys(metadata).length > 0 ? metadata : null,
         estado: movimiento.estado,
         empresa_id: movimiento.empresaId,
         creado_por: movimiento.creadoPor,
@@ -183,42 +188,6 @@ export const tesoreriaSupabaseService = {
       .single();
 
     if (error) throw error;
-
-    const { data: cuenta } = await supabase
-      .from('cuentas_bancarias')
-      .select('saldo_actual')
-      .eq('id', movimiento.cuentaBancariaId)
-      .single();
-
-    if (cuenta) {
-      let nuevoSaldo = cuenta.saldo_actual;
-
-      if (movimiento.tipoMovimiento === 'INGRESO') {
-        nuevoSaldo += movimiento.monto;
-      } else if (movimiento.tipoMovimiento === 'EGRESO') {
-        nuevoSaldo -= movimiento.monto;
-      }
-
-      await supabase
-        .from('cuentas_bancarias')
-        .update({ saldo_actual: nuevoSaldo })
-        .eq('id', movimiento.cuentaBancariaId);
-
-      if (movimiento.tipoMovimiento === 'TRANSFERENCIA' && movimiento.cuentaDestinoId) {
-        const { data: cuentaDestino } = await supabase
-          .from('cuentas_bancarias')
-          .select('saldo_actual')
-          .eq('id', movimiento.cuentaDestinoId)
-          .single();
-
-        if (cuentaDestino) {
-          await supabase
-            .from('cuentas_bancarias')
-            .update({ saldo_actual: cuentaDestino.saldo_actual + movimiento.monto })
-            .eq('id', movimiento.cuentaDestinoId);
-        }
-      }
-    }
 
     return {
       id: data.id,
@@ -230,7 +199,7 @@ export const tesoreriaSupabaseService = {
       referencia: data.referencia,
       beneficiario: data.beneficiario,
       categoria: data.categoria,
-      cuentaDestinoId: data.cuenta_destino_id,
+      cuentaDestinoId: data.metadata?.cuenta_destino_id || null,
       documentoSoporte: data.documento_soporte,
       estado: data.estado as any,
       empresaId: data.empresa_id,
