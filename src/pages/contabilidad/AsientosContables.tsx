@@ -173,9 +173,11 @@ function AsientosContables() {
     if (selectedPeriod) {
       const periodo = periodos.find(p => p.id === selectedPeriod);
       if (periodo) {
-        const fechaAsiento = new Date(asiento.fecha);
-        const fechaInicio = new Date(periodo.fecha_inicio);
-        const fechaFin = new Date(periodo.fecha_fin);
+        // Normalizar fechas para comparación (solo fecha, sin hora)
+        const fechaAsiento = new Date(asiento.fecha.split('T')[0] + 'T00:00:00');
+        const fechaInicio = new Date(periodo.fecha_inicio + 'T00:00:00');
+        const fechaFin = new Date(periodo.fecha_fin + 'T23:59:59');
+
         matchesPeriod = fechaAsiento >= fechaInicio && fechaAsiento <= fechaFin;
       }
     }
@@ -565,14 +567,21 @@ function AsientosContables() {
               onChange={(e) => setSelectedPeriod(e.target.value)}
               className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent appearance-none"
             >
-              <option value="">Todos los períodos</option>
+              <option value="">Todos los períodos ({asientos.length} asientos)</option>
               {periodos.map(periodo => {
-                const fechaInicio = new Date(periodo.fecha_inicio).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
-                const fechaFin = new Date(periodo.fecha_fin).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
+                const fechaInicio = new Date(periodo.fecha_inicio + 'T00:00:00');
+                const fechaFin = new Date(periodo.fecha_fin + 'T23:59:59');
+
+                // Contar asientos en este periodo
+                const asientosEnPeriodo = asientos.filter(asiento => {
+                  const fechaAsiento = new Date(asiento.fecha);
+                  return fechaAsiento >= fechaInicio && fechaAsiento <= fechaFin;
+                }).length;
+
                 const estadoBadge = periodo.estado === 'abierto' ? '🟢' : periodo.estado === 'cerrado' ? '🔴' : '⚫';
                 return (
                   <option key={periodo.id} value={periodo.id}>
-                    {estadoBadge} {periodo.nombre} - {fechaInicio} a {fechaFin}
+                    {estadoBadge} {periodo.nombre} ({asientosEnPeriodo} asientos)
                   </option>
                 );
               })}
