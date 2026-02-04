@@ -7,12 +7,15 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
-  Wrench
+  Wrench,
+  CheckCircle
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import { PeriodoContable } from '../../services/supabase/periodosContables';
 import { useNavigate } from 'react-router-dom';
 import { tesoreriaSupabaseService } from '../../services/supabase/tesoreria';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { NotificationModal } from '../common/NotificationModal';
 
 interface DetalleErroresCierreProps {
   periodo: PeriodoContable;
@@ -75,6 +78,19 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
   const [detalles, setDetalles] = useState<DetallesErrores | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [cuadrandoCuentas, setCuadrandoCuentas] = useState(false);
+
+  // Estados para modales
+  const [showConfirmCuadrar, setShowConfirmCuadrar] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationConfig, setNotificationConfig] = useState<{
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+  }>({
+    title: '',
+    message: '',
+    type: 'success'
+  });
 
   useEffect(() => {
     cargarDetalles();
@@ -334,24 +350,43 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
     onClose();
   };
 
-  const cuadrarCuentasAutomaticamente = async () => {
-    if (!confirm('¿Desea cuadrar automáticamente las cuentas bancarias sin movimientos estableciendo su saldo en $0.00?')) {
-      return;
-    }
+  const mostrarNotificacion = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => {
+    setNotificationConfig({ title, message, type });
+    setShowNotification(true);
+  };
 
+  const confirmarCuadrarCuentas = () => {
+    setShowConfirmCuadrar(true);
+  };
+
+  const ejecutarCuadreCuentas = async () => {
+    setShowConfirmCuadrar(false);
     setCuadrandoCuentas(true);
+
     try {
       const resultado = await tesoreriaSupabaseService.cuadrarCuentasSinMovimientos(empresaId);
 
       if (resultado.cuentasCorregidas > 0) {
-        alert(`Se cuadraron ${resultado.cuentasCorregidas} cuenta(s) bancaria(s) exitosamente.`);
+        mostrarNotificacion(
+          'Cuentas Cuadradas',
+          `Se cuadraron ${resultado.cuentasCorregidas} cuenta(s) bancaria(s) exitosamente. Las cuentas sin movimientos ahora tienen saldo $0.00.`,
+          'success'
+        );
         await cargarDetalles();
       } else {
-        alert('No se encontraron cuentas para cuadrar automáticamente.');
+        mostrarNotificacion(
+          'Sin Cambios',
+          'No se encontraron cuentas bancarias sin movimientos que requieran ajuste.',
+          'info'
+        );
       }
     } catch (error) {
       console.error('Error cuadrando cuentas:', error);
-      alert('Error al cuadrar cuentas bancarias. Por favor, intente nuevamente.');
+      mostrarNotificacion(
+        'Error al Cuadrar Cuentas',
+        'Ocurrió un error al intentar cuadrar las cuentas bancarias. Por favor, intente nuevamente.',
+        'error'
+      );
     } finally {
       setCuadrandoCuentas(false);
     }
@@ -608,7 +643,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
                         Ve a Finanzas → Tesorería para revisar los movimientos.
                       </p>
                       <button
-                        onClick={cuadrarCuentasAutomaticamente}
+                        onClick={confirmarCuadrarCuentas}
                         disabled={cuadrandoCuentas}
                         className="ml-3 flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Cuadrar automáticamente cuentas sin movimientos estableciendo saldo en $0.00"
@@ -689,6 +724,28 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
           </button>
         </div>
       </div>
+
+      {/* Modal de confirmación */}
+      <ConfirmModal
+        isOpen={showConfirmCuadrar}
+        onClose={() => setShowConfirmCuadrar(false)}
+        onConfirm={ejecutarCuadreCuentas}
+        title="Cuadrar Cuentas Bancarias"
+        message="¿Desea cuadrar automáticamente las cuentas bancarias sin movimientos estableciendo su saldo en $0.00?"
+        type="warning"
+        confirmText="Sí, Cuadrar"
+        cancelText="Cancelar"
+      />
+
+      {/* Modal de notificación */}
+      <NotificationModal
+        isOpen={showNotification}
+        onClose={() => setShowNotification(false)}
+        title={notificationConfig.title}
+        message={notificationConfig.message}
+        type={notificationConfig.type}
+        autoClose={notificationConfig.type === 'success' ? 3000 : undefined}
+      />
     </div>
   );
 }
