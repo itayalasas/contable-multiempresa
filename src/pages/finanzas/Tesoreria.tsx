@@ -59,7 +59,7 @@ function Tesoreria() {
 
   // Filtrado de movimientos
   const movimientosFiltrados = movimientos.filter(movimiento => {
-    const matchesSearch = movimiento.concepto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = movimiento.concepto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          movimiento.referencia?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCuenta = !selectedCuenta || movimiento.cuentaId === selectedCuenta;
     const matchesTipo = !selectedTipo || movimiento.tipo === selectedTipo;

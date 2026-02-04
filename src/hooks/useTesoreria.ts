@@ -75,9 +75,9 @@ export function useTesoreria(empresaId: string | undefined) {
         tipo: mov.tipoMovimiento,
         fecha: mov.fecha,
         monto: mov.monto,
-        concepto: mov.descripcion,
-        referencia: mov.referencia,
-        beneficiario: mov.beneficiario,
+        concepto: mov.descripcion || '',
+        referencia: mov.referencia || '',
+        beneficiario: mov.beneficiario || '',
       }));
 
       setCuentas(cuentasAdaptadas as any);
