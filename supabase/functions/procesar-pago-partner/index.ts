@@ -66,6 +66,37 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Cuenta por pagar no encontrada: ${cuentaError?.message}`);
     }
 
+    // Determinar cuenta bancaria a usar
+    let cuentaBancariaFinal = cuentaBancariaId;
+
+    // Si no se especificó cuenta o es pago de partner, usar cuenta MercadoLibre
+    if (!cuentaBancariaFinal) {
+      // 2. Obtener factura de compra asociada para verificar si es partner
+      const { data: facturaCompra } = await supabase
+        .from('facturas_compra')
+        .select('tipo_factura_compra')
+        .eq('id', cuentaPorPagar.referencia)
+        .maybeSingle();
+
+      if (facturaCompra?.tipo_factura_compra === 'partner_pago') {
+        // Es pago de partner, buscar cuenta MercadoLibre
+        const { data: cuentaML } = await supabase
+          .from('cuentas_bancarias')
+          .select('id')
+          .eq('empresa_id', cuentaPorPagar.empresa_id)
+          .ilike('nombre', '%MercadoLibre%')
+          .eq('activa', true)
+          .maybeSingle();
+
+        if (cuentaML) {
+          cuentaBancariaFinal = cuentaML.id;
+          console.log('💳 Usando cuenta MercadoLibre para pago de partner:', cuentaBancariaFinal);
+        } else {
+          console.warn('⚠️ No se encontró cuenta MercadoLibre, se usará cuenta por defecto');
+        }
+      }
+    }
+
     if (cuentaPorPagar.estado === 'PAGADA') {
       throw new Error('La cuenta por pagar ya está pagada');
     }
@@ -77,7 +108,7 @@ Deno.serve(async (req: Request) => {
       throw new Error(`El monto del pago ($${montoFloat}) excede el saldo pendiente ($${saldoPendiente})`);
     }
 
-    // 2. Obtener factura de compra asociada
+    // 2. Obtener factura de compra asociada (ya la obtuvimos arriba para verificar tipo)
     const { data: facturaCompra } = await supabase
       .from('facturas_compra')
       .select('*')
@@ -174,7 +205,7 @@ Deno.serve(async (req: Request) => {
       facturaCompra,
       pago,
       montoFloat,
-      cuentaBancariaId,
+      cuentaBancariaFinal,
       periodo?.id
     );
 

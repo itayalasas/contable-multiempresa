@@ -1,0 +1,64 @@
+{
+  "event": "order.created",
+  "empresa_id": "a2fb84eb-c91c-4f3e-88c3-4a9c3420009e",
+  "timestamp": "2026-02-04T15:30:00Z",
+  "order": {
+    "order_id": "DOG-2026-MKTP-999",
+    "order_number": "ORD-MKTP-999",
+    "created_at": "2026-02-04T15:30:00Z",
+    "status": "completed",
+    "total": 2000.00,
+    "subtotal": 1639.34,
+    "tax": 360.66,
+    "shipping": 0,
+    "discount": 0,
+    "currency": "UYU",
+    "payment_method": "mercadopago",
+    "payment_status": "paid"
+  },
+  "customer": {
+    "customer_id": "CUST-MKTP-999",
+    "name": "Test Marketplace Completo",
+    "email": "test-marketplace@example.com",
+    "phone": "+598 99 999 999",
+    "document_type": "CI",
+    "document_number": "99999999",
+    "address": {
+      "street": "Test 999",
+      "city": "Montevideo",
+      "state": "Montevideo",
+      "zip": "11200",
+      "country": "UY"
+    }
+  },
+  "items": [
+    {
+      "item_id": "ITEM-MKTP-999",
+      "sku": "MKTP-TEST-999",
+      "name": "Producto Test Marketplace",
+      "description": "Producto para probar flujo completo de marketplace",
+      "quantity": 1,
+      "unit_price": 1639.34,
+      "subtotal": 1639.34,
+      "tax_rate": 0.22,
+      "tax_amount": 360.66,
+      "total": 2000.00,
+      "category": "Test",
+      "partner": {
+        "partner_id": "PARTNER-MKTP-TEST",
+        "name": "Partner Test Marketplace",
+        "email": "partner-test@example.com",
+        "phone": "+598 99 888 888",
+        "document_type": "RUT",
+        "document_number": "219999990019",
+        "commission_percentage": 15.0,
+        "billing_frequency": "quincenal",
+        "billing_day": 15
+      }
+    }
+  ],
+  "metadata": {
+    "test": true,
+    "flujo_completo": true
+  }
+}
