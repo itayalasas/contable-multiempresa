@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { tesoreriaSupabaseService, CuentaBancaria, MovimientoTesoreria } from '../services/supabase/tesoreria';
+import { useSesion } from '../context/SesionContext';
+import { useNomencladores } from './useNomencladores';
 
 interface ResumenTesoreria {
   totalCuentas: number;
@@ -19,6 +21,9 @@ interface ResumenTesoreria {
 }
 
 export function useTesoreria(empresaId: string | undefined) {
+  const { paisActual } = useSesion();
+  const { tiposMovimientoTesoreria } = useNomencladores(paisActual?.id);
+
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoTesoreria[]>([]);
   const [resumen, setResumen] = useState<ResumenTesoreria>({
@@ -168,10 +173,18 @@ export function useTesoreria(empresaId: string | undefined) {
 
   const crearMovimiento = async (movimiento: any) => {
     try {
+      // Buscar el nomenclador para obtener el tipo correcto
+      const tipoMovimiento = tiposMovimientoTesoreria.find(t => t.id === movimiento.tipo);
+
+      if (!tipoMovimiento) {
+        // Si no encuentra el nomenclador, asumir que ya viene el tipo correcto
+        console.warn('No se encontró el nomenclador para el tipo:', movimiento.tipo);
+      }
+
       // Mapear propiedades del componente a las del servicio
       const movimientoData = {
         cuentaBancariaId: movimiento.cuentaId || movimiento.cuentaBancariaId,
-        tipoMovimiento: movimiento.tipo || movimiento.tipoMovimiento,
+        tipoMovimiento: tipoMovimiento?.tipo || movimiento.tipo || movimiento.tipoMovimiento,
         fecha: movimiento.fecha,
         monto: movimiento.monto,
         descripcion: movimiento.concepto || movimiento.descripcion,
@@ -213,6 +226,12 @@ export function useTesoreria(empresaId: string | undefined) {
       if (updates.descripcion) updatesData.descripcion = updates.descripcion;
       if (updates.referencia !== undefined) updatesData.referencia = updates.referencia;
       if (updates.beneficiario !== undefined) updatesData.beneficiario = updates.beneficiario;
+
+      // Si se actualiza el tipo, mapear el ID del nomenclador al tipo
+      if (updates.tipo) {
+        const tipoMovimiento = tiposMovimientoTesoreria.find(t => t.id === updates.tipo);
+        updatesData.tipoMovimiento = tipoMovimiento?.tipo || updates.tipo;
+      }
 
       await tesoreriaSupabaseService.updateMovimiento(movimientoId, updatesData);
       await cargarDatos(); // Recargar datos
