@@ -199,13 +199,17 @@ export function useTesoreria(empresaId: string | undefined) {
     }
   };
 
-  const eliminarMovimiento = async (movimientoId: string) => {
+  const solicitarEliminacionMovimiento = async (params: {
+    movimientoId: string;
+    empresaId: string;
+    motivo: string;
+    solicitadoPor: string;
+  }) => {
     try {
-      const resultado = await tesoreriaSupabaseService.deleteMovimiento(movimientoId);
-      await cargarDatos(); // Recargar datos para actualizar saldos
+      const resultado = await tesoreriaSupabaseService.solicitarEliminacionMovimiento(params);
       return resultado;
     } catch (err: any) {
-      console.error('Error eliminando movimiento:', err);
+      console.error('Error solicitando eliminación de movimiento:', err);
       throw err;
     }
   };
@@ -220,7 +224,7 @@ export function useTesoreria(empresaId: string | undefined) {
     actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
-    eliminarMovimiento,
+    solicitarEliminacionMovimiento,
     recargarDatos: cargarDatos,
   };
 }

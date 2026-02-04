@@ -11,6 +11,7 @@ export const asientosSupabaseService = {
         movimientos_contables (*)
       `)
       .eq('empresa_id', empresaId)
+      .eq('eliminado', false)
       .eq('ocultar_en_listados', false)
       .order('fecha', { ascending: false })
       .order('numero', { ascending: false });
@@ -65,6 +66,7 @@ export const asientosSupabaseService = {
         movimientos_contables (*)
       `)
       .eq('empresa_id', empresaId)
+      .eq('eliminado', false)
       .eq('ocultar_en_listados', false)
       .gte('fecha', fechaInicio)
       .lte('fecha', fechaFin)

@@ -126,6 +126,10 @@ const Multimoneda = React.lazy(() =>
   import('./pages/admin/Multimoneda')
 )
 
+const BandejaAutorizaciones = React.lazy(() =>
+  import('./pages/admin/BandejaAutorizaciones')
+)
+
 const ManualRouter = React.lazy(() =>
   import('./manuales/ManualRouter')
     .then(mod => ({ default: mod.ManualRouter }))
@@ -237,6 +241,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/admin/integraciones" element={<Integraciones />} />
             <Route path="/admin/auditoria" element={<Auditoria />} />
             <Route path="/admin/multimoneda" element={<Multimoneda />} />
+            <Route path="/admin/autorizaciones" element={<BandejaAutorizaciones />} />
 
             {/* Rutas para el manual de usuario */}
             <Route path="/manuales/*" element={<ManualRouter />} />

@@ -24,7 +24,8 @@ import {
   Plug,
   Shield,
   TrendingUp,
-  ChevronRight
+  ChevronRight,
+  CheckCircle
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -100,6 +101,7 @@ const menuItems = [
     submenu: [
       { title: 'Empresas', icon: Building2, path: '/admin/empresas' },
       { title: 'Usuarios', icon: Users, path: '/admin/usuarios' },
+      { title: 'Autorizaciones', icon: CheckCircle, path: '/admin/autorizaciones' },
       { title: 'Nomencladores', icon: Database, path: '/admin/configuracion' },
       { title: 'Mapeo de Archivos', icon: FileText, path: '/admin/configuracion-mapeo' },
       { title: 'Impuestos', icon: DollarSign, path: '/admin/impuestos' },

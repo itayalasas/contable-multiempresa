@@ -26,7 +26,7 @@ function Tesoreria() {
     actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
-    eliminarMovimiento,
+    solicitarEliminacionMovimiento,
     recargarDatos
   } = useTesoreria(empresaActual?.id);
   
@@ -103,23 +103,45 @@ function Tesoreria() {
   };
 
   const handleEliminarMovimiento = (movimiento: any) => {
+    const motivo = prompt(
+      'Por favor, ingrese el motivo de la eliminación (requerido para auditoría):'
+    );
+
+    if (!motivo || motivo.trim() === '') {
+      showError(
+        'Motivo requerido',
+        'Debe proporcionar un motivo para la solicitud de eliminación'
+      );
+      return;
+    }
+
+    if (!empresaActual?.id || !usuario?.id) {
+      showError('Error', 'No se pudo identificar la empresa o usuario');
+      return;
+    }
+
     confirmDelete(
-      '¿Eliminar movimiento?',
-      `¿Estás seguro de que deseas eliminar este movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}? Esta acción no se puede deshacer.`,
+      'Solicitar eliminación',
+      `Esta acción creará una solicitud de autorización para eliminar el movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}. La eliminación requerirá aprobación de otro usuario.`,
       async () => {
         try {
-          const resultado = await eliminarMovimiento(movimiento.id);
+          const resultado = await solicitarEliminacionMovimiento({
+            movimientoId: movimiento.id,
+            empresaId: empresaActual.id,
+            motivo: motivo.trim(),
+            solicitadoPor: usuario.id,
+          });
 
-          let mensaje = 'El movimiento ha sido eliminado exitosamente.';
-          if (resultado.tieneAsiento && resultado.asientoInfo) {
-            mensaje += ` También se eliminó el asiento contable ${resultado.asientoInfo.numero} asociado.`;
+          let mensaje = 'Solicitud de eliminación creada exitosamente. Pendiente de aprobación.';
+          if (resultado.tieneAsiento) {
+            mensaje += ' El asiento contable asociado también será eliminado al aprobar la solicitud.';
           }
 
-          showSuccess('Movimiento eliminado', mensaje);
+          showSuccess('Solicitud creada', mensaje);
         } catch (error) {
           showError(
-            'Error al eliminar',
-            error instanceof Error ? error.message : 'No se pudo eliminar el movimiento'
+            'Error al crear solicitud',
+            error instanceof Error ? error.message : 'No se pudo crear la solicitud'
           );
         }
       }
