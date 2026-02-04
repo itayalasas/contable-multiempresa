@@ -300,6 +300,54 @@ async function generarAsientoPago(
   if (detalleError) throw detalleError;
 
   console.log(`✅ Asiento contable ${numeroAsiento} generado para pago`);
+
+  // ✨ CREAR MOVIMIENTO DE TESORERÍA
+  if (cuentaBancariaId) {
+    console.log('💰 Creando movimiento de tesorería para el pago');
+
+    // Obtener datos de la cuenta bancaria
+    const { data: cuentaBancaria, error: cuentaError } = await supabase
+      .from('cuentas_bancarias')
+      .select('nombre, banco, numero_cuenta')
+      .eq('id', cuentaBancariaId)
+      .maybeSingle();
+
+    if (cuentaError || !cuentaBancaria) {
+      console.warn('⚠️ No se encontró cuenta bancaria, saltando movimiento de tesorería');
+    } else {
+      // Crear movimiento de EGRESO (sale dinero)
+      const { error: movTesoreriaError } = await supabase
+        .from('movimientos_tesoreria')
+        .insert({
+          empresa_id: cuentaPorPagar.empresa_id,
+          cuenta_bancaria_id: cuentaBancariaId,
+          tipo_movimiento: 'EGRESO',
+          fecha: pago.fecha_pago,
+          monto: monto,
+          descripcion: `Pago ${cuentaPorPagar.numero} - ${proveedorNombre}`,
+          referencia: pago.referencia || cuentaPorPagar.numero,
+          beneficiario: proveedorNombre,
+          categoria: 'PAGO_PROVEEDOR',
+          asiento_contable_id: asiento.id,
+          documento_origen_tipo: 'pago_proveedor',
+          documento_origen_id: pago.id,
+          metadata: {
+            tipo_pago: pago.tipo_pago,
+            banco: cuentaBancaria.banco,
+            numero_cuenta: cuentaBancaria.numero_cuenta,
+            factura_id: facturaCompra.id,
+            numero_operacion: pago.referencia || '',
+          },
+        });
+
+      if (movTesoreriaError) {
+        console.error('⚠️ Error creando movimiento de tesorería:', movTesoreriaError);
+        // No lanzamos error para no bloquear el pago, pero lo logueamos
+      } else {
+        console.log(`✅ Movimiento de tesorería creado (EGRESO: $${monto})`);
+      }
+    }
+  }
 }
 
 async function generarNumeroAsiento(supabase: any, empresaId: string): Promise<string> {
