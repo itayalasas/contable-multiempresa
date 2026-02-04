@@ -196,6 +196,27 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
             errores.push(`Hay ${cantidadComisionesFacturadas} comisión(es) facturada(s) pendiente(s) de generar cuenta por pagar por $${totalFacturado.toFixed(2)}. Ve a Compras > Comisiones y genera las cuentas por pagar.`);
           }
         }
+
+        // Validar comisiones facturadas pero sin pagar
+        const { data: comisionesFacturadasSinPagar, error: errorSinPagar } = await supabase
+          .from('comisiones_partners')
+          .select('id, comision_monto')
+          .eq('empresa_id', empresaActual.id)
+          .gte('fecha', periodo.fecha_inicio)
+          .lte('fecha', periodo.fecha_fin)
+          .eq('estado_comision', 'facturada')
+          .eq('estado_pago', 'pendiente');
+
+        if (errorSinPagar) {
+          console.error('Error al consultar comisiones facturadas sin pagar:', errorSinPagar);
+          errores.push(`Error al validar comisiones sin pagar: ${errorSinPagar.message}`);
+        } else {
+          const cantidadComisionesSinPagar = comisionesFacturadasSinPagar?.length || 0;
+          if (cantidadComisionesSinPagar > 0) {
+            const totalSinPagar = comisionesFacturadasSinPagar?.reduce((sum, c) => sum + parseFloat(c.comision_monto || '0'), 0) || 0;
+            errores.push(`Hay ${cantidadComisionesSinPagar} comisión(es) facturada(s) sin pagar por $${totalSinPagar.toFixed(2)}. Ve a Compras > Comisiones Partners para resolver estos pendientes.`);
+          }
+        }
       } catch (error: any) {
         // Ignorar si la tabla no existe
         if (!error.message?.includes('does not exist')) {
