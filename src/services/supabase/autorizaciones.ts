@@ -33,9 +33,9 @@ export const autorizacionesService = {
       .insert({
         empresa_id: params.empresaId,
         tipo_operacion: params.tipoOperacion,
-        tabla_afectada: params.tablaAfectada,
-        registro_id: params.registroId,
-        datos_registro: params.datosRegistro,
+        tipo_entidad: params.tablaAfectada,
+        entidad_id: params.registroId,
+        entidad_data: params.datosRegistro,
         motivo: params.motivo,
         solicitado_por: params.solicitadoPor,
         estado: 'PENDIENTE',
@@ -49,18 +49,18 @@ export const autorizacionesService = {
       id: data.id,
       empresaId: data.empresa_id,
       tipoOperacion: data.tipo_operacion,
-      tablaAfectada: data.tabla_afectada,
-      registroId: data.registro_id,
-      datosRegistro: data.datos_registro,
+      tablaAfectada: data.tipo_entidad,
+      registroId: data.entidad_id,
+      datosRegistro: data.entidad_data,
       motivo: data.motivo,
       estado: data.estado,
       solicitadoPor: data.solicitado_por,
-      fechaSolicitud: data.fecha_solicitud,
-      aprobadoPor: data.aprobado_por,
-      fechaAprobacion: data.fecha_aprobacion,
-      comentarioAprobacion: data.comentario_aprobacion,
-      ejecutada: data.ejecutada,
-      fechaEjecucion: data.fecha_ejecucion,
+      fechaSolicitud: data.solicitado_en,
+      aprobadoPor: data.revisado_por,
+      fechaAprobacion: data.revisado_en,
+      comentarioAprobacion: data.comentarios_revision,
+      ejecutada: !!data.ejecutado_en,
+      fechaEjecucion: data.ejecutado_en,
     };
   },
 
@@ -70,7 +70,7 @@ export const autorizacionesService = {
       .select('*')
       .eq('empresa_id', empresaId)
       .eq('estado', 'PENDIENTE')
-      .order('fecha_solicitud', { ascending: false });
+      .order('solicitado_en', { ascending: false });
 
     if (error) throw error;
 
@@ -78,18 +78,18 @@ export const autorizacionesService = {
       id: item.id,
       empresaId: item.empresa_id,
       tipoOperacion: item.tipo_operacion,
-      tablaAfectada: item.tabla_afectada,
-      registroId: item.registro_id,
-      datosRegistro: item.datos_registro,
+      tablaAfectada: item.tipo_entidad,
+      registroId: item.entidad_id,
+      datosRegistro: item.entidad_data,
       motivo: item.motivo,
       estado: item.estado,
       solicitadoPor: item.solicitado_por,
-      fechaSolicitud: item.fecha_solicitud,
-      aprobadoPor: item.aprobado_por,
-      fechaAprobacion: item.fecha_aprobacion,
-      comentarioAprobacion: item.comentario_aprobacion,
-      ejecutada: item.ejecutada,
-      fechaEjecucion: item.fecha_ejecucion,
+      fechaSolicitud: item.solicitado_en,
+      aprobadoPor: item.revisado_por,
+      fechaAprobacion: item.revisado_en,
+      comentarioAprobacion: item.comentarios_revision,
+      ejecutada: !!item.ejecutado_en,
+      fechaEjecucion: item.ejecutado_en,
     }));
   },
 
@@ -98,7 +98,7 @@ export const autorizacionesService = {
       .from('solicitudes_autorizacion')
       .select('*')
       .eq('empresa_id', empresaId)
-      .order('fecha_solicitud', { ascending: false });
+      .order('solicitado_en', { ascending: false });
 
     if (estado) {
       query = query.eq('estado', estado);
@@ -112,18 +112,18 @@ export const autorizacionesService = {
       id: item.id,
       empresaId: item.empresa_id,
       tipoOperacion: item.tipo_operacion,
-      tablaAfectada: item.tabla_afectada,
-      registroId: item.registro_id,
-      datosRegistro: item.datos_registro,
+      tablaAfectada: item.tipo_entidad,
+      registroId: item.entidad_id,
+      datosRegistro: item.entidad_data,
       motivo: item.motivo,
       estado: item.estado,
       solicitadoPor: item.solicitado_por,
-      fechaSolicitud: item.fecha_solicitud,
-      aprobadoPor: item.aprobado_por,
-      fechaAprobacion: item.fecha_aprobacion,
-      comentarioAprobacion: item.comentario_aprobacion,
-      ejecutada: item.ejecutada,
-      fechaEjecucion: item.fecha_ejecucion,
+      fechaSolicitud: item.solicitado_en,
+      aprobadoPor: item.revisado_por,
+      fechaAprobacion: item.revisado_en,
+      comentarioAprobacion: item.comentarios_revision,
+      ejecutada: !!item.ejecutado_en,
+      fechaEjecucion: item.ejecutado_en,
     }));
   },
 
