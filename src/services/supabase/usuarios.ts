@@ -142,6 +142,7 @@ export const usuariosSupabaseService = {
     // Agregar empresa si no está asignada
     const empresasActuales = usuario.empresas_asignadas || [];
     if (!empresasActuales.includes(empresaId)) {
+      // 1. Actualizar tabla usuarios
       const { error } = await supabase
         .from('usuarios')
         .update({
@@ -150,6 +151,27 @@ export const usuariosSupabaseService = {
         .eq('id', usuarioId);
 
       if (error) throw error;
+
+      // 2. Actualizar tabla empresas (sincronizar)
+      const { data: empresa, error: getEmpresaError } = await supabase
+        .from('empresas')
+        .select('usuarios_asignados')
+        .eq('id', empresaId)
+        .single();
+
+      if (getEmpresaError) throw getEmpresaError;
+
+      const usuariosActuales = empresa.usuarios_asignados || [];
+      if (!usuariosActuales.includes(usuarioId)) {
+        const { error: updateEmpresaError } = await supabase
+          .from('empresas')
+          .update({
+            usuarios_asignados: [...usuariosActuales, usuarioId]
+          })
+          .eq('id', empresaId);
+
+        if (updateEmpresaError) throw updateEmpresaError;
+      }
     }
   },
 
@@ -163,7 +185,7 @@ export const usuariosSupabaseService = {
 
     if (getUserError) throw getUserError;
 
-    // Remover empresa
+    // 1. Remover empresa de usuario
     const empresasActuales = usuario.empresas_asignadas || [];
     const { error } = await supabase
       .from('usuarios')
@@ -173,6 +195,25 @@ export const usuariosSupabaseService = {
       .eq('id', usuarioId);
 
     if (error) throw error;
+
+    // 2. Remover usuario de empresa (sincronizar)
+    const { data: empresa, error: getEmpresaError } = await supabase
+      .from('empresas')
+      .select('usuarios_asignados')
+      .eq('id', empresaId)
+      .single();
+
+    if (getEmpresaError) throw getEmpresaError;
+
+    const usuariosActuales = empresa.usuarios_asignados || [];
+    const { error: updateEmpresaError } = await supabase
+      .from('empresas')
+      .update({
+        usuarios_asignados: usuariosActuales.filter(id => id !== usuarioId)
+      })
+      .eq('id', empresaId);
+
+    if (updateEmpresaError) throw updateEmpresaError;
   },
 
   async actualizarRol(usuarioId: string, nuevoRol: string): Promise<void> {

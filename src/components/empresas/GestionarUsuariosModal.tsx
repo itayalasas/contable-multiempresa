@@ -8,6 +8,7 @@ interface GestionarUsuariosModalProps {
   onClose: () => void;
   empresaId: string;
   empresaNombre: string;
+  onUsuariosChanged?: () => void;
 }
 
 export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
@@ -15,6 +16,7 @@ export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
   onClose,
   empresaId,
   empresaNombre,
+  onUsuariosChanged,
 }) => {
   const [usuariosAsignados, setUsuariosAsignados] = useState<Usuario[]>([]);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState<Usuario[]>([]);
@@ -78,6 +80,7 @@ export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
       await usuariosSupabaseService.asignarEmpresa(selectedUsuarioId, empresaId);
       setSelectedUsuarioId('');
       await cargarUsuarios();
+      onUsuariosChanged?.();
     } catch (error) {
       console.error('Error asignando usuario:', error);
       alert('Error al asignar usuario');
@@ -93,6 +96,7 @@ export const GestionarUsuariosModal: React.FC<GestionarUsuariosModalProps> = ({
       setSaving(true);
       await usuariosSupabaseService.desasignarEmpresa(usuarioId, empresaId);
       await cargarUsuarios();
+      onUsuariosChanged?.();
     } catch (error) {
       console.error('Error desasignando usuario:', error);
       alert('Error al desasignar usuario');

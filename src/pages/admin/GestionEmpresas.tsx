@@ -959,8 +959,9 @@ export const GestionEmpresas: React.FC = () => {
           onClose={() => {
             setShowModal(false);
             setSelectedEmpresa(null);
-            cargarDatos(); // Recargar datos después de cambios
+            cargarDatos();
           }}
+          onUsuariosChanged={cargarDatos}
           empresaId={selectedEmpresa.id}
           empresaNombre={selectedEmpresa.nombre}
         />
