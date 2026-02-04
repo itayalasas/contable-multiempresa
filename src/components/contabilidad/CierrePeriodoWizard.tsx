@@ -200,12 +200,13 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         // Validar comisiones facturadas pero sin pagar
         const { data: comisionesFacturadasSinPagar, error: errorSinPagar } = await supabase
           .from('comisiones_partners')
-          .select('id, comision_monto')
+          .select('id, comision_monto, factura_compra_id')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha', periodo.fecha_inicio)
           .lte('fecha', periodo.fecha_fin)
           .eq('estado_comision', 'facturada')
-          .eq('estado_pago', 'pendiente');
+          .eq('estado_pago', 'pendiente')
+          .not('factura_compra_id', 'is', null);
 
         if (errorSinPagar) {
           console.error('Error al consultar comisiones facturadas sin pagar:', errorSinPagar);
@@ -214,7 +215,7 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
           const cantidadComisionesSinPagar = comisionesFacturadasSinPagar?.length || 0;
           if (cantidadComisionesSinPagar > 0) {
             const totalSinPagar = comisionesFacturadasSinPagar?.reduce((sum, c) => sum + parseFloat(c.comision_monto || '0'), 0) || 0;
-            errores.push(`Hay ${cantidadComisionesSinPagar} comisión(es) facturada(s) sin pagar por $${totalSinPagar.toFixed(2)}. Ve a Compras > Comisiones Partners para resolver estos pendientes.`);
+            errores.push(`Hay ${cantidadComisionesSinPagar} comisión(es) facturada(s) sin pagar por $${totalSinPagar.toFixed(2)}. Las facturas están en Finanzas > Cuentas por Pagar. Busca las facturas de compra de Partners y registra el pago.`);
           }
         }
       } catch (error: any) {
