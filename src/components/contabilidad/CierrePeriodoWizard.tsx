@@ -197,25 +197,25 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
           }
         }
 
-        // Validar comisiones facturadas pero sin pagar
-        const { data: comisionesFacturadasSinPagar, error: errorSinPagar } = await supabase
+        // Validar comisiones facturadas pero no cobradas del cliente (ingresos no realizados)
+        const { data: comisionesFacturadasSinCobrar, error: errorSinCobrar } = await supabase
           .from('comisiones_partners')
-          .select('id, comision_monto, factura_compra_id')
+          .select('id, comision_monto, factura_venta_id')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha', periodo.fecha_inicio)
           .lte('fecha', periodo.fecha_fin)
           .eq('estado_comision', 'facturada')
           .eq('estado_pago', 'pendiente')
-          .not('factura_compra_id', 'is', null);
+          .not('factura_venta_id', 'is', null);
 
-        if (errorSinPagar) {
-          console.error('Error al consultar comisiones facturadas sin pagar:', errorSinPagar);
-          errores.push(`Error al validar comisiones sin pagar: ${errorSinPagar.message}`);
+        if (errorSinCobrar) {
+          console.error('Error al consultar comisiones facturadas sin cobrar:', errorSinCobrar);
+          errores.push(`Error al validar comisiones sin cobrar: ${errorSinCobrar.message}`);
         } else {
-          const cantidadComisionesSinPagar = comisionesFacturadasSinPagar?.length || 0;
-          if (cantidadComisionesSinPagar > 0) {
-            const totalSinPagar = comisionesFacturadasSinPagar?.reduce((sum, c) => sum + parseFloat(c.comision_monto || '0'), 0) || 0;
-            errores.push(`Hay ${cantidadComisionesSinPagar} comisión(es) facturada(s) sin pagar por $${totalSinPagar.toFixed(2)}. Las facturas están en Finanzas > Cuentas por Pagar. Busca las facturas de compra de Partners y registra el pago.`);
+          const cantidadComisionesSinCobrar = comisionesFacturadasSinCobrar?.length || 0;
+          if (cantidadComisionesSinCobrar > 0) {
+            const totalSinCobrar = comisionesFacturadasSinCobrar?.reduce((sum, c) => sum + parseFloat(c.comision_monto || '0'), 0) || 0;
+            errores.push(`Hay ${cantidadComisionesSinCobrar} comisión(es) facturada(s) sin cobrar del cliente por $${totalSinCobrar.toFixed(2)}. Ve a Ventas > Facturas y marca las facturas como cobradas (pagadas) o regístralas en Finanzas > Cuentas por Cobrar.`);
           }
         }
       } catch (error: any) {
