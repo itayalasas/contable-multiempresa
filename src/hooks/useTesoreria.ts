@@ -166,9 +166,25 @@ export function useTesoreria(empresaId: string | undefined) {
     }
   };
 
-  const crearMovimiento = async (movimiento: Omit<MovimientoTesoreria, 'id'>) => {
+  const crearMovimiento = async (movimiento: any) => {
     try {
-      const nuevoMovimiento = await tesoreriaSupabaseService.createMovimiento(movimiento);
+      // Mapear propiedades del componente a las del servicio
+      const movimientoData = {
+        cuentaBancariaId: movimiento.cuentaId || movimiento.cuentaBancariaId,
+        tipoMovimiento: movimiento.tipo || movimiento.tipoMovimiento,
+        fecha: movimiento.fecha,
+        monto: movimiento.monto,
+        descripcion: movimiento.concepto || movimiento.descripcion,
+        referencia: movimiento.referencia,
+        beneficiario: movimiento.beneficiario,
+        categoria: movimiento.categoria,
+        cuentaDestinoId: movimiento.cuentaDestinoId,
+        documentoSoporte: movimiento.documentoSoporte,
+        empresaId: movimiento.empresaId,
+        creadoPor: movimiento.creadoPor,
+      };
+
+      const nuevoMovimiento = await tesoreriaSupabaseService.createMovimiento(movimientoData);
       setMovimientos([nuevoMovimiento, ...movimientos]);
       await cargarDatos(); // Recargar para actualizar saldos
       return nuevoMovimiento;
@@ -188,9 +204,17 @@ export function useTesoreria(empresaId: string | undefined) {
     }
   };
 
-  const actualizarMovimiento = async (movimientoId: string, updates: Partial<MovimientoTesoreria>) => {
+  const actualizarMovimiento = async (movimientoId: string, updates: any) => {
     try {
-      await tesoreriaSupabaseService.updateMovimiento(movimientoId, updates);
+      // Mapear propiedades del componente a las del servicio
+      const updatesData: any = {};
+      if (updates.fecha) updatesData.fecha = updates.fecha;
+      if (updates.concepto) updatesData.descripcion = updates.concepto;
+      if (updates.descripcion) updatesData.descripcion = updates.descripcion;
+      if (updates.referencia !== undefined) updatesData.referencia = updates.referencia;
+      if (updates.beneficiario !== undefined) updatesData.beneficiario = updates.beneficiario;
+
+      await tesoreriaSupabaseService.updateMovimiento(movimientoId, updatesData);
       await cargarDatos(); // Recargar datos
     } catch (err: any) {
       console.error('Error actualizando movimiento:', err);
