@@ -4,6 +4,7 @@ import { useSesion } from '../../context/SesionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAutorizaciones } from '../../hooks/useAutorizaciones';
 import { useModals } from '../../hooks/useModals';
+import { InputModal } from '../../components/common/InputModal';
 
 function BandejaAutorizaciones() {
   const { empresaActual, formatearMoneda } = useSesion();
@@ -17,7 +18,7 @@ function BandejaAutorizaciones() {
     rechazarSolicitud,
   } = useAutorizaciones(empresaActual?.id);
 
-  const { showSuccess, showError } = useModals();
+  const { showSuccess, showError, showInput, inputModal, closeInput } = useModals();
   const [filtroEstado, setFiltroEstado] = useState<string>('PENDIENTE');
 
   const solicitudesFiltradas = filtroEstado
@@ -30,14 +31,24 @@ function BandejaAutorizaciones() {
       return;
     }
 
-    const comentario = prompt('Comentario de aprobación (opcional):');
-
-    try {
-      await aprobarSolicitud(solicitud.id, usuario?.id || '', comentario || undefined);
-      showSuccess('Solicitud aprobada', 'La eliminación ha sido ejecutada exitosamente');
-    } catch (error: any) {
-      showError('Error al aprobar', error.message || 'No se pudo aprobar la solicitud');
-    }
+    showInput({
+      title: 'Comentario de aprobación',
+      message: 'Puedes agregar un comentario sobre esta aprobación (opcional):',
+      placeholder: 'Ej: Aprobado según procedimiento establecido',
+      required: false,
+      multiline: true,
+      rows: 2,
+      confirmText: 'Aprobar',
+      cancelText: 'Cancelar',
+      onConfirm: async (comentario: string) => {
+        try {
+          await aprobarSolicitud(solicitud.id, usuario?.id || '', comentario || undefined);
+          showSuccess('Solicitud aprobada', 'La eliminación ha sido ejecutada exitosamente');
+        } catch (error: any) {
+          showError('Error al aprobar', error.message || 'No se pudo aprobar la solicitud');
+        }
+      }
+    });
   };
 
   const handleRechazar = async (solicitud: any) => {
@@ -46,18 +57,24 @@ function BandejaAutorizaciones() {
       return;
     }
 
-    const comentario = prompt('Motivo del rechazo (requerido):');
-    if (!comentario || comentario.trim() === '') {
-      showError('Motivo requerido', 'Debe proporcionar un motivo para el rechazo');
-      return;
-    }
-
-    try {
-      await rechazarSolicitud(solicitud.id, usuario?.id || '', comentario);
-      showSuccess('Solicitud rechazada', 'La solicitud ha sido rechazada');
-    } catch (error: any) {
-      showError('Error al rechazar', error.message || 'No se pudo rechazar la solicitud');
-    }
+    showInput({
+      title: 'Motivo del rechazo',
+      message: 'Por favor, indique el motivo por el cual rechaza esta solicitud (requerido):',
+      placeholder: 'Ej: No se justifica la eliminación, falta información',
+      required: true,
+      multiline: true,
+      rows: 3,
+      confirmText: 'Rechazar',
+      cancelText: 'Cancelar',
+      onConfirm: async (comentario: string) => {
+        try {
+          await rechazarSolicitud(solicitud.id, usuario?.id || '', comentario);
+          showSuccess('Solicitud rechazada', 'La solicitud ha sido rechazada');
+        } catch (error: any) {
+          showError('Error al rechazar', error.message || 'No se pudo rechazar la solicitud');
+        }
+      }
+    });
   };
 
   const getEstadoBadge = (estado: string) => {
@@ -229,6 +246,21 @@ function BandejaAutorizaciones() {
           )}
         </div>
       </div>
+
+      <InputModal
+        isOpen={inputModal.isOpen}
+        onClose={closeInput}
+        onConfirm={inputModal.onConfirm}
+        title={inputModal.title}
+        message={inputModal.message}
+        placeholder={inputModal.placeholder}
+        defaultValue={inputModal.defaultValue}
+        required={inputModal.required}
+        confirmText={inputModal.confirmText}
+        cancelText={inputModal.cancelText}
+        multiline={inputModal.multiline}
+        rows={inputModal.rows}
+      />
     </div>
   );
 }

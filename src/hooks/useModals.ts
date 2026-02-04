@@ -19,6 +19,20 @@ interface NotificationModalState {
   autoClose: boolean;
 }
 
+interface InputModalState {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  placeholder: string;
+  defaultValue: string;
+  required: boolean;
+  confirmText: string;
+  cancelText: string;
+  multiline: boolean;
+  rows: number;
+  onConfirm: (value: string) => void;
+}
+
 export const useModals = () => {
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
     isOpen: false,
@@ -37,6 +51,20 @@ export const useModals = () => {
     message: '',
     type: 'info',
     autoClose: true
+  });
+
+  const [inputModal, setInputModal] = useState<InputModalState>({
+    isOpen: false,
+    title: '',
+    message: '',
+    placeholder: '',
+    defaultValue: '',
+    required: false,
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar',
+    multiline: false,
+    rows: 3,
+    onConfirm: () => {}
   });
 
   // Funciones para el modal de confirmación
@@ -121,22 +149,89 @@ export const useModals = () => {
     });
   };
 
+  const showInput = (options: {
+    title: string;
+    message: string;
+    placeholder?: string;
+    defaultValue?: string;
+    required?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+    multiline?: boolean;
+    rows?: number;
+    onConfirm: (value: string) => void;
+  }) => {
+    return new Promise<string | null>((resolve) => {
+      setInputModal({
+        isOpen: true,
+        title: options.title,
+        message: options.message,
+        placeholder: options.placeholder || '',
+        defaultValue: options.defaultValue || '',
+        required: options.required || false,
+        confirmText: options.confirmText || 'Confirmar',
+        cancelText: options.cancelText || 'Cancelar',
+        multiline: options.multiline || false,
+        rows: options.rows || 3,
+        onConfirm: (value: string) => {
+          options.onConfirm(value);
+          closeInput();
+          resolve(value);
+        }
+      });
+    });
+  };
+
+  const closeInput = () => {
+    setInputModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const promptInput = (title: string, message: string, required: boolean = false): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setInputModal({
+        isOpen: true,
+        title,
+        message,
+        placeholder: '',
+        defaultValue: '',
+        required,
+        confirmText: 'Aceptar',
+        cancelText: 'Cancelar',
+        multiline: false,
+        rows: 3,
+        onConfirm: (value: string) => {
+          closeInput();
+          resolve(value);
+        }
+      });
+      const originalOnConfirm = inputModal.onConfirm;
+      const handleCancel = () => {
+        closeInput();
+        resolve(null);
+      };
+    });
+  };
+
   return {
     // Estados
     confirmModal,
     notificationModal,
-    
+    inputModal,
+
     // Funciones de control
     showConfirm,
     closeConfirm,
     showNotification,
     closeNotification,
-    
+    showInput,
+    closeInput,
+
     // Funciones de conveniencia
     showSuccess,
     showError,
     showWarning,
     showInfo,
-    confirmDelete
+    confirmDelete,
+    promptInput
   };
 };

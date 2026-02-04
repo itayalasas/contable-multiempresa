@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useModals } from '../../hooks/useModals';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
+import { InputModal } from '../../components/common/InputModal';
 import { CuentaBancariaModal } from '../../components/tesoreria/CuentaBancariaModal';
 import { MovimientoTesoreriaModal } from '../../components/tesoreria/MovimientoTesoreriaModal';
 import { ResumenTesoreria } from '../../components/tesoreria/ResumenTesoreria';
@@ -46,11 +47,14 @@ function Tesoreria() {
   const {
     confirmModal,
     notificationModal,
+    inputModal,
     closeConfirm,
     closeNotification,
+    closeInput,
     confirmDelete,
     showSuccess,
-    showError
+    showError,
+    showInput
   } = useModals();
 
   // Filtrado de movimientos
@@ -103,49 +107,49 @@ function Tesoreria() {
   };
 
   const handleEliminarMovimiento = (movimiento: any) => {
-    const motivo = prompt(
-      'Por favor, ingrese el motivo de la eliminación (requerido para auditoría):'
-    );
-
-    if (!motivo || motivo.trim() === '') {
-      showError(
-        'Motivo requerido',
-        'Debe proporcionar un motivo para la solicitud de eliminación'
-      );
-      return;
-    }
-
     if (!empresaActual?.id || !usuario?.id) {
       showError('Error', 'No se pudo identificar la empresa o usuario');
       return;
     }
 
-    confirmDelete(
-      'Solicitar eliminación',
-      `Esta acción creará una solicitud de autorización para eliminar el movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}. La eliminación requerirá aprobación de otro usuario.`,
-      async () => {
-        try {
-          const resultado = await solicitarEliminacionMovimiento({
-            movimientoId: movimiento.id,
-            empresaId: empresaActual.id,
-            motivo: motivo.trim(),
-            solicitadoPor: usuario.id,
-          });
+    showInput({
+      title: 'Motivo de eliminación',
+      message: 'Por favor, ingrese el motivo de la eliminación (requerido para auditoría):',
+      placeholder: 'Ej: Error en el registro, duplicado, etc.',
+      required: true,
+      multiline: true,
+      rows: 3,
+      confirmText: 'Continuar',
+      cancelText: 'Cancelar',
+      onConfirm: (motivo: string) => {
+        confirmDelete(
+          'Solicitar eliminación',
+          `Esta acción creará una solicitud de autorización para eliminar el movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}. La eliminación requerirá aprobación de otro usuario.`,
+          async () => {
+            try {
+              const resultado = await solicitarEliminacionMovimiento({
+                movimientoId: movimiento.id,
+                empresaId: empresaActual.id,
+                motivo: motivo.trim(),
+                solicitadoPor: usuario.id,
+              });
 
-          let mensaje = 'Solicitud de eliminación creada exitosamente. Pendiente de aprobación.';
-          if (resultado.tieneAsiento) {
-            mensaje += ' El asiento contable asociado también será eliminado al aprobar la solicitud.';
+              let mensaje = 'Solicitud de eliminación creada exitosamente. Pendiente de aprobación.';
+              if (resultado.tieneAsiento) {
+                mensaje += ' El asiento contable asociado también será eliminado al aprobar la solicitud.';
+              }
+
+              showSuccess('Solicitud creada', mensaje);
+            } catch (error) {
+              showError(
+                'Error al crear solicitud',
+                error instanceof Error ? error.message : 'No se pudo crear la solicitud'
+              );
+            }
           }
-
-          showSuccess('Solicitud creada', mensaje);
-        } catch (error) {
-          showError(
-            'Error al crear solicitud',
-            error instanceof Error ? error.message : 'No se pudo crear la solicitud'
-          );
-        }
+        );
       }
-    );
+    });
   };
 
   const handleEliminarCuenta = (cuenta: any) => {
@@ -781,6 +785,21 @@ function Tesoreria() {
         message={notificationModal.message}
         type={notificationModal.type}
         autoClose={notificationModal.autoClose}
+      />
+
+      <InputModal
+        isOpen={inputModal.isOpen}
+        onClose={closeInput}
+        onConfirm={inputModal.onConfirm}
+        title={inputModal.title}
+        message={inputModal.message}
+        placeholder={inputModal.placeholder}
+        defaultValue={inputModal.defaultValue}
+        required={inputModal.required}
+        confirmText={inputModal.confirmText}
+        cancelText={inputModal.cancelText}
+        multiline={inputModal.multiline}
+        rows={inputModal.rows}
       />
     </div>
   );
