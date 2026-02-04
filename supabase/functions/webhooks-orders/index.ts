@@ -197,6 +197,32 @@ async function handleOrder(
       return { success: false, error: 'Empresa no encontrada' };
     }
 
+    // Obtener configuración de comisión MercadoLibre desde impuestos
+    const { data: impuestoML } = await supabase
+      .from('impuestos')
+      .select('tasa')
+      .eq('empresa_id', payload.empresa_id)
+      .ilike('nombre', '%Mercado%')
+      .eq('activo', true)
+      .maybeSingle();
+
+    const comisionMLPorcentaje = impuestoML?.tasa || 7.0;
+    console.log(`💳 [Order] Comisión ML configurada: ${comisionMLPorcentaje}%`);
+
+    // Obtener configuración de cuenta bancaria ML
+    const { data: cuentaBancariaML } = await supabase
+      .from('cuentas_bancarias')
+      .select('id')
+      .eq('empresa_id', payload.empresa_id)
+      .ilike('nombre', '%MercadoLibre%')
+      .eq('activa', true)
+      .maybeSingle();
+
+    const cuentaBancariaMLId = cuentaBancariaML?.id || null;
+    if (!cuentaBancariaMLId) {
+      console.warn('⚠️ [Order] No se encontró cuenta bancaria MercadoLibre');
+    }
+
     let clienteId;
     let clienteExistente = null;
 
@@ -358,6 +384,9 @@ async function handleOrder(
 
     console.log(`💳 [Order] Payment status recibido: "${payload.order.payment_status}" → Estado factura: "${estaPagada ? 'pagada' : 'pendiente'}"`);
 
+    // Calcular comisión MercadoLibre sobre el total
+    const comisionMLMonto = total * (comisionMLPorcentaje / 100);
+
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -384,6 +413,10 @@ async function handleOrder(
           fecha_pago: estaPagada ? new Date().toISOString() : null,
           customer_id: payload.customer.customer_id,
           evento_id: eventoId,
+          comision_ml_porcentaje: comisionMLPorcentaje,
+          comision_ml_monto: comisionMLMonto.toFixed(2),
+          cuenta_bancaria_ml_id: cuentaBancariaMLId,
+          origen_marketplace: true,
           ...payload.metadata,
         },
       })
@@ -485,6 +518,84 @@ async function handleOrder(
     }
 
     console.log(`💰 [Order] Comisiones registradas: ${comisionesCreadas.length}`);
+
+    // 💳 Registrar cobro del cliente si está pagada
+    if (estaPagada && cuentaBancariaMLId) {
+      try {
+        console.log('💳 [Order] Registrando cobro de cliente en tesorería...');
+
+        // Crear movimiento de INGRESO en MercadoLibre
+        const { error: ingresoError } = await supabase
+          .from('movimientos_tesoreria')
+          .insert({
+            empresa_id: payload.empresa_id,
+            cuenta_bancaria_id: cuentaBancariaMLId,
+            tipo_movimiento: 'INGRESO',
+            fecha: new Date().toISOString().split('T')[0],
+            monto: total.toFixed(2),
+            descripcion: `Cobro orden ${payload.order.order_number || payload.order.order_id} - ${payload.customer.name}`,
+            referencia: payload.order.order_id,
+            beneficiario: payload.customer.name,
+            categoria: 'COBRO_CLIENTE',
+            asiento_contable_id: null, // Se vinculará después
+            documento_origen_tipo: 'factura_venta',
+            documento_origen_id: factura.id,
+            metadata: {
+              order_id: payload.order.order_id,
+              payment_method: payload.order.payment_method,
+              customer_id: payload.customer.customer_id,
+              origen: 'marketplace',
+              automatico: true,
+            },
+          });
+
+        if (ingresoError) {
+          console.error('⚠️ [Order] Error registrando ingreso:', ingresoError);
+        } else {
+          console.log('✅ [Order] Ingreso registrado en MercadoLibre');
+        }
+
+        // Registrar comisión de MercadoLibre como EGRESO
+        if (comisionMLMonto > 0) {
+          const { error: egresoError } = await supabase
+            .from('movimientos_tesoreria')
+            .insert({
+              empresa_id: payload.empresa_id,
+              cuenta_bancaria_id: cuentaBancariaMLId,
+              tipo_movimiento: 'EGRESO',
+              fecha: new Date().toISOString().split('T')[0],
+              monto: comisionMLMonto.toFixed(2),
+              descripcion: `Comisión MercadoLibre ${comisionMLPorcentaje}% - Orden ${payload.order.order_number || payload.order.order_id}`,
+              referencia: payload.order.order_id,
+              beneficiario: 'MercadoLibre',
+              categoria: 'COMISION_MARKETPLACE',
+              asiento_contable_id: null,
+              documento_origen_tipo: 'factura_venta',
+              documento_origen_id: factura.id,
+              metadata: {
+                order_id: payload.order.order_id,
+                comision_porcentaje: comisionMLPorcentaje,
+                total_venta: total.toFixed(2),
+                origen: 'marketplace',
+                automatico: true,
+              },
+            });
+
+          if (egresoError) {
+            console.error('⚠️ [Order] Error registrando comisión ML:', egresoError);
+          } else {
+            console.log(`✅ [Order] Comisión ML registrada: $${comisionMLMonto.toFixed(2)}`);
+          }
+        }
+
+        // Actualizar saldo de cuenta bancaria
+        const saldoDisponible = total - comisionMLMonto;
+        console.log(`💰 [Order] Saldo disponible después de comisión ML: $${saldoDisponible.toFixed(2)}`);
+
+      } catch (tesoreriaError) {
+        console.error('⚠️ [Order] Error en tesorería (no crítico):', tesoreriaError);
+      }
+    }
 
     // 🚀 Envío automático a DGI
     try {
