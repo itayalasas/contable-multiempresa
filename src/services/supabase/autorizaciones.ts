@@ -10,8 +10,10 @@ export interface SolicitudAutorizacion {
   motivo: string;
   estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA';
   solicitadoPor: string;
+  solicitadoPorNombre?: string;
   fechaSolicitud: string;
   aprobadoPor?: string | null;
+  aprobadoPorNombre?: string | null;
   fechaAprobacion?: string | null;
   comentarioAprobacion?: string | null;
   ejecutada: boolean;
@@ -67,7 +69,11 @@ export const autorizacionesService = {
   async getSolicitudesPendientes(empresaId: string): Promise<SolicitudAutorizacion[]> {
     const { data, error } = await supabase
       .from('solicitudes_autorizacion')
-      .select('*')
+      .select(`
+        *,
+        usuario_solicitante:usuarios!solicitudes_autorizacion_solicitado_por_fkey(id, nombre),
+        usuario_revisor:usuarios!solicitudes_autorizacion_revisado_por_fkey(id, nombre)
+      `)
       .eq('empresa_id', empresaId)
       .eq('estado', 'PENDIENTE')
       .order('solicitado_en', { ascending: false });
@@ -84,8 +90,10 @@ export const autorizacionesService = {
       motivo: item.motivo,
       estado: item.estado,
       solicitadoPor: item.solicitado_por,
+      solicitadoPorNombre: item.usuario_solicitante?.nombre || item.solicitado_por,
       fechaSolicitud: item.solicitado_en,
       aprobadoPor: item.revisado_por,
+      aprobadoPorNombre: item.usuario_revisor?.nombre,
       fechaAprobacion: item.revisado_en,
       comentarioAprobacion: item.comentarios_revision,
       ejecutada: !!item.ejecutado_en,
@@ -96,7 +104,11 @@ export const autorizacionesService = {
   async getSolicitudes(empresaId: string, estado?: string): Promise<SolicitudAutorizacion[]> {
     let query = supabase
       .from('solicitudes_autorizacion')
-      .select('*')
+      .select(`
+        *,
+        usuario_solicitante:usuarios!solicitudes_autorizacion_solicitado_por_fkey(id, nombre),
+        usuario_revisor:usuarios!solicitudes_autorizacion_revisado_por_fkey(id, nombre)
+      `)
       .eq('empresa_id', empresaId)
       .order('solicitado_en', { ascending: false });
 
@@ -118,8 +130,10 @@ export const autorizacionesService = {
       motivo: item.motivo,
       estado: item.estado,
       solicitadoPor: item.solicitado_por,
+      solicitadoPorNombre: item.usuario_solicitante?.nombre || item.solicitado_por,
       fechaSolicitud: item.solicitado_en,
       aprobadoPor: item.revisado_por,
+      aprobadoPorNombre: item.usuario_revisor?.nombre,
       fechaAprobacion: item.revisado_en,
       comentarioAprobacion: item.comentarios_revision,
       ejecutada: !!item.ejecutado_en,

@@ -200,7 +200,7 @@ function BandejaAutorizaciones() {
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <div className="flex items-center gap-1">
                         <User className="w-3 h-3" />
-                        <span>Solicitado por: {solicitud.solicitadoPor}</span>
+                        <span>Solicitado por: {solicitud.solicitadoPorNombre || solicitud.solicitadoPor}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
@@ -211,7 +211,7 @@ function BandejaAutorizaciones() {
                     {solicitud.aprobadoPor && (
                       <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
                         <p className="text-gray-600">
-                          <strong>{solicitud.estado === 'APROBADA' ? 'Aprobado' : 'Rechazado'} por:</strong> {solicitud.aprobadoPor}
+                          <strong>{solicitud.estado === 'APROBADA' ? 'Aprobado' : 'Rechazado'} por:</strong> {solicitud.aprobadoPorNombre || solicitud.aprobadoPor}
                         </p>
                         {solicitud.comentarioAprobacion && (
                           <p className="text-gray-600 mt-1">
