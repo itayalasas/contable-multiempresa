@@ -46,7 +46,7 @@ function Tesoreria() {
 
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(15);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   
   // Hook para modales
   const {
@@ -87,10 +87,10 @@ function Tesoreria() {
   const endIndex = startIndex + itemsPerPage;
   const movimientosPaginados = movimientosFiltrados.slice(startIndex, endIndex);
 
-  // Resetear a página 1 cuando cambien los filtros
+  // Resetear a página 1 cuando cambien los filtros o items por página
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCuenta, selectedTipo, fechaDesde, fechaHasta]);
+  }, [searchTerm, selectedCuenta, selectedTipo, fechaDesde, fechaHasta, itemsPerPage]);
 
   // Handlers para modales
   const handleNuevaCuenta = () => {
@@ -718,6 +718,7 @@ function Tesoreria() {
                 onPageChange={setCurrentPage}
                 totalItems={totalItems}
                 itemsPerPage={itemsPerPage}
+                onItemsPerPageChange={setItemsPerPage}
               />
             </div>
           )}
