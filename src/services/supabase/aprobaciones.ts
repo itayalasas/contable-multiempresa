@@ -1,13 +1,27 @@
 import { supabase } from '../../config/supabase';
 
+export type TipoSolicitud =
+  | 'modificar_factura'
+  | 'eliminar_factura'
+  | 'modificar_asiento'
+  | 'eliminar_asiento'
+  | 'modificar_movimiento_tesoreria'
+  | 'eliminar_movimiento_tesoreria'
+  | 'modificar_pago_cliente'
+  | 'eliminar_pago_cliente'
+  | 'modificar_pago_proveedor'
+  | 'eliminar_pago_proveedor';
+
 export interface SolicitudAprobacion {
   id: string;
   empresa_id: string;
-  tipo_solicitud: 'modificar_factura' | 'eliminar_factura';
+  tipo_solicitud: TipoSolicitud;
   estado: 'pendiente' | 'aprobada' | 'rechazada';
   solicitante_id: string;
   aprobador_id?: string;
-  factura_id: string;
+  factura_id?: string;
+  tabla_afectada: string;
+  registro_id: string;
   datos_originales: any;
   datos_modificados?: any;
   motivo: string;
@@ -34,15 +48,18 @@ export interface AuditoriaCambio {
 }
 
 export const aprobacionesService = {
-  async solicitarModificacion(
+  // Método genérico para solicitar modificación de cualquier registro
+  async solicitarModificacionGenerica(
     empresaId: string,
-    facturaId: string,
+    tablaAfectada: string,
+    registroId: string,
+    tipoSolicitud: TipoSolicitud,
     datosModificados: any,
     motivo: string,
     usuarioId: string
   ) {
     try {
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/solicitar-aprobacion-factura`;
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/solicitar-aprobacion-generica`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -52,8 +69,9 @@ export const aprobacionesService = {
         },
         body: JSON.stringify({
           empresaId,
-          facturaId,
-          tipoSolicitud: 'modificar_factura',
+          tablaAfectada,
+          registroId,
+          tipoSolicitud,
           datosModificados,
           motivo,
           usuarioId,
@@ -73,14 +91,17 @@ export const aprobacionesService = {
     }
   },
 
-  async solicitarEliminacion(
+  // Método genérico para solicitar eliminación de cualquier registro
+  async solicitarEliminacionGenerica(
     empresaId: string,
-    facturaId: string,
+    tablaAfectada: string,
+    registroId: string,
+    tipoSolicitud: TipoSolicitud,
     motivo: string,
     usuarioId: string
   ) {
     try {
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/solicitar-aprobacion-factura`;
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/solicitar-aprobacion-generica`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -90,8 +111,9 @@ export const aprobacionesService = {
         },
         body: JSON.stringify({
           empresaId,
-          facturaId,
-          tipoSolicitud: 'eliminar_factura',
+          tablaAfectada,
+          registroId,
+          tipoSolicitud,
           motivo,
           usuarioId,
         }),
@@ -108,6 +130,41 @@ export const aprobacionesService = {
       console.error('Error al solicitar eliminación:', error);
       throw error;
     }
+  },
+
+  // Mantener métodos específicos para facturas (compatibilidad)
+  async solicitarModificacion(
+    empresaId: string,
+    facturaId: string,
+    datosModificados: any,
+    motivo: string,
+    usuarioId: string
+  ) {
+    return this.solicitarModificacionGenerica(
+      empresaId,
+      'facturas_venta',
+      facturaId,
+      'modificar_factura',
+      datosModificados,
+      motivo,
+      usuarioId
+    );
+  },
+
+  async solicitarEliminacion(
+    empresaId: string,
+    facturaId: string,
+    motivo: string,
+    usuarioId: string
+  ) {
+    return this.solicitarEliminacionGenerica(
+      empresaId,
+      'facturas_venta',
+      facturaId,
+      'eliminar_factura',
+      motivo,
+      usuarioId
+    );
   },
 
   async aprobarSolicitud(
