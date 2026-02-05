@@ -311,6 +311,196 @@ const AsientosContablesManual: React.FC = () => {
           </div>
           
           <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Asientos Automáticos del Sistema</h2>
+
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <Info className="h-5 w-5 text-blue-500" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    El sistema genera asientos contables automáticamente para garantizar la integración entre los módulos
+                    de finanzas, ventas, compras y tesorería. Estos asientos se crean al momento de registrar las operaciones
+                    y se vinculan al documento origen para trazabilidad completa.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
+                <h3 className="font-semibold text-gray-800 mb-2">Ejemplo: Factura de Venta ($6,120)</h3>
+                <p className="text-gray-600 mb-3">Se genera automáticamente al crear una factura de venta.</p>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuenta</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debe</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Haber</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">1212 - Cuentas por Cobrar</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">6,120.00</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">7011 - Ventas</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">5,016.39</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">2113 - IVA por Pagar</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">1,103.61</td>
+                      </tr>
+                      <tr className="bg-gray-50 font-semibold">
+                        <td className="px-4 py-2 text-sm text-gray-900">TOTALES</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">6,120.00</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">6,120.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">✓ Generado automáticamente • Vinculado a Factura A-00000001</p>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
+                <h3 className="font-semibold text-gray-800 mb-2">Ejemplo: Cobro con Comisión Mercado Pago (5%)</h3>
+                <p className="text-gray-600 mb-3">Al cobrar $6,120 por Mercado Pago con 5% de comisión ($306), ingresa neto: $5,814</p>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuenta</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debe</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Haber</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">1121 - Banco MercadoPago</td>
+                        <td className="px-4 py-2 text-sm text-right text-green-700 font-medium">5,814.00</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">630501 - Gastos Comisión MP</td>
+                        <td className="px-4 py-2 text-sm text-right text-red-700 font-medium">306.00</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">1212 - Cuentas por Cobrar</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">6,120.00</td>
+                      </tr>
+                      <tr className="bg-gray-50 font-semibold">
+                        <td className="px-4 py-2 text-sm text-gray-900">TOTALES</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">6,120.00</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">6,120.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">✓ Ingreso real al banco: $5,814 • Gasto comisión MP: $306 • Saldo bancario cuadra perfectamente</p>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
+                <h3 className="font-semibold text-gray-800 mb-2">Ejemplo: Factura de Compra a Partner ($250.82)</h3>
+                <p className="text-gray-600 mb-3">Comisión del partner con IVA incluido (5% sobre $5,016.39)</p>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuenta</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debe</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Haber</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">6402 - Comisiones Partners</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">205.59</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">2111 - IVA Crédito Fiscal</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">45.23</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">2211 - Cuentas por Pagar</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                      </tr>
+                      <tr className="bg-gray-50 font-semibold">
+                        <td className="px-4 py-2 text-sm text-gray-900">TOTALES</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">✓ El 5% acordado INCLUYE IVA • Partner factura $250.82 total • IVA recuperable: $45.23</p>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
+                <h3 className="font-semibold text-gray-800 mb-2">Ejemplo: Pago a Proveedor ($250.82)</h3>
+                <p className="text-gray-600 mb-3">Pago de comisión al partner desde cuenta bancaria</p>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuenta</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debe</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Haber</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">2211 - Cuentas por Pagar</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">1121 - Banco Principal</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">-</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                      </tr>
+                      <tr className="bg-gray-50 font-semibold">
+                        <td className="px-4 py-2 text-sm text-gray-900">TOTALES</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                        <td className="px-4 py-2 text-sm text-right text-gray-900">250.82</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">✓ Genera movimiento de egreso en tesorería automáticamente</p>
+              </div>
+            </div>
+
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 mt-6">
+              <p className="text-green-800 text-sm mb-2">
+                <strong>Ventajas de los Asientos Automáticos:</strong>
+              </p>
+              <ul className="list-disc list-inside text-green-700 text-sm space-y-1">
+                <li>Eliminan errores de registro manual</li>
+                <li>Garantizan consistencia contable en todos los módulos</li>
+                <li>Ahorran tiempo y esfuerzo al contador</li>
+                <li>Mantienen trazabilidad completa con documentos origen</li>
+                <li>Los saldos bancarios cuadran automáticamente</li>
+                <li>Las comisiones de pasarelas de pago se registran correctamente como gastos</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Gestión de asientos contables</h2>
             
             <div className="space-y-4">

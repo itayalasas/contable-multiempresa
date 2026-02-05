@@ -146,34 +146,54 @@ const TesoreriaManual: React.FC = () => {
           
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Movimientos de Tesorería</h2>
-            
+
             <div className="mb-6">
               <h3 className="text-xl font-semibold text-gray-800 mb-3">Tipos de movimientos</h3>
-              
+
               <div className="space-y-4">
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                   <div className="flex items-center space-x-2 mb-2">
                     <ArrowUpRight className="h-5 w-5 text-green-600" />
                     <h4 className="font-semibold text-green-800">Ingreso</h4>
                   </div>
-                  <p className="text-gray-600">Entrada de dinero a una cuenta (cobros, depósitos, transferencias recibidas, etc.).</p>
+                  <p className="text-gray-600 mb-2">Entrada de dinero a una cuenta (cobros, depósitos, transferencias recibidas, etc.).</p>
+                  <p className="text-sm text-green-700 font-medium">✓ Se genera automáticamente al registrar cobros de clientes</p>
                 </div>
-                
+
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200">
                   <div className="flex items-center space-x-2 mb-2">
                     <ArrowDownRight className="h-5 w-5 text-red-600" />
                     <h4 className="font-semibold text-red-800">Egreso</h4>
                   </div>
-                  <p className="text-gray-600">Salida de dinero de una cuenta (pagos, retiros, transferencias enviadas, etc.).</p>
+                  <p className="text-gray-600 mb-2">Salida de dinero de una cuenta (pagos, retiros, transferencias enviadas, etc.).</p>
+                  <p className="text-sm text-red-700 font-medium">✓ Se genera automáticamente al registrar pagos a proveedores</p>
                 </div>
-                
+
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <div className="flex items-center space-x-2 mb-2">
                     <ArrowLeftRight className="h-5 w-5 text-blue-600" />
                     <h4 className="font-semibold text-blue-800">Transferencia</h4>
                   </div>
-                  <p className="text-gray-600">Movimiento de fondos entre cuentas propias de la empresa.</p>
+                  <p className="text-gray-600 mb-2">Movimiento de fondos entre cuentas propias de la empresa.</p>
+                  <p className="text-sm text-blue-700 font-medium">✓ Actualiza saldos de ambas cuentas automáticamente</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-gray-800 mb-3">Movimientos Automáticos</h3>
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+                <p className="text-blue-800 mb-2 font-semibold">El sistema genera movimientos de tesorería automáticamente en los siguientes casos:</p>
+                <ul className="list-disc list-inside text-blue-700 space-y-1 text-sm">
+                  <li><strong>Cobros de Clientes:</strong> Crea un INGRESO en la cuenta bancaria seleccionada</li>
+                  <li><strong>Pagos a Proveedores:</strong> Crea un EGRESO desde la cuenta bancaria seleccionada</li>
+                  <li><strong>Facturas de Marketplace Pagadas:</strong> Si el webhook indica estado "paid", se crea el ingreso automáticamente</li>
+                  <li><strong>Comisiones de Mercado Pago:</strong> Se registra el ingreso neto (después de comisión MP) en la cuenta</li>
+                </ul>
+                <p className="text-blue-800 mt-3 text-sm">
+                  <strong>Importante:</strong> Los movimientos automáticos están vinculados a asientos contables y no se pueden eliminar directamente.
+                  Si necesita ajustar un movimiento automático, debe eliminar el cobro o pago que lo generó.
+                </p>
               </div>
             </div>
             
@@ -234,9 +254,40 @@ const TesoreriaManual: React.FC = () => {
           </div>
           
           <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Estado de Conciliación</h2>
+            <p className="text-gray-700 mb-4">
+              Cada movimiento de tesorería tiene un estado de conciliación que indica si ha sido verificado con el extracto bancario:
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <h4 className="font-semibold text-yellow-800 mb-2">Pendiente</h4>
+                <p className="text-sm text-gray-600">El movimiento aún no ha sido conciliado con el banco</p>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <h4 className="font-semibold text-green-800 mb-2">Conciliado</h4>
+                <p className="text-sm text-gray-600">El movimiento coincide con el extracto bancario</p>
+              </div>
+
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <h4 className="font-semibold text-red-800 mb-2">Diferencia</h4>
+                <p className="text-sm text-gray-600">Hay una discrepancia entre el sistema y el banco</p>
+              </div>
+            </div>
+
+            <div className="bg-purple-50 border-l-4 border-purple-500 p-4 mb-6">
+              <p className="text-purple-800 text-sm">
+                <strong>Tip:</strong> Utiliza el módulo de <strong>Conciliación Bancaria</strong> para importar extractos bancarios
+                y conciliar automáticamente los movimientos. Esto te ayudará a detectar diferencias y mantener tus registros al día.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Resumen de Tesorería</h2>
             <p className="text-gray-700 mb-4">
-              El resumen de tesorería proporciona una visión general de la situación financiera de la empresa 
+              El resumen de tesorería proporciona una visión general de la situación financiera de la empresa
               en términos de liquidez y flujo de efectivo.
             </p>
             
@@ -293,6 +344,51 @@ const TesoreriaManual: React.FC = () => {
             </div>
           </div>
           
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Integración con Contabilidad</h2>
+            <p className="text-gray-700 mb-4">
+              El módulo de Tesorería está completamente integrado con el sistema contable:
+            </p>
+
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 className="font-semibold text-gray-800 mb-2">Asientos Automáticos</h3>
+                <p className="text-gray-600 text-sm">
+                  Cada movimiento de ingreso o egreso genera automáticamente un asiento contable que afecta
+                  las cuentas correspondientes del plan de cuentas (Banco, Caja, Cuentas por Cobrar, Cuentas por Pagar, etc.).
+                </p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 className="font-semibold text-gray-800 mb-2">Comisiones de Pasarelas de Pago</h3>
+                <p className="text-gray-600 text-sm mb-2">
+                  Cuando se registra un cobro con comisión de Mercado Pago u otra pasarela:
+                </p>
+                <ul className="list-disc list-inside text-gray-600 text-sm space-y-1 ml-4">
+                  <li>El movimiento registra el <strong>ingreso neto</strong> (después de comisión)</li>
+                  <li>Se crea un asiento de <strong>gasto por comisión</strong> automáticamente</li>
+                  <li>El saldo bancario coincide exactamente con lo que ingresa realmente</li>
+                </ul>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 className="font-semibold text-gray-800 mb-2">Períodos Contables</h3>
+                <p className="text-gray-600 text-sm">
+                  Los movimientos de tesorería respetan los períodos contables. Si un período está cerrado,
+                  no se pueden crear movimientos con fechas dentro de ese período.
+                </p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 className="font-semibold text-gray-800 mb-2">Eliminación Lógica</h3>
+                <p className="text-gray-600 text-sm">
+                  Los movimientos pueden marcarse como eliminados sin perder el historial. Esto es útil para
+                  mantener la trazabilidad de los cambios y cumplir con requisitos de auditoría.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -301,10 +397,14 @@ const TesoreriaManual: React.FC = () => {
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">Importante</h3>
                 <div className="mt-2 text-sm text-yellow-700">
-                  <p>
-                    Los movimientos de tesorería afectan inmediatamente los saldos de las cuentas. Verifique 
-                    cuidadosamente la información antes de registrar un movimiento, especialmente el tipo de 
+                  <p className="mb-2">
+                    Los movimientos de tesorería afectan inmediatamente los saldos de las cuentas. Verifique
+                    cuidadosamente la información antes de registrar un movimiento, especialmente el tipo de
                     movimiento y las cuentas involucradas.
+                  </p>
+                  <p>
+                    <strong>Los movimientos automáticos</strong> (generados por cobros/pagos) no se pueden eliminar directamente.
+                    Si necesita corregir un error, elimine el cobro o pago que lo generó.
                   </p>
                 </div>
               </div>

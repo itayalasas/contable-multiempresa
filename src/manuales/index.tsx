@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, FileText, Calculator, PieChart, CreditCard, Receipt, Wallet, ArrowLeftRight, Building2, Users, Settings } from 'lucide-react';
+import { BookOpen, FileText, Calculator, PieChart, CreditCard, Receipt, Wallet, ArrowLeftRight, Building2, Users, Settings, DollarSign } from 'lucide-react';
 
 const ManualIndex: React.FC = () => {
   return (
@@ -105,7 +105,15 @@ const ManualIndex: React.FC = () => {
                 <p className="text-sm text-gray-500">Conciliación de movimientos bancarios y contables</p>
               </div>
             </Link>
-            
+
+            <Link to="/manuales/compras/comisiones" className="block p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 flex items-center space-x-3 transition-colors">
+              <DollarSign className="h-5 w-5 text-purple-600" />
+              <div>
+                <h3 className="font-medium text-purple-900">Sistema de Comisiones</h3>
+                <p className="text-sm text-purple-600">Gestión de comisiones de partners y pasarelas de pago (con IVA y MP)</p>
+              </div>
+            </Link>
+
             <Link to="/manuales/administracion/empresas" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 flex items-center space-x-3 transition-colors">
               <Building2 className="h-5 w-5 text-gray-600" />
               <div>

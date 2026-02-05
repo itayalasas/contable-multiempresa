@@ -143,16 +143,17 @@ const PlanCuentasManual: React.FC = () => {
        └─ 592. Pérdidas
            └─ 592001 Pérdidas acumuladas
 
-7. INGRESOS (3 cuentas de detalle)
-   ├─ 71. VENTAS
-   │   └─ 711. Ventas de Mercaderías
-   │       └─ 711001 Mercaderías manufacturadas
+7. INGRESOS (6 cuentas de detalle)
+   ├─ 70. VENTAS
+   │   ├─ 7011 Ventas
+   │   ├─ 7012 Ingresos por Comisiones Marketplace
+   │   └─ 7013 Ingresos por Comisiones Procesamiento Pagos
    └─ 75. OTROS INGRESOS
        └─ 751. Otros Ingresos de Gestión
            ├─ 751001 Servicios en beneficio del personal
            └─ 751002 Otros ingresos diversos
 
-6. GASTOS (12 cuentas de detalle)
+6. GASTOS (15 cuentas de detalle)
    ├─ 61. COMPRAS
    │   ├─ 611. Mercaderías
    │   │   └─ 611001 Mercaderías manufacturadas
@@ -163,12 +164,17 @@ const PlanCuentasManual: React.FC = () => {
    │   ├─ 631. Servicios de Terceros
    │   │   ├─ 631001 Transporte y correos
    │   │   └─ 631002 Mantenimiento y reparaciones
+   │   ├─ 6305 - Gastos por Comisiones de Pasarelas
+   │   │   └─ 630501 Gastos Comisiones Mercado Pago (⭐ NUEVA)
    │   └─ 636. Servicios Básicos
    │       ├─ 636001 Energía eléctrica
    │       ├─ 636002 Gas
    │       ├─ 636003 Agua
    │       ├─ 636004 Teléfono
    │       └─ 636005 Internet
+   ├─ 64. GASTOS POR TRIBUTOS
+   │   ├─ 6402 - Comisiones Partners (⭐ NUEVA)
+   │   └─ 6403 - Comisiones por Retencion Partners
    └─ 65. OTROS GASTOS DE GESTIÓN
        └─ 651. Gastos Generales
            ├─ 651001 Seguros
@@ -185,6 +191,91 @@ const PlanCuentasManual: React.FC = () => {
                   <p className="text-sm text-green-700">
                     <strong>Cuentas operativas:</strong> Las cuentas de 6 dígitos (nivel 4) son las únicas que se pueden
                     usar en asientos contables y movimientos. Los niveles superiores son solo organizacionales.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Cuentas Especiales para Marketplace y Comisiones</h2>
+
+            <div className="space-y-4">
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <h3 className="font-semibold text-purple-800">7012 - Ingresos por Comisiones Marketplace</h3>
+                <p className="text-gray-600 text-sm mb-2">
+                  Registra los ingresos por comisiones que la empresa gana al conectar compradores con partners (vendedores).
+                </p>
+                <p className="text-gray-600 text-sm">
+                  <strong>Uso:</strong> Se carga automáticamente cuando se crea una factura de venta con comisión de partner.
+                  Ejemplo: 5% sobre venta de $5,016.39 = Ingreso de $250.82 (con IVA incluido).
+                </p>
+              </div>
+
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <h3 className="font-semibold text-purple-800">7013 - Ingresos por Comisiones Procesamiento Pagos</h3>
+                <p className="text-gray-600 text-sm mb-2">
+                  Registra ingresos adicionales por procesamiento de pagos compartidos con el marketplace.
+                </p>
+                <p className="text-gray-600 text-sm">
+                  <strong>Uso:</strong> Cuando el marketplace comparte parte de la comisión de Mercado Pago con nosotros.
+                </p>
+              </div>
+
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <h3 className="font-semibold text-red-800">630501 - Gastos Comisiones Mercado Pago ⭐ NUEVA</h3>
+                <p className="text-gray-600 text-sm mb-2">
+                  Registra el gasto por comisión que cobra Mercado Pago u otra pasarela de pago.
+                </p>
+                <p className="text-gray-600 text-sm mb-2">
+                  <strong>Uso:</strong> Cuando se cobra una factura por Mercado Pago con comisión del 5%:
+                </p>
+                <ul className="list-disc list-inside text-gray-600 text-sm ml-4">
+                  <li>Factura al cliente: $6,120</li>
+                  <li>Comisión MP (5%): <strong className="text-red-700">-$306</strong> (se registra aquí)</li>
+                  <li>Ingreso neto al banco: $5,814</li>
+                </ul>
+                <p className="text-green-700 text-sm font-medium mt-2">
+                  ✓ Esto hace que el saldo bancario cuadre exactamente con lo que ingresa realmente
+                </p>
+              </div>
+
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <h3 className="font-semibold text-red-800">6402 - Comisiones Partners ⭐ ACTUALIZADA</h3>
+                <p className="text-gray-600 text-sm mb-2">
+                  Registra el gasto por comisiones que se le pagan a los partners (vendedores) por sus ventas.
+                </p>
+                <p className="text-gray-600 text-sm mb-2">
+                  <strong>Importante:</strong> El porcentaje acordado (ej: 5%) INCLUYE el IVA. El partner debe facturar con IVA.
+                </p>
+                <p className="text-gray-600 text-sm">
+                  Ejemplo: Comisión 5% sobre $5,016.39 = $250.82 total (incluye $45.23 de IVA recuperable)
+                </p>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-semibold text-blue-800">1213 - Comisiones por Cobrar - Marketplace</h3>
+                <p className="text-gray-600 text-sm mb-2">
+                  Cuenta de activo que registra las comisiones que el marketplace nos debe por ventas realizadas.
+                </p>
+                <p className="text-gray-600 text-sm">
+                  <strong>Uso:</strong> Se carga cuando se genera una venta con comisión. Se abona cuando el marketplace nos paga.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mt-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="h-5 w-5 text-yellow-500" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700 mb-2">
+                    <strong>Configuración de Comisión MP:</strong> Para que el sistema calcule automáticamente las comisiones
+                    de Mercado Pago, debe activarse en la configuración de la empresa.
+                  </p>
+                  <p className="text-sm text-yellow-700">
+                    Ruta: Administración → Empresas → Configuración → Comisión Mercado Pago (porcentaje y activar/desactivar)
                   </p>
                 </div>
               </div>

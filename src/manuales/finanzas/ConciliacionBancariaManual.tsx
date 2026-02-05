@@ -48,21 +48,39 @@ const ConciliacionBancariaManual: React.FC = () => {
           
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Elementos de la Conciliación Bancaria</h2>
-            
+
             <div className="space-y-4">
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <h3 className="font-semibold text-gray-800">1. Movimientos Bancarios</h3>
                 <p className="text-gray-600">Transacciones registradas en el extracto bancario (depósitos, retiros, transferencias, comisiones, etc.).</p>
               </div>
-              
+
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <h3 className="font-semibold text-gray-800">2. Movimientos Contables</h3>
                 <p className="text-gray-600">Transacciones registradas en el sistema contable de la empresa relacionadas con cuentas bancarias.</p>
               </div>
-              
+
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <h3 className="font-semibold text-gray-800">3. Partidas Conciliatorias</h3>
                 <p className="text-gray-600">Diferencias entre los registros bancarios y contables que deben ser identificadas y ajustadas.</p>
+              </div>
+            </div>
+
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 mt-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-700 mb-2">
+                    <strong>Integración Automática:</strong> El sistema registra automáticamente el <strong>ingreso neto</strong>
+                    en tesorería al cobrar facturas con comisión de Mercado Pago u otra pasarela.
+                  </p>
+                  <p className="text-sm text-green-700">
+                    Ejemplo: Factura de $6,120 con comisión MP 5% ($306) → El sistema registra ingreso de <strong>$5,814</strong>
+                    que es exactamente lo que ingresa al banco. No necesita ajustar manualmente por comisiones.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
