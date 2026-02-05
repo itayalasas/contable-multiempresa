@@ -68,8 +68,11 @@ export interface TipoMovimientoTesoreria {
   codigo: string;
   descripcion: string;
   paisId: string;
+  tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
   activo: boolean;
   afectaSaldo: boolean;
+  afectaCaja?: boolean;
+  afectaBanco?: boolean;
   requiereReferencia?: boolean;
   requiereDocumento?: boolean;
 }

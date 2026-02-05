@@ -215,7 +215,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
   const selectedCuentaDestino = cuentas.find(c => c.id === formData.cuentaDestinoId);
 
   // Obtener tipo de movimiento seleccionado
-  const selectedTipoMovimiento = tiposMovimientoTesoreria.find(t => t.id === formData.tipo);
+  const selectedTipoMovimiento = tiposMovimientoTesoreria.find(t => t.tipo === formData.tipo);
 
   // Obtener ícono según tipo de movimiento
   const getTipoIcon = () => {
@@ -293,7 +293,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
                   <option value="">Cargando tipos...</option>
                 ) : tiposMovimientoTesoreria && tiposMovimientoTesoreria.length > 0 ? (
                   tiposMovimientoTesoreria.map(tipo => (
-                    <option key={tipo.id} value={tipo.id}>
+                    <option key={tipo.id} value={tipo.tipo}>
                       {tipo.nombre}
                     </option>
                   ))
