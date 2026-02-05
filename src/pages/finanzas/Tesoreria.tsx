@@ -7,6 +7,7 @@ import { useModals } from '../../hooks/useModals';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { InputModal } from '../../components/common/InputModal';
+import { Pagination } from '../../components/common/Pagination';
 import { CuentaBancariaModal } from '../../components/tesoreria/CuentaBancariaModal';
 import { MovimientoTesoreriaModal } from '../../components/tesoreria/MovimientoTesoreriaModal';
 import { ResumenTesoreria } from '../../components/tesoreria/ResumenTesoreria';
@@ -42,6 +43,10 @@ function Tesoreria() {
   const [selectedMovimiento, setSelectedMovimiento] = useState<any | null>(null);
   const [selectedCuentaBancaria, setSelectedCuentaBancaria] = useState<any | null>(null);
   const [modalType, setModalType] = useState<'create' | 'edit' | 'view'>('create');
+
+  // Estados para paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
   
   // Hook para modales
   const {
@@ -63,7 +68,7 @@ function Tesoreria() {
                          movimiento.referencia?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCuenta = !selectedCuenta || movimiento.cuentaId === selectedCuenta;
     const matchesTipo = !selectedTipo || movimiento.tipo === selectedTipo;
-    
+
     let matchesFecha = true;
     if (fechaDesde && fechaHasta) {
       const fechaMovimiento = new Date(movimiento.fecha);
@@ -71,9 +76,21 @@ function Tesoreria() {
       const hasta = new Date(fechaHasta);
       matchesFecha = fechaMovimiento >= desde && fechaMovimiento <= hasta;
     }
-    
+
     return matchesSearch && matchesCuenta && matchesTipo && matchesFecha;
   });
+
+  // Paginación
+  const totalItems = movimientosFiltrados.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const movimientosPaginados = movimientosFiltrados.slice(startIndex, endIndex);
+
+  // Resetear a página 1 cuando cambien los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCuenta, selectedTipo, fechaDesde, fechaHasta]);
 
   // Handlers para modales
   const handleNuevaCuenta = () => {
@@ -608,7 +625,7 @@ function Tesoreria() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {movimientosFiltrados.map((movimiento) => {
+                  {movimientosPaginados.map((movimiento) => {
                     const TipoIcon = getTipoMovimientoIcon(movimiento.tipo);
                     
                     return (
@@ -689,6 +706,19 @@ function Tesoreria() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Paginación */}
+          {movimientosFiltrados.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+              />
             </div>
           )}
         </div>

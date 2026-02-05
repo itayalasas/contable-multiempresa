@@ -78,6 +78,7 @@ export function useTesoreria(empresaId: string | undefined) {
         concepto: mov.descripcion || '',
         referencia: mov.referencia || '',
         beneficiario: mov.beneficiario || '',
+        estado: mov.estadoConciliacion || 'PENDIENTE',
       }));
 
       setCuentas(cuentasAdaptadas as any);

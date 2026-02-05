@@ -28,6 +28,7 @@ export interface MovimientoTesoreria {
   beneficiario: string | null;
   categoria: string | null;
   cuentaDestinoId: string | null;
+  estadoConciliacion: 'PENDIENTE' | 'CONCILIADO' | 'RECHAZADO';
   documentoSoporte: string | null;
   empresaId: string;
   creadoPor: string;
@@ -153,6 +154,7 @@ export const tesoreriaSupabaseService = {
       beneficiario: mov.beneficiario,
       categoria: mov.categoria,
       cuentaDestinoId: mov.metadata?.cuenta_destino_id || null,
+      estadoConciliacion: mov.estado_conciliacion || 'PENDIENTE',
       documentoSoporte: mov.documento_soporte,
       empresaId: mov.empresa_id,
       creadoPor: mov.creado_por,
@@ -197,6 +199,7 @@ export const tesoreriaSupabaseService = {
       beneficiario: data.beneficiario,
       categoria: data.categoria,
       cuentaDestinoId: data.metadata?.cuenta_destino_id || null,
+      estadoConciliacion: data.estado_conciliacion || 'PENDIENTE',
       documentoSoporte: data.documento_soporte,
       empresaId: data.empresa_id,
       creadoPor: data.creado_por,
