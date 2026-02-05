@@ -372,9 +372,6 @@ async function handleOrder(
 
     console.log(`💳 [Order] Payment status recibido: "${payload.order.payment_status}" → Estado factura: "${estaPagada ? 'pagada' : 'pendiente'}"`);
 
-    // Calcular comisión MercadoLibre sobre el total
-    const comisionMLMonto = total * (comisionMLPorcentaje / 100);
-
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
