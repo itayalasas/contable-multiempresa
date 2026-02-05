@@ -17,12 +17,14 @@ interface Comision {
   estado_pago: string;
   fecha_facturada?: string;
   fecha_pagada?: string;
-  partner_id: string;
+  partner_id: string | null;
   factura_venta_id: string;
+  tipo_comision: string;
+  beneficiario: string | null;
   partners_aliados: {
     razon_social: string;
     partner_id_externo: string;
-  };
+  } | null;
   facturas_venta: {
     numero_factura: string;
   };
@@ -46,6 +48,7 @@ export default function ComisionesPartners() {
   const [comisiones, setComisiones] = useState<Comision[]>([]);
   const [facturasCompra, setFacturasCompra] = useState<FacturaCompra[]>([]);
   const [filtroEstado, setFiltroEstado] = useState<string>('todas');
+  const [filtroTipo, setFiltroTipo] = useState<string>('todas');
   const [loading, setLoading] = useState(true);
   const [generandoFacturas, setGenerandoFacturas] = useState(false);
   const [generandoFacturasCompra, setGenerandoFacturasCompra] = useState(false);
@@ -87,8 +90,8 @@ export default function ComisionesPartners() {
       .from('comisiones_partners')
       .select(`
         *,
-        partners_aliados!inner(razon_social, partner_id_externo),
-        facturas_venta!comisiones_partners_factura_venta_id_fkey!inner(numero_factura)
+        partners_aliados(razon_social, partner_id_externo),
+        facturas_venta!comisiones_partners_factura_venta_id_fkey(numero_factura)
       `)
       .eq('empresa_id', empresaActual.id)
       .eq('ocultar_en_listados', false)
@@ -321,11 +324,27 @@ export default function ComisionesPartners() {
   };
 
   const comisionesFiltradas = comisiones.filter((c) => {
-    if (filtroEstado === 'todas') return true;
-    if (filtroEstado === 'pendientes') return c.estado_comision === 'pendiente';
-    if (filtroEstado === 'facturadas') return c.estado_comision === 'facturada' && c.estado_pago !== 'pagada';
-    if (filtroEstado === 'pagadas') return c.estado_pago === 'pagada';
-    return true;
+    // Filtro por estado
+    let pasaFiltroEstado = true;
+    if (filtroEstado === 'pendientes') {
+      pasaFiltroEstado = c.estado_comision === 'pendiente';
+    } else if (filtroEstado === 'facturadas') {
+      pasaFiltroEstado = c.estado_comision === 'facturada' && c.estado_pago !== 'pagada';
+    } else if (filtroEstado === 'pagadas') {
+      pasaFiltroEstado = c.estado_pago === 'pagada';
+    }
+
+    // Filtro por tipo
+    let pasaFiltroTipo = true;
+    if (filtroTipo === 'partners') {
+      pasaFiltroTipo = c.tipo_comision === 'partner';
+    } else if (filtroTipo === 'marketplace') {
+      pasaFiltroTipo = c.tipo_comision === 'marketplace';
+    } else if (filtroTipo === 'mercadopago') {
+      pasaFiltroTipo = ['cobranza_electronica', 'acreditacion_instantanea', 'acreditacion_21_dias', 'financiamiento_cuotas'].includes(c.tipo_comision);
+    }
+
+    return pasaFiltroEstado && pasaFiltroTipo;
   });
 
   const totales = {
@@ -498,39 +517,77 @@ export default function ComisionesPartners() {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Detalle de Comisiones</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setFiltroEstado('todas')}
-                className={`px-3 py-1 rounded text-sm ${
-                  filtroEstado === 'todas' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                Todas
-              </button>
-              <button
-                onClick={() => setFiltroEstado('pendientes')}
-                className={`px-3 py-1 rounded text-sm ${
-                  filtroEstado === 'pendientes' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                Pendientes
-              </button>
-              <button
-                onClick={() => setFiltroEstado('facturadas')}
-                className={`px-3 py-1 rounded text-sm ${
-                  filtroEstado === 'facturadas' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                Facturadas
-              </button>
-              <button
-                onClick={() => setFiltroEstado('pagadas')}
-                className={`px-3 py-1 rounded text-sm ${
-                  filtroEstado === 'pagadas' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                Pagadas
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <span className="text-sm text-gray-600 font-medium mr-2">Estado:</span>
+                <button
+                  onClick={() => setFiltroEstado('todas')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroEstado === 'todas' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Todas
+                </button>
+                <button
+                  onClick={() => setFiltroEstado('pendientes')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroEstado === 'pendientes' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Pendientes
+                </button>
+                <button
+                  onClick={() => setFiltroEstado('facturadas')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroEstado === 'facturadas' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Facturadas
+                </button>
+                <button
+                  onClick={() => setFiltroEstado('pagadas')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroEstado === 'pagadas' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Pagadas
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-sm text-gray-600 font-medium mr-2">Tipo:</span>
+                <button
+                  onClick={() => setFiltroTipo('todas')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroTipo === 'todas' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Todas
+                </button>
+                <button
+                  onClick={() => setFiltroTipo('partners')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroTipo === 'partners' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Partners
+                </button>
+                <button
+                  onClick={() => setFiltroTipo('marketplace')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroTipo === 'marketplace' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Marketplace
+                </button>
+                <button
+                  onClick={() => setFiltroTipo('mercadopago')}
+                  className={`px-3 py-1 rounded text-sm ${
+                    filtroTipo === 'mercadopago' ? 'bg-cyan-600 text-white' : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Mercado Pago
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -556,8 +613,21 @@ export default function ComisionesPartners() {
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {new Date(comision.fecha).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    {comision.partners_aliados.razon_social}
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-900">
+                        {comision.partners_aliados?.razon_social || comision.beneficiario || 'N/A'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {comision.tipo_comision === 'partner' ? 'Comisión Partner' :
+                         comision.tipo_comision === 'marketplace' ? 'Comisión Marketplace' :
+                         comision.tipo_comision === 'cobranza_electronica' ? 'Cobranza Electrónica' :
+                         comision.tipo_comision === 'acreditacion_instantanea' ? 'Acreditación Instantánea' :
+                         comision.tipo_comision === 'acreditacion_21_dias' ? 'Acreditación 21 días' :
+                         comision.tipo_comision === 'financiamiento_cuotas' ? 'Financiamiento Cuotas' :
+                         comision.tipo_comision}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 font-mono">
                     {comision.order_id}

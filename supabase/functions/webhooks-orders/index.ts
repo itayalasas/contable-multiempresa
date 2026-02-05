@@ -602,6 +602,31 @@ async function handleOrder(
           } else {
             console.log(`✅ [Order] Comisión ML registrada: $${comisionMLMonto.toFixed(2)}`);
 
+            // Registrar comisión ML en tabla unificada de comisiones
+            try {
+              await supabase
+                .from('comisiones_partners')
+                .insert({
+                  empresa_id: payload.empresa_id,
+                  partner_id: null,
+                  factura_venta_id: factura.id,
+                  order_id: payload.order.order_id,
+                  item_codigo: null,
+                  fecha: new Date().toISOString().split('T')[0],
+                  subtotal_venta: total.toFixed(2),
+                  comision_porcentaje: comisionMLPorcentaje,
+                  comision_monto: comisionMLMonto.toFixed(2),
+                  tipo_comision: 'marketplace',
+                  beneficiario: 'MercadoLibre',
+                  estado_comision: 'pendiente',
+                  estado_pago: 'pendiente',
+                  descripcion: `Comisión MercadoLibre ${comisionMLPorcentaje}%`,
+                });
+              console.log(`✅ [Order] Comisión ML registrada en tabla unificada`);
+            } catch (e) {
+              console.error('⚠️ [Order] Error registrando comisión ML en tabla:', e);
+            }
+
             // Generar asiento contable del egreso
             try {
               const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -785,11 +810,22 @@ async function procesarComisionPartner(
     }
 
     const divisor = esEnCentavos ? 100 : 1;
-    const itemSubtotal = (item.subtotal || (item.quantity * item.unit_price)) / divisor;
-    const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
-    const comisionMonto = itemSubtotal * (comisionPorcentaje / 100);
 
-    console.log(`💰 [Comision] Subtotal: ${itemSubtotal.toFixed(2)}, Porcentaje: ${comisionPorcentaje}%, Monto: ${comisionMonto.toFixed(2)}`);
+    // Usar base_amount si está disponible (es el monto sin IVA después de descuentos)
+    // Si no, calcular desde total
+    let itemSubtotalSinIva;
+    if (item.base_amount) {
+      itemSubtotalSinIva = item.base_amount / divisor;
+    } else {
+      const itemTotal = (item.total || 0) / divisor;
+      const itemTaxRate = item.tax_rate || 0.22;
+      itemSubtotalSinIva = itemTotal / (1 + itemTaxRate);
+    }
+
+    const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
+    const comisionMonto = itemSubtotalSinIva * (comisionPorcentaje / 100);
+
+    console.log(`💰 [Comision] Subtotal sin IVA: ${itemSubtotalSinIva.toFixed(2)}, Porcentaje: ${comisionPorcentaje}%, Monto: ${comisionMonto.toFixed(2)}`);
 
     const { data: comision, error: comisionError } = await supabase
       .from('comisiones_partners')
@@ -800,7 +836,7 @@ async function procesarComisionPartner(
         order_id: orderId,
         item_codigo: item.sku || item.item_id,
         fecha: new Date().toISOString().split('T')[0],
-        subtotal_venta: itemSubtotal.toFixed(2),
+        subtotal_venta: itemSubtotalSinIva.toFixed(2),
         comision_porcentaje: comisionPorcentaje,
         comision_monto: comisionMonto.toFixed(2),
         estado_comision: 'pendiente',
