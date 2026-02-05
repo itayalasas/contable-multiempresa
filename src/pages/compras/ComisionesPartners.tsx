@@ -347,10 +347,15 @@ export default function ComisionesPartners() {
     return pasaFiltroEstado && pasaFiltroTipo;
   });
 
+  // Filtrar solo comisiones facturables (excluir auto-cobradas de marketplace/mercadopago)
+  const comisionesFacturables = comisiones.filter(c => c.estado_pago !== 'auto_cobrada');
+  const comisionesAutoCobradas = comisiones.filter(c => c.estado_pago === 'auto_cobrada');
+
   const totales = {
-    pendientes: comisiones.filter(c => c.estado_comision === 'pendiente').reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
-    facturadas: comisiones.filter(c => c.estado_comision === 'facturada' && c.estado_pago !== 'pagada').reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
-    pagadas: comisiones.filter(c => c.estado_pago === 'pagada').reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
+    pendientes: comisionesFacturables.filter(c => c.estado_comision === 'pendiente').reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
+    facturadas: comisionesFacturables.filter(c => c.estado_comision === 'facturada' && c.estado_pago !== 'pagada').reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
+    pagadas: comisionesFacturables.filter(c => c.estado_pago === 'pagada').reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
+    autoCobradas: comisionesAutoCobradas.reduce((sum, c) => sum + parseFloat(c.comision_monto.toString()), 0),
   };
 
   if (loading) {
@@ -390,14 +395,14 @@ export default function ComisionesPartners() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Comisiones Pendientes</p>
+              <p className="text-sm font-medium text-gray-600">Pendientes (A Facturar)</p>
               <p className="text-2xl font-bold text-yellow-600 mt-1">${totales.pendientes.toFixed(2)}</p>
               <p className="text-xs text-gray-500 mt-1">
-                {comisiones.filter(c => c.estado_comision === 'pendiente').length} comisiones
+                {comisionesFacturables.filter(c => c.estado_comision === 'pendiente').length} comisiones
               </p>
             </div>
             <div className="bg-yellow-100 p-3 rounded-lg">
@@ -412,7 +417,7 @@ export default function ComisionesPartners() {
               <p className="text-sm font-medium text-gray-600">Por Pagar (Facturadas)</p>
               <p className="text-2xl font-bold text-orange-600 mt-1">${totales.facturadas.toFixed(2)}</p>
               <p className="text-xs text-gray-500 mt-1">
-                {comisiones.filter(c => c.estado_comision === 'facturada' && c.estado_pago !== 'pagada').length} comisiones
+                {comisionesFacturables.filter(c => c.estado_comision === 'facturada' && c.estado_pago !== 'pagada').length} comisiones
               </p>
             </div>
             <div className="bg-orange-100 p-3 rounded-lg">
@@ -424,14 +429,29 @@ export default function ComisionesPartners() {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Pagado</p>
+              <p className="text-sm font-medium text-gray-600">Pagadas</p>
               <p className="text-2xl font-bold text-green-600 mt-1">${totales.pagadas.toFixed(2)}</p>
               <p className="text-xs text-gray-500 mt-1">
-                {comisiones.filter(c => c.estado_pago === 'pagada').length} comisiones
+                {comisionesFacturables.filter(c => c.estado_pago === 'pagada').length} comisiones
               </p>
             </div>
             <div className="bg-green-100 p-3 rounded-lg">
               <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Auto-Cobradas</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">${totales.autoCobradas.toFixed(2)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {comisionesAutoCobradas.length} comisiones
+              </p>
+            </div>
+            <div className="bg-blue-100 p-3 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-blue-600" />
             </div>
           </div>
         </div>
@@ -650,11 +670,13 @@ export default function ComisionesPartners() {
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                        comision.estado_pago === 'auto_cobrada' ? 'bg-blue-100 text-blue-800' :
                         comision.estado_pago === 'pagada' ? 'bg-green-100 text-green-800' :
                         comision.estado_comision === 'facturada' ? 'bg-orange-100 text-orange-800' :
                         'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {comision.estado_pago === 'pagada' ? 'Pagada' :
+                        {comision.estado_pago === 'auto_cobrada' ? 'Auto-Cobrada' :
+                         comision.estado_pago === 'pagada' ? 'Pagada' :
                          comision.estado_comision === 'facturada' ? 'Facturada' :
                          'Pendiente'}
                       </span>

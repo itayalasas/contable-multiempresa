@@ -197,19 +197,7 @@ async function handleOrder(
       return { success: false, error: 'Empresa no encontrada' };
     }
 
-    // Obtener configuración de comisión MercadoLibre desde impuestos
-    const { data: impuestoML } = await supabase
-      .from('impuestos')
-      .select('tasa')
-      .eq('empresa_id', payload.empresa_id)
-      .ilike('nombre', '%Mercado%')
-      .eq('activo', true)
-      .maybeSingle();
-
-    const comisionMLPorcentaje = impuestoML?.tasa || 7.0;
-    console.log(`💳 [Order] Comisión ML configurada: ${comisionMLPorcentaje}%`);
-
-    // Obtener configuración de cuenta bancaria ML
+    // Obtener configuración de cuenta bancaria ML (para registrar cobros/pagos)
     const { data: cuentaBancariaML } = await supabase
       .from('cuentas_bancarias')
       .select('id')
@@ -413,8 +401,6 @@ async function handleOrder(
           fecha_pago: estaPagada ? new Date().toISOString() : null,
           customer_id: payload.customer.customer_id,
           evento_id: eventoId,
-          comision_ml_porcentaje: comisionMLPorcentaje,
-          comision_ml_monto: comisionMLMonto.toFixed(2),
           cuenta_bancaria_ml_id: cuentaBancariaMLId,
           origen_marketplace: true,
           ...payload.metadata,
@@ -569,129 +555,8 @@ async function handleOrder(
           }
         }
 
-        // Registrar comisión de MercadoLibre como EGRESO
-        if (comisionMLMonto > 0) {
-          const { data: movEgreso, error: egresoError } = await supabase
-            .from('movimientos_tesoreria')
-            .insert({
-              empresa_id: payload.empresa_id,
-              cuenta_bancaria_id: cuentaBancariaMLId,
-              tipo_movimiento: 'EGRESO',
-              fecha: new Date().toISOString().split('T')[0],
-              monto: comisionMLMonto.toFixed(2),
-              descripcion: `Comisión MercadoLibre ${comisionMLPorcentaje}% - Orden ${payload.order.order_number || payload.order.order_id}`,
-              referencia: payload.order.order_id,
-              beneficiario: 'MercadoLibre',
-              categoria: 'COMISION_MARKETPLACE',
-              asiento_contable_id: null,
-              documento_origen_tipo: 'factura_venta',
-              documento_origen_id: factura.id,
-              metadata: {
-                order_id: payload.order.order_id,
-                comision_porcentaje: comisionMLPorcentaje,
-                total_venta: total.toFixed(2),
-                origen: 'marketplace',
-                automatico: true,
-              },
-            })
-            .select()
-            .single();
-
-          if (egresoError) {
-            console.error('⚠️ [Order] Error registrando comisión ML:', egresoError);
-          } else {
-            console.log(`✅ [Order] Comisión ML registrada: $${comisionMLMonto.toFixed(2)}`);
-
-            // Registrar comisión ML en tabla unificada de comisiones
-            try {
-              await supabase
-                .from('comisiones_partners')
-                .insert({
-                  empresa_id: payload.empresa_id,
-                  partner_id: null,
-                  factura_venta_id: factura.id,
-                  order_id: payload.order.order_id,
-                  item_codigo: null,
-                  fecha: new Date().toISOString().split('T')[0],
-                  subtotal_venta: total.toFixed(2),
-                  comision_porcentaje: comisionMLPorcentaje,
-                  comision_monto: comisionMLMonto.toFixed(2),
-                  tipo_comision: 'marketplace',
-                  beneficiario: 'MercadoLibre',
-                  estado_comision: 'pendiente',
-                  estado_pago: 'pendiente',
-                  descripcion: `Comisión MercadoLibre ${comisionMLPorcentaje}%`,
-                });
-              console.log(`✅ [Order] Comisión ML registrada en tabla unificada`);
-            } catch (e) {
-              console.error('⚠️ [Order] Error registrando comisión ML en tabla:', e);
-            }
-
-            // Generar asiento contable del egreso
-            try {
-              const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-              await fetch(`${supabaseUrl}/functions/v1/generar-asiento-tesoreria`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ movimientoTesoreriaId: movEgreso.id }),
-              });
-            } catch (e) {
-              console.error('⚠️ [Order] Error generando asiento de comisión ML (no crítico):', e);
-            }
-          }
-
-          // Registrar comisión propia (50% de la comisión ML) como INGRESO
-          const comisionPropiaMonto = comisionMLMonto * 0.5;
-          const { data: movIngresoComision, error: ingresoComisionError } = await supabase
-            .from('movimientos_tesoreria')
-            .insert({
-              empresa_id: payload.empresa_id,
-              cuenta_bancaria_id: cuentaBancariaMLId,
-              tipo_movimiento: 'INGRESO',
-              fecha: new Date().toISOString().split('T')[0],
-              monto: comisionPropiaMonto.toFixed(2),
-              descripcion: `Ingreso por comisión marketplace 50% - Orden ${payload.order.order_number || payload.order.order_id}`,
-              referencia: payload.order.order_id,
-              beneficiario: 'Comisión Marketplace',
-              categoria: 'INGRESO_COMISION',
-              asiento_contable_id: null,
-              documento_origen_tipo: 'factura_venta',
-              documento_origen_id: factura.id,
-              metadata: {
-                order_id: payload.order.order_id,
-                comision_propia_porcentaje: comisionMLPorcentaje / 2,
-                comision_ml_total: comisionMLMonto.toFixed(2),
-                total_venta: total.toFixed(2),
-                origen: 'marketplace',
-                automatico: true,
-              },
-            })
-            .select()
-            .single();
-
-          if (ingresoComisionError) {
-            console.error('⚠️ [Order] Error registrando ingreso comisión propia:', ingresoComisionError);
-          } else {
-            console.log(`✅ [Order] Ingreso comisión propia registrada: $${comisionPropiaMonto.toFixed(2)}`);
-
-            // Generar asiento contable del ingreso por comisión
-            try {
-              const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-              await fetch(`${supabaseUrl}/functions/v1/generar-asiento-tesoreria`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ movimientoTesoreriaId: movIngresoComision.id }),
-              });
-            } catch (e) {
-              console.error('⚠️ [Order] Error generando asiento de ingreso comisión (no crítico):', e);
-            }
-          }
-        }
-
-        // Actualizar saldo de cuenta bancaria
-        const comisionPropiaMonto = comisionMLMonto * 0.5;
-        const saldoDisponible = total - comisionMLMonto + comisionPropiaMonto;
-        console.log(`💰 [Order] Saldo disponible después de comisiones: $${saldoDisponible.toFixed(2)}`);
+        // Las comisiones de Mercado Pago se registran por item según configuración del partner
+        // No hay comisión genérica a nivel de orden
 
       } catch (tesoreriaError) {
         console.error('⚠️ [Order] Error en tesorería (no crítico):', tesoreriaError);
@@ -852,10 +717,95 @@ async function procesarComisionPartner(
 
     console.log('✅ [Comision] Registrada:', comision.id);
 
+    // Obtener configuración de Mercado Pago del partner
+    const { data: partnerConfig } = await supabase
+      .from('partners_aliados')
+      .select('dias_acreditacion, habilitacion_cuotas, comision_cuotas_tasa')
+      .eq('id', partnerId)
+      .maybeSingle();
+
+    const comisionesMP = [];
+
+    if (partnerConfig) {
+      // Calcular total del item con IVA para comisiones de MP (que se calculan sobre el total con IVA)
+      const itemTotalConIva = (item.total || 0) / divisor;
+
+      // Comisión de acreditación (si está configurada)
+      if (partnerConfig.dias_acreditacion !== null && partnerConfig.dias_acreditacion !== undefined) {
+        let tasaAcreditacion = 4.99; // Por defecto 21 días
+        let tipoAcreditacion = 'acreditacion_21_dias';
+
+        if (partnerConfig.dias_acreditacion === 0) {
+          tasaAcreditacion = 5.99; // Acreditación instantánea
+          tipoAcreditacion = 'acreditacion_instantanea';
+        }
+
+        const comisionAcreditacion = itemTotalConIva * (tasaAcreditacion / 100);
+
+        const { data: comisionMP, error: errorMP } = await supabase
+          .from('comisiones_partners')
+          .insert({
+            empresa_id: empresaId,
+            partner_id: null,
+            factura_venta_id: facturaId,
+            order_id: orderId,
+            item_codigo: item.sku || item.item_id,
+            fecha: new Date().toISOString().split('T')[0],
+            subtotal_venta: itemTotalConIva.toFixed(2),
+            comision_porcentaje: tasaAcreditacion,
+            comision_monto: comisionAcreditacion.toFixed(2),
+            tipo_comision: tipoAcreditacion,
+            beneficiario: 'MercadoPago',
+            estado_comision: 'pendiente',
+            estado_pago: 'auto_cobrada',
+            descripcion: `Acreditación ${partnerConfig.dias_acreditacion} días - ${item.description || item.name}`,
+          })
+          .select()
+          .single();
+
+        if (!errorMP) {
+          comisionesMP.push(comisionMP.id);
+          console.log(`✅ [Comision] MP Acreditación registrada: ${tasaAcreditacion}% = $${comisionAcreditacion.toFixed(2)}`);
+        }
+      }
+
+      // Comisión de cuotas (si está habilitada)
+      if (partnerConfig.habilitacion_cuotas && partnerConfig.comision_cuotas_tasa) {
+        const comisionCuotas = itemTotalConIva * (parseFloat(partnerConfig.comision_cuotas_tasa) / 100);
+
+        const { data: comisionCuotasData, error: errorCuotas } = await supabase
+          .from('comisiones_partners')
+          .insert({
+            empresa_id: empresaId,
+            partner_id: null,
+            factura_venta_id: facturaId,
+            order_id: orderId,
+            item_codigo: item.sku || item.item_id,
+            fecha: new Date().toISOString().split('T')[0],
+            subtotal_venta: itemTotalConIva.toFixed(2),
+            comision_porcentaje: parseFloat(partnerConfig.comision_cuotas_tasa),
+            comision_monto: comisionCuotas.toFixed(2),
+            tipo_comision: 'financiamiento_cuotas',
+            beneficiario: 'MercadoPago',
+            estado_comision: 'pendiente',
+            estado_pago: 'auto_cobrada',
+            descripcion: `Financiamiento cuotas sin interés - ${item.description || item.name}`,
+          })
+          .select()
+          .single();
+
+        if (!errorCuotas) {
+          comisionesMP.push(comisionCuotasData.id);
+          console.log(`✅ [Comision] MP Cuotas registrada: ${partnerConfig.comision_cuotas_tasa}% = $${comisionCuotas.toFixed(2)}`);
+        }
+      }
+    }
+
     return {
       success: true,
       comision_id: comision.id,
       partner_id: partnerId,
+      comisiones_mp: comisionesMP,
     };
   } catch (error) {
     console.error('❌ [Comision] Error:', error);

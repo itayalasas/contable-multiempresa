@@ -144,7 +144,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
       .eq('empresa_id', empresaId)
       .eq('estado_comision', 'facturada')
       .not('factura_venta_comision_id', 'is', null)
-      .is('factura_compra_id', null);
+      .is('factura_compra_id', null)
+      .neq('estado_pago', 'auto_cobrada'); // Excluir comisiones de marketplace/MP (ya cobradas automáticamente)
 
     if (partnerId) {
       query = query.eq('partner_id', partnerId);
