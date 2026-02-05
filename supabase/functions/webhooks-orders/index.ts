@@ -717,95 +717,13 @@ async function procesarComisionPartner(
 
     console.log('✅ [Comision] Registrada:', comision.id);
 
-    // Obtener configuración de Mercado Pago del partner
-    const { data: partnerConfig } = await supabase
-      .from('partners_aliados')
-      .select('dias_acreditacion, habilitacion_cuotas, comision_cuotas_tasa')
-      .eq('id', partnerId)
-      .maybeSingle();
-
-    const comisionesMP = [];
-
-    if (partnerConfig) {
-      // Calcular total del item con IVA para comisiones de MP (que se calculan sobre el total con IVA)
-      const itemTotalConIva = (item.total || 0) / divisor;
-
-      // Comisión de acreditación (si está configurada)
-      if (partnerConfig.dias_acreditacion !== null && partnerConfig.dias_acreditacion !== undefined) {
-        let tasaAcreditacion = 4.99; // Por defecto 21 días
-        let tipoAcreditacion = 'acreditacion_21_dias';
-
-        if (partnerConfig.dias_acreditacion === 0) {
-          tasaAcreditacion = 5.99; // Acreditación instantánea
-          tipoAcreditacion = 'acreditacion_instantanea';
-        }
-
-        const comisionAcreditacion = itemTotalConIva * (tasaAcreditacion / 100);
-
-        const { data: comisionMP, error: errorMP } = await supabase
-          .from('comisiones_partners')
-          .insert({
-            empresa_id: empresaId,
-            partner_id: null,
-            factura_venta_id: facturaId,
-            order_id: orderId,
-            item_codigo: item.sku || item.item_id,
-            fecha: new Date().toISOString().split('T')[0],
-            subtotal_venta: itemTotalConIva.toFixed(2),
-            comision_porcentaje: tasaAcreditacion,
-            comision_monto: comisionAcreditacion.toFixed(2),
-            tipo_comision: tipoAcreditacion,
-            beneficiario: 'MercadoPago',
-            estado_comision: 'pendiente',
-            estado_pago: 'auto_cobrada',
-            descripcion: `Acreditación ${partnerConfig.dias_acreditacion} días - ${item.description || item.name}`,
-          })
-          .select()
-          .single();
-
-        if (!errorMP) {
-          comisionesMP.push(comisionMP.id);
-          console.log(`✅ [Comision] MP Acreditación registrada: ${tasaAcreditacion}% = $${comisionAcreditacion.toFixed(2)}`);
-        }
-      }
-
-      // Comisión de cuotas (si está habilitada)
-      if (partnerConfig.habilitacion_cuotas && partnerConfig.comision_cuotas_tasa) {
-        const comisionCuotas = itemTotalConIva * (parseFloat(partnerConfig.comision_cuotas_tasa) / 100);
-
-        const { data: comisionCuotasData, error: errorCuotas } = await supabase
-          .from('comisiones_partners')
-          .insert({
-            empresa_id: empresaId,
-            partner_id: null,
-            factura_venta_id: facturaId,
-            order_id: orderId,
-            item_codigo: item.sku || item.item_id,
-            fecha: new Date().toISOString().split('T')[0],
-            subtotal_venta: itemTotalConIva.toFixed(2),
-            comision_porcentaje: parseFloat(partnerConfig.comision_cuotas_tasa),
-            comision_monto: comisionCuotas.toFixed(2),
-            tipo_comision: 'financiamiento_cuotas',
-            beneficiario: 'MercadoPago',
-            estado_comision: 'pendiente',
-            estado_pago: 'auto_cobrada',
-            descripcion: `Financiamiento cuotas sin interés - ${item.description || item.name}`,
-          })
-          .select()
-          .single();
-
-        if (!errorCuotas) {
-          comisionesMP.push(comisionCuotasData.id);
-          console.log(`✅ [Comision] MP Cuotas registrada: ${partnerConfig.comision_cuotas_tasa}% = $${comisionCuotas.toFixed(2)}`);
-        }
-      }
-    }
+    // NOTA: Las comisiones de Mercado Pago son funcionalidad interna del sistema contable
+    // No vienen en el webhook y se calcularán posteriormente según la configuración del partner
 
     return {
       success: true,
       comision_id: comision.id,
       partner_id: partnerId,
-      comisiones_mp: comisionesMP,
     };
   } catch (error) {
     console.error('❌ [Comision] Error:', error);
