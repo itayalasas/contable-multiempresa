@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
+import { aprobacionesService } from '../../services/supabase/aprobaciones';
+import { FacturaVenta } from '../../services/supabase/facturas';
 
 interface SolicitudAprobacionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (motivo: string) => Promise<void>;
+  factura: FacturaVenta;
   tipo: 'modificar' | 'eliminar';
-  facturaNumero: string;
+  usuarioId: string;
+  empresaId: string;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
 export const SolicitudAprobacionModal: React.FC<SolicitudAprobacionModalProps> = ({
-  isOpen,
-  onClose,
-  onSubmit,
+  factura,
   tipo,
-  facturaNumero,
+  usuarioId,
+  empresaId,
+  onClose,
+  onSuccess,
 }) => {
   const [motivo, setMotivo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,9 +36,24 @@ export const SolicitudAprobacionModal: React.FC<SolicitudAprobacionModalProps> =
     setError(null);
 
     try {
-      await onSubmit(motivo);
+      if (tipo === 'modificar') {
+        await aprobacionesService.solicitarModificacion(
+          empresaId,
+          factura.id,
+          {},
+          motivo,
+          usuarioId
+        );
+      } else {
+        await aprobacionesService.solicitarEliminacion(
+          empresaId,
+          factura.id,
+          motivo,
+          usuarioId
+        );
+      }
       setMotivo('');
-      onClose();
+      onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear solicitud');
     } finally {
@@ -50,8 +69,6 @@ export const SolicitudAprobacionModal: React.FC<SolicitudAprobacionModalProps> =
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
@@ -61,7 +78,7 @@ export const SolicitudAprobacionModal: React.FC<SolicitudAprobacionModalProps> =
               Solicitar {tipo === 'modificar' ? 'Modificación' : 'Eliminación'}
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              Factura: {facturaNumero}
+              Factura: {factura.serie}-{factura.numero_factura}
             </p>
           </div>
           <button

@@ -16,15 +16,19 @@ import { FacturaDetalleModal } from '../../components/ventas/FacturaDetalleModal
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { Pagination } from '../../components/common/Pagination';
+import { SolicitudAprobacionModal } from '../../components/ventas/SolicitudAprobacionModal';
 
 export default function Facturas() {
-  const { empresaActual } = useSesion();
+  const { empresaActual, usuario } = useSesion();
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [facturaEdit, setFacturaEdit] = useState<FacturaVenta | null>(null);
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [facturaDetalle, setFacturaDetalle] = useState<FacturaVenta | null>(null);
+  const [showSolicitudModal, setShowSolicitudModal] = useState(false);
+  const [solicitudTipo, setSolicitudTipo] = useState<'modificar' | 'eliminar'>('modificar');
+  const [facturaParaSolicitud, setFacturaParaSolicitud] = useState<FacturaVenta | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -107,26 +111,38 @@ export default function Facturas() {
   };
 
   const handleEditFactura = (factura: FacturaVenta) => {
-    setFacturaEdit(factura);
-    setShowModal(true);
+    if (factura.estado === 'borrador') {
+      setFacturaEdit(factura);
+      setShowModal(true);
+    } else {
+      setFacturaParaSolicitud(factura);
+      setSolicitudTipo('modificar');
+      setShowSolicitudModal(true);
+    }
   };
 
   const handleEliminarFactura = (factura: FacturaVenta) => {
-    setConfirmModal({
-      show: true,
-      title: 'Eliminar Factura',
-      message: `¿Está seguro que desea eliminar la factura ${factura.numero_factura}?`,
-      onConfirm: async () => {
-        try {
-          await eliminarFactura(factura.id);
-          mostrarNotificacion('success', 'Éxito', 'Factura eliminada correctamente');
-          cargarFacturas();
-          cargarEstadisticas();
-        } catch (error: any) {
-          mostrarNotificacion('error', 'Error', error.message);
-        }
-      },
-    });
+    if (factura.estado === 'borrador') {
+      setConfirmModal({
+        show: true,
+        title: 'Eliminar Factura',
+        message: `¿Está seguro que desea eliminar la factura ${factura.numero_factura}?`,
+        onConfirm: async () => {
+          try {
+            await eliminarFactura(factura.id);
+            mostrarNotificacion('success', 'Éxito', 'Factura eliminada correctamente');
+            cargarFacturas();
+            cargarEstadisticas();
+          } catch (error: any) {
+            mostrarNotificacion('error', 'Error', error.message);
+          }
+        },
+      });
+    } else {
+      setFacturaParaSolicitud(factura);
+      setSolicitudTipo('eliminar');
+      setShowSolicitudModal(true);
+    }
   };
 
   const esFacturaComision = (factura: FacturaVenta): boolean => {
@@ -541,6 +557,10 @@ export default function Facturas() {
     setNotification({ show: true, type, title, message });
   };
 
+  const mostrarConfirmacion = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({ show: true, title, message, onConfirm });
+  };
+
   const todasFacturasFiltradas = facturas.filter((factura) => {
     const cumpleFiltroEstado =
       filtroEstado === 'todos' || factura.estado === filtroEstado;
@@ -907,12 +927,12 @@ export default function Facturas() {
                           </button>
                         )}
 
-                        {/* Editar - solo borrador */}
-                        {factura.estado === 'borrador' && (
+                        {/* Editar - visible para todas las facturas excepto anuladas */}
+                        {factura.estado !== 'anulada' && !esFacturaComision(factura) && (
                           <button
                             onClick={() => handleEditFactura(factura)}
                             className="text-blue-600 hover:text-blue-900"
-                            title="Editar"
+                            title={factura.estado === 'borrador' ? 'Editar' : 'Solicitar modificación'}
                           >
                             <svg
                               className="w-5 h-5"
@@ -1069,12 +1089,12 @@ export default function Facturas() {
                           </button>
                         )}
 
-                        {/* Eliminar - solo borrador */}
-                        {factura.estado === 'borrador' && (
+                        {/* Eliminar - visible para todas las facturas excepto anuladas */}
+                        {factura.estado !== 'anulada' && !esFacturaComision(factura) && (
                           <button
                             onClick={() => handleEliminarFactura(factura)}
                             className="text-red-600 hover:text-red-900"
-                            title="Eliminar"
+                            title={factura.estado === 'borrador' ? 'Eliminar' : 'Solicitar eliminación'}
                           >
                             <svg
                               className="w-5 h-5"
@@ -1158,6 +1178,29 @@ export default function Facturas() {
           onClose={() => {
             setShowDetalleModal(false);
             setFacturaDetalle(null);
+          }}
+        />
+      )}
+
+      {showSolicitudModal && facturaParaSolicitud && usuario && empresaActual && (
+        <SolicitudAprobacionModal
+          factura={facturaParaSolicitud}
+          tipo={solicitudTipo}
+          usuarioId={usuario.id}
+          empresaId={empresaActual.id}
+          onClose={() => {
+            setShowSolicitudModal(false);
+            setFacturaParaSolicitud(null);
+          }}
+          onSuccess={() => {
+            setShowSolicitudModal(false);
+            setFacturaParaSolicitud(null);
+            mostrarNotificacion(
+              'success',
+              'Solicitud Enviada',
+              'La solicitud de aprobación ha sido enviada correctamente. Un supervisor debe aprobarla para continuar.'
+            );
+            cargarFacturas();
           }}
         />
       )}
