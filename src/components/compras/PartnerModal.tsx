@@ -16,6 +16,10 @@ interface Partner {
   dia_facturacion: number;
   cuenta_bancaria?: string;
   banco?: string;
+  habilitacion_cuotas?: boolean;
+  cantidad_cuotas_max?: number;
+  dias_acreditacion?: number;
+  comision_cuotas_tasa?: number;
 }
 
 interface PartnerModalProps {
@@ -41,6 +45,10 @@ export function PartnerModal({ isOpen, onClose, onSave, partner, empresaId }: Pa
     dia_facturacion: 1,
     cuenta_bancaria: '',
     banco: '',
+    habilitacion_cuotas: false,
+    cantidad_cuotas_max: 0,
+    dias_acreditacion: 21,
+    comision_cuotas_tasa: 2.49,
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -63,6 +71,10 @@ export function PartnerModal({ isOpen, onClose, onSave, partner, empresaId }: Pa
         dia_facturacion: 1,
         cuenta_bancaria: '',
         banco: '',
+        habilitacion_cuotas: false,
+        cantidad_cuotas_max: 0,
+        dias_acreditacion: 21,
+        comision_cuotas_tasa: 2.49,
       });
     }
     setErrors({});
@@ -328,6 +340,83 @@ export function PartnerModal({ isOpen, onClose, onSave, partner, empresaId }: Pa
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+
+            <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Configuración Mercado Pago</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Configure las comisiones y opciones de pago para este partner
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Acreditación del Dinero
+              </label>
+              <select
+                value={formData.dias_acreditacion}
+                onChange={(e) => setFormData({ ...formData, dias_acreditacion: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value={0}>Al instante (5.99% + IVA)</option>
+                <option value={21}>A 21 días (4.99% + IVA)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Tiempo de disponibilización del dinero y comisión asociada
+              </p>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={formData.habilitacion_cuotas || false}
+                  onChange={(e) => setFormData({ ...formData, habilitacion_cuotas: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Habilitar Cuotas Sin Interés</span>
+              </label>
+              <p className="text-xs text-gray-500">
+                Si está habilitado, se aplicará la comisión por financiamiento
+              </p>
+            </div>
+
+            {formData.habilitacion_cuotas && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cantidad Máxima de Cuotas
+                  </label>
+                  <select
+                    value={formData.cantidad_cuotas_max}
+                    onChange={(e) => setFormData({ ...formData, cantidad_cuotas_max: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={0}>No ofrece cuotas</option>
+                    <option value={3}>3 cuotas</option>
+                    <option value={6}>6 cuotas</option>
+                    <option value={12}>12 cuotas</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Comisión por Cuotas (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.01"
+                    value={formData.comision_cuotas_tasa}
+                    onChange={(e) => setFormData({ ...formData, comision_cuotas_tasa: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Comisión adicional por ofrecer financiamiento (default: 2.49% para 12 cuotas)
+                  </p>
+                </div>
+              </>
+            )}
 
             <div className="md:col-span-2">
               <label className="flex items-center gap-2">
