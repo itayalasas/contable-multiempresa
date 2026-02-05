@@ -411,6 +411,26 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         if (updateError) throw updateError;
 
+        // Actualizar el estado de la factura de comisión (factura de venta de comisiones)
+        // de "pendiente" a "validada" ya que ya se generó la factura de compra al partner
+        const facturasComisionIds = comisionesPartner
+          .map((c) => c.factura_venta_comision_id)
+          .filter((id) => id != null);
+
+        if (facturasComisionIds.length > 0) {
+          const { error: updateFacturaError } = await supabase
+            .from('facturas_venta')
+            .update({ estado: 'validada' })
+            .in('id', facturasComisionIds)
+            .eq('estado', 'pendiente');
+
+          if (updateFacturaError) {
+            console.warn('⚠️ Error actualizando estado de facturas de comisión:', updateFacturaError.message);
+          } else {
+            console.log(`✅ ${facturasComisionIds.length} factura(s) de comisión actualizadas a estado "validada"`);
+          }
+        }
+
         console.log('📝 Generando asiento contable para factura de compra...');
 
         try {

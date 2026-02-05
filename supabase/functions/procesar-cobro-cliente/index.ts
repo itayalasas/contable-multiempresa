@@ -306,15 +306,68 @@ async function registrarMovimientoTesoreria(
 
     console.log('✅ Usando cuenta bancaria:', cuenta.nombre);
 
-    // Registrar movimiento de INGRESO (entra dinero)
-    const { error: movError } = await supabase
-      .from('movimientos_tesoreria')
-      .insert({
+    const comisionMP = parseFloat(factura.comision_mp_monto || 0);
+    const ingresoNeto = parseFloat(factura.ingreso_neto || pago.monto);
+    const montoTotal = parseFloat(pago.monto);
+
+    // Si hay comisión MP, registrar dos movimientos para visibilidad
+    const movimientos = [];
+
+    if (comisionMP > 0) {
+      // 1. INGRESO bruto (lo que el cliente pagó)
+      movimientos.push({
         empresa_id: factura.empresa_id,
         cuenta_bancaria_id: cuentaBancariaId,
         tipo_movimiento: 'INGRESO',
         fecha: pago.fechaPago,
-        monto: pago.monto,
+        monto: montoTotal,
+        descripcion: `Cobro factura ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
+        referencia: pago.referencia || factura.numero_factura,
+        beneficiario: factura.cliente?.razon_social || 'Cliente',
+        categoria: 'COBRO_CLIENTE',
+        asiento_contable_id: asientoId,
+        documento_origen_tipo: 'pago_cliente',
+        documento_origen_id: pagoId,
+        metadata: {
+          tipo_pago: pago.tipoPago,
+          factura_id: factura.id,
+          tiene_comision_mp: true,
+          comision_mp: comisionMP,
+          ingreso_neto: ingresoNeto,
+        },
+      });
+
+      // 2. EGRESO por comisión de Mercado Pago
+      movimientos.push({
+        empresa_id: factura.empresa_id,
+        cuenta_bancaria_id: cuentaBancariaId,
+        tipo_movimiento: 'EGRESO',
+        fecha: pago.fechaPago,
+        monto: comisionMP,
+        descripcion: `Comisión Mercado Pago ${factura.comision_mp_porcentaje}% - Factura ${factura.numero_factura}`,
+        referencia: `MP-${factura.numero_factura}`,
+        beneficiario: 'Mercado Pago',
+        categoria: 'COMISION_PASARELA',
+        asiento_contable_id: asientoId,
+        documento_origen_tipo: 'comision_mercadopago',
+        documento_origen_id: factura.id,
+        metadata: {
+          factura_id: factura.id,
+          pago_cliente_id: pagoId,
+          porcentaje: factura.comision_mp_porcentaje,
+          tipo: 'mercadopago',
+        },
+      });
+
+      console.log(`💳 [ComisionMP] Registrando: Ingreso $${montoTotal.toFixed(2)} - Comisión MP $${comisionMP.toFixed(2)} = Neto $${ingresoNeto.toFixed(2)}`);
+    } else {
+      // Sin comisión MP, registrar solo el ingreso
+      movimientos.push({
+        empresa_id: factura.empresa_id,
+        cuenta_bancaria_id: cuentaBancariaId,
+        tipo_movimiento: 'INGRESO',
+        fecha: pago.fechaPago,
+        monto: montoTotal,
         descripcion: `Cobro factura ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
         referencia: pago.referencia || factura.numero_factura,
         beneficiario: factura.cliente?.razon_social || 'Cliente',
@@ -327,6 +380,11 @@ async function registrarMovimientoTesoreria(
           factura_id: factura.id,
         },
       });
+    }
+
+    const { error: movError } = await supabase
+      .from('movimientos_tesoreria')
+      .insert(movimientos);
 
     if (movError) {
       console.error('⚠️ Error registrando movimiento de tesorería:', movError.message);
@@ -334,7 +392,7 @@ async function registrarMovimientoTesoreria(
       return;
     }
 
-    console.log('✅ Movimiento de tesorería registrado - Saldo bancario actualizado automáticamente');
+    console.log(`✅ ${movimientos.length} movimiento(s) de tesorería registrado(s) - Saldo bancario actualizado automáticamente`);
 
   } catch (error) {
     console.error('⚠️ Error en tesorería (no crítico):', error);
