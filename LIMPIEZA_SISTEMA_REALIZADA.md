@@ -1,127 +1,63 @@
-# Limpieza del Sistema - Resumen
+# Limpieza Completa del Sistema
 
-## Fecha de Limpieza
-5 de febrero de 2026
+## Fecha: 2026-02-05
 
-## Objetivo
-Limpiar todos los datos transaccionales del sistema manteniendo la configuración y datos maestros para poder realizar pruebas desde cero con el nuevo sistema de comisiones de Mercado Pago.
+## Resumen Ejecutivo
+
+Se realizó una limpieza completa de todas las transacciones del sistema, dejándolo listo para empezar de cero con datos reales.
 
 ## Datos Eliminados
 
-Se eliminaron exitosamente todos los registros transaccionales:
+### 1. Facturas
+- ✅ Todas las facturas de venta eliminadas (0 restantes)
+- ✅ Todos los items de facturas de venta eliminados
+- ✅ Todas las facturas de compra eliminadas (0 restantes)
+- ✅ Todos los items de facturas de compra eliminados
 
-### Facturas y Documentos
-- ✅ Facturas de venta (0 registros)
-- ✅ Facturas de compra (0 registros)
-- ✅ Notas de crédito (0 registros)
-- ✅ Items de facturas de venta
-- ✅ Items de facturas de compra
-- ✅ Items de notas de crédito
-- ✅ Facturas por pagar
+### 2. Contabilidad
+- ✅ Todos los asientos contables eliminados (0 restantes)
+- ✅ Todos los movimientos contables eliminados
 
-### Comisiones y Partners
-- ✅ Comisiones de partners (0 registros)
-- ✅ Lotes de facturación de partners
-- ✅ Lotes de pago bancario
-- ✅ Pagos en lote
+### 3. Tesorería
+- ✅ Todos los movimientos de tesorería eliminados (0 restantes)
+- ✅ Saldos de cuentas bancarias reseteados a saldo inicial
+- ✅ Saldo total: $0.00
 
-### Pagos y Cobros
-- ✅ Pagos de clientes (0 registros)
-- ✅ Pagos a proveedores (0 registros)
+### 4. Pagos y Cobros
+- ✅ Todos los pagos a clientes eliminados
+- ✅ Todos los pagos a proveedores eliminados
 
-### Tesorería
-- ✅ Movimientos de tesorería (0 registros)
-- ✅ Saldos bancarios restablecidos a 0
+### 5. Comisiones
+- ✅ Todas las comisiones de partners eliminadas (0 restantes)
 
-### Contabilidad
-- ✅ Asientos contables (0 registros)
-- ✅ Movimientos contables (0 registros)
-- ✅ Periodos contables reabiertos (todos en estado "abierto")
+### 6. Sistema de Aprobaciones
+- ✅ Todas las solicitudes de aprobación eliminadas (0 restantes)
 
-### Sistema
-- ✅ Eventos externos (webhooks procesados) (0 registros)
-- ✅ Solicitudes de autorización (0 registros)
+### 7. Integraciones
+- ✅ Todos los eventos externos (órdenes del marketplace) eliminados (0 restantes)
 
-## Datos Mantenidos
+### 8. Periodos Contables
+- ✅ Todos los periodos cerrados reabiertos
+- ✅ Periodos listos para registrar nuevas transacciones
 
-Se preservaron todos los datos maestros y configuraciones:
+## Datos Preservados
 
-### Empresas y Usuarios
-- ✅ 1 empresa
-- ✅ 7 usuarios
+El script preservó todos los datos maestros necesarios:
 
-### Catálogos
-- ✅ 29 clientes
-- ✅ 10 proveedores
-- ✅ 8 partners/aliados
+- ✅ Clientes, Proveedores, Partners
+- ✅ Plan de cuentas
+- ✅ Cuentas bancarias
+- ✅ Empresas y configuración
+- ✅ Usuarios y permisos
 
-### Contabilidad
-- ✅ 89 cuentas del plan de cuentas
-- ✅ 26 periodos contables (ahora abiertos)
+## Estado Final
 
-### Finanzas
-- ✅ 6 cuentas bancarias (saldo en 0)
+Facturas de Venta: 0
+Facturas de Compra: 0
+Asientos Contables: 0
+Movimientos Tesorería: 0
+Comisiones: 0
+Cuentas Bancarias: 6
+Saldo Total: $0.00
 
-### Configuraciones
-- ✅ 8 configuraciones de impuestos (incluye las nuevas comisiones de Mercado Pago)
-
-## Configuraciones de Mercado Pago Disponibles
-
-El sistema ahora cuenta con las siguientes configuraciones de comisiones:
-
-1. **COMISION_COBRANZA_ELECTRONICA** (5.99%)
-   - Comisión base por procesamiento de pagos
-
-2. **COMISION_ACREDITACION_INSTANTANEA** (5.99%)
-   - Para acreditación al instante (0 días)
-
-3. **COMISION_ACREDITACION_21_DIAS** (4.99%)
-   - Para acreditación a 21 días
-
-4. **COMISION_FINANCIAMIENTO_CUOTAS** (2.49%)
-   - Para financiamiento en cuotas sin interés
-
-## Estado Actual del Sistema
-
-El sistema está completamente limpio y listo para:
-
-- ✅ Probar flujos de facturación desde cero
-- ✅ Probar sistema de comisiones de Mercado Pago
-- ✅ Probar webhooks de marketplace
-- ✅ Probar generación de asientos contables
-- ✅ Probar cálculo de comisiones en cascada
-- ✅ Probar movimientos de tesorería
-- ✅ Probar cuentas por cobrar y pagar
-
-## Cómo Volver a Limpiar
-
-Para realizar una nueva limpieza en el futuro, ejecute la siguiente migración que se guardó en el sistema:
-
-```sql
--- Ver archivo: supabase/migrations/20260205XXXXXX_limpiar_datos_transaccionales_correcto.sql
-```
-
-O ejecute el script SQL directamente desde la consola de Supabase.
-
-## Recomendaciones
-
-1. **Antes de probar**: Verifique que los partners tengan configuradas sus comisiones de Mercado Pago
-2. **Durante pruebas**: Monitoree los asientos contables automáticos
-3. **Después de pruebas**: Puede volver a limpiar usando el mismo script
-
-## Notas Importantes
-
-- La limpieza es **IRREVERSIBLE**
-- Siempre haga un backup antes de limpiar en producción
-- Este script está diseñado para ambientes de desarrollo/prueba
-- Los saldos bancarios se resetean a 0
-- Todos los periodos contables se reabren automáticamente
-
-## Próximos Pasos
-
-1. Configurar partners con opciones de Mercado Pago
-2. Enviar webhooks de prueba
-3. Verificar generación de facturas
-4. Verificar cálculo de comisiones
-5. Verificar asientos contables automáticos
-6. Verificar movimientos de tesorería
+Sistema listo para nuevas transacciones.
