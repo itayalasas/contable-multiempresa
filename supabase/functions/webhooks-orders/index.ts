@@ -372,6 +372,23 @@ async function handleOrder(
 
     console.log(`💳 [Order] Payment status recibido: "${payload.order.payment_status}" → Estado factura: "${estaPagada ? 'pagada' : 'pendiente'}"`);
 
+    // Obtener configuración de comisión de Mercado Pago
+    const { data: configMP } = await supabase
+      .from('empresas_comision_mp')
+      .select('porcentaje, activo')
+      .eq('empresa_id', payload.empresa_id)
+      .eq('activo', true)
+      .maybeSingle();
+
+    const comisionMPPorcentaje = configMP?.porcentaje ? parseFloat(configMP.porcentaje) : 0;
+    const comisionMPMonto = comisionMPPorcentaje > 0 ? total * (comisionMPPorcentaje / 100) : 0;
+    const ingresoNeto = total - comisionMPMonto;
+
+    if (comisionMPPorcentaje > 0) {
+      console.log(`💳 [ComisionMP] Aplicando ${comisionMPPorcentaje}% sobre $${total.toFixed(2)} = $${comisionMPMonto.toFixed(2)}`);
+      console.log(`💰 [IngresoNeto] Ingreso real después de MP: $${ingresoNeto.toFixed(2)}`);
+    }
+
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .insert({
@@ -386,6 +403,9 @@ async function handleOrder(
         descuento: descuento.toFixed(2),
         total_iva: impuestos.toFixed(2),
         total: total.toFixed(2),
+        comision_mp_porcentaje: comisionMPPorcentaje > 0 ? comisionMPPorcentaje.toFixed(2) : null,
+        comision_mp_monto: comisionMPMonto > 0 ? comisionMPMonto.toFixed(2) : null,
+        ingreso_neto: ingresoNeto.toFixed(2),
         moneda: payload.order.currency || 'UYU',
         tipo_cambio: 1,
         dgi_enviada: false,
@@ -684,10 +704,20 @@ async function procesarComisionPartner(
       itemSubtotalSinIva = itemTotal / (1 + itemTaxRate);
     }
 
+    // Calcular comisión CON IVA INCLUIDO
+    // El porcentaje acordado se aplica sobre el subtotal sin IVA,
+    // pero el resultado INCLUYE el IVA que el partner debe declarar
     const comisionPorcentaje = partnerData.commission_percentage || partnerData.commission_default || 15;
-    const comisionMonto = itemSubtotalSinIva * (comisionPorcentaje / 100);
+    const comisionMontoConIVA = itemSubtotalSinIva * (comisionPorcentaje / 100);
 
-    console.log(`💰 [Comision] Subtotal sin IVA: ${itemSubtotalSinIva.toFixed(2)}, Porcentaje: ${comisionPorcentaje}%, Monto: ${comisionMonto.toFixed(2)}`);
+    // Desglosar IVA (asumiendo 22% en Uruguay)
+    const IVA_RATE = 1.22;
+    const comisionSinIVA = comisionMontoConIVA / IVA_RATE;
+    const ivaComision = comisionMontoConIVA - comisionSinIVA;
+
+    console.log(`💰 [Comision] Subtotal sin IVA: ${itemSubtotalSinIva.toFixed(2)}, Porcentaje: ${comisionPorcentaje}%`);
+    console.log(`   → Comisión total (con IVA): ${comisionMontoConIVA.toFixed(2)}`);
+    console.log(`   → Desglose: Sin IVA ${comisionSinIVA.toFixed(2)} + IVA ${ivaComision.toFixed(2)}`);
 
     const { data: comision, error: comisionError } = await supabase
       .from('comisiones_partners')
@@ -700,7 +730,9 @@ async function procesarComisionPartner(
         fecha: new Date().toISOString().split('T')[0],
         subtotal_venta: itemSubtotalSinIva.toFixed(2),
         comision_porcentaje: comisionPorcentaje,
-        comision_monto: comisionMonto.toFixed(2),
+        comision_monto: comisionMontoConIVA.toFixed(2),
+        comision_sin_iva: comisionSinIVA.toFixed(2),
+        iva_monto: ivaComision.toFixed(2),
         estado_comision: 'pendiente',
         estado_pago: 'pendiente',
         descripcion: item.description || item.name,

@@ -201,27 +201,48 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
 
     // Crear movimientos contables
     const monto = pago.monto;
+    const comisionMP = parseFloat(factura.comision_mp_monto || 0);
+    const ingresoNeto = parseFloat(factura.ingreso_neto || monto);
 
-    const movimientos = [
-      // DEBE: Banco/Caja (entra dinero)
-      {
-        asiento_id: asiento.id,
-        cuenta_id: cuentaDestinoId,
-        cuenta: `${cuentaDestinoCodigo} - ${nombreCuentaDestino}`,
-        debito: monto,
-        credito: 0,
-        descripcion: `Cobro ${factura.numero_factura} - ${pago.tipoPago}`,
-      },
-      // HABER: Cuentas por Cobrar (se reduce el activo)
-      {
-        asiento_id: asiento.id,
-        cuenta_id: cuentaCobrarId,
-        cuenta: '121201 - Cuentas por Cobrar - Clientes',
-        debito: 0,
-        credito: monto,
-        descripcion: `Cobro ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
-      },
-    ];
+    const movimientos = [];
+
+    // DEBE: Banco/Caja (entra el dinero real, después de comisión MP)
+    movimientos.push({
+      asiento_id: asiento.id,
+      cuenta_id: cuentaDestinoId,
+      cuenta: `${cuentaDestinoCodigo} - ${nombreCuentaDestino}`,
+      debito: comisionMP > 0 ? ingresoNeto : monto,
+      credito: 0,
+      descripcion: `Cobro ${factura.numero_factura} - ${pago.tipoPago}`,
+    });
+
+    // DEBE: Gastos Comisión MP (si hay comisión de Mercado Pago)
+    if (comisionMP > 0) {
+      const cuentaGastoMPId = await obtenerCuentaId(supabase, factura.empresa_id, '630501');
+      if (cuentaGastoMPId) {
+        movimientos.push({
+          asiento_id: asiento.id,
+          cuenta_id: cuentaGastoMPId,
+          cuenta: '630501 - Gastos Comisiones Mercado Pago',
+          debito: comisionMP,
+          credito: 0,
+          descripcion: `Comisión MP ${factura.comision_mp_porcentaje}% - Factura ${factura.numero_factura}`,
+        });
+        console.log(`💳 [ComisionMP] Registrando gasto: $${comisionMP.toFixed(2)} (${factura.comision_mp_porcentaje}%)`);
+      } else {
+        console.warn('⚠️ No se encontró cuenta 630501 para gastos de comisión MP');
+      }
+    }
+
+    // HABER: Cuentas por Cobrar (se reduce por el monto total de la factura)
+    movimientos.push({
+      asiento_id: asiento.id,
+      cuenta_id: cuentaCobrarId,
+      cuenta: '121201 - Cuentas por Cobrar - Clientes',
+      debito: 0,
+      credito: monto,
+      descripcion: `Cobro ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
+    });
 
     const { error: movError } = await supabase
       .from('movimientos_contables')
