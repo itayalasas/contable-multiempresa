@@ -139,29 +139,38 @@ const menuItems: MenuItem[] = [
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) => {
   const [expandedMenu, setExpandedMenu] = React.useState<string | null>('Contabilidad');
-  const { hasModuleAccess, role } = usePermissions();
+  const { hasModuleAccess, isAdmin } = usePermissions();
 
   const toggleSubmenu = (title: string) => {
     setExpandedMenu(expandedMenu === title ? null : title);
   };
 
   const filteredMenuItems = React.useMemo(() => {
-    if (role === 'administrador_sistema') {
+    console.log('🔍 Filtrando menús - isAdmin:', isAdmin);
+
+    if (isAdmin) {
+      console.log('✅ Usuario es admin, mostrando todos los menús');
       return menuItems;
     }
 
-    return menuItems
+    const filtered = menuItems
       .filter(item => {
         if (!item.slug) return true;
 
         if (item.submenu) {
-          const accessibleSubmenuItems = item.submenu.filter(subItem =>
-            hasModuleAccess(subItem.slug)
-          );
-          return accessibleSubmenuItems.length > 0;
+          const accessibleSubmenuItems = item.submenu.filter(subItem => {
+            const hasAccess = hasModuleAccess(subItem.slug);
+            console.log(`  📋 ${item.title} → ${subItem.title} (${subItem.slug}):`, hasAccess);
+            return hasAccess;
+          });
+          const shouldShow = accessibleSubmenuItems.length > 0;
+          console.log(`📁 ${item.title}: ${shouldShow ? '✅ MOSTRAR' : '❌ OCULTAR'} (${accessibleSubmenuItems.length} submenús accesibles)`);
+          return shouldShow;
         }
 
-        return hasModuleAccess(item.slug);
+        const hasAccess = hasModuleAccess(item.slug);
+        console.log(`📄 ${item.title} (${item.slug}):`, hasAccess ? '✅ MOSTRAR' : '❌ OCULTAR');
+        return hasAccess;
       })
       .map(item => {
         if (item.submenu) {
@@ -172,7 +181,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) =
         }
         return item;
       });
-  }, [role, hasModuleAccess]);
+
+    console.log('🎯 Menús filtrados:', filtered.map(i => i.title));
+    return filtered;
+  }, [isAdmin, hasModuleAccess]);
 
   return (
     <>
