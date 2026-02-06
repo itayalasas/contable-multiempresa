@@ -68,11 +68,11 @@ Deno.serve(async (req: Request) => {
     const saldoPendiente = total - totalPagado;
 
     // 4. Actualizar estado de la factura
-    let nuevoEstado = 'validada';
+    let nuevoEstado = 'pendiente';
     if (saldoPendiente <= 0) {
       nuevoEstado = 'pagada';
     } else if (totalPagado > 0) {
-      nuevoEstado = 'parcialmente_pagada';
+      nuevoEstado = 'pendiente'; // Parcialmente pagada se mantiene como pendiente
     }
 
     await supabase
