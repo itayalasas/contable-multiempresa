@@ -248,7 +248,7 @@ export const tesoreriaSupabaseService = {
 
     const solicitud = await autorizacionesService.crearSolicitudEliminacion({
       empresaId: params.empresaId,
-      tipoOperacion: 'ELIMINAR_MOVIMIENTO',
+      tipoOperacion: 'eliminar_movimiento_tesoreria',
       tablaAfectada: 'movimientos_tesoreria',
       registroId: params.movimientoId,
       datosRegistro: movimiento,

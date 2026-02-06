@@ -141,7 +141,7 @@ function Tesoreria() {
       onConfirm: (motivo: string) => {
         confirmDelete(
           'Solicitar eliminación',
-          `Esta acción creará una solicitud de autorización para eliminar el movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}. La eliminación requerirá aprobación de otro usuario.`,
+          `Esta acción creará una solicitud de autorización para eliminar el movimiento de ${movimiento.tipo === 'INGRESO' ? 'ingreso' : 'egreso'} por ${formatearMoneda(movimiento.monto)}. La eliminación requerirá aprobación de otro usuario.${movimiento.asiento_contable_id ? '\n\nNOTA: Al aprobar, también se eliminará el asiento contable asociado.' : ''}`,
           async () => {
             try {
               const resultado = await solicitarEliminacionMovimiento({
