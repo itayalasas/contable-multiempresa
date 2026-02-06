@@ -150,32 +150,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) =
       return menuItems;
     }
 
-    return menuItems.filter(item => {
-      if (!item.slug) return true;
+    return menuItems
+      .filter(item => {
+        if (!item.slug) return true;
 
-      if (item.submenu) {
-        const accessibleSubmenuItems = item.submenu.filter(subItem =>
-          hasModuleAccess(subItem.slug)
-        );
+        if (item.submenu) {
+          const accessibleSubmenuItems = item.submenu.filter(subItem =>
+            hasModuleAccess(subItem.slug)
+          );
+          return accessibleSubmenuItems.length > 0;
+        }
 
-        if (accessibleSubmenuItems.length === 0) return false;
-
-        return {
-          ...item,
-          submenu: accessibleSubmenuItems
-        };
-      }
-
-      return hasModuleAccess(item.slug);
-    }).map(item => {
-      if (item.submenu) {
-        return {
-          ...item,
-          submenu: item.submenu.filter(subItem => hasModuleAccess(subItem.slug))
-        };
-      }
-      return item;
-    });
+        return hasModuleAccess(item.slug);
+      })
+      .map(item => {
+        if (item.submenu) {
+          return {
+            ...item,
+            submenu: item.submenu.filter(subItem => hasModuleAccess(subItem.slug))
+          };
+        }
+        return item;
+      });
   }, [role, hasModuleAccess]);
 
   return (
@@ -215,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) =
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-          {menuItems.map((item) => (
+          {filteredMenuItems.map((item) => (
             <div key={item.title}>
               {item.submenu ? (
                 <div>
