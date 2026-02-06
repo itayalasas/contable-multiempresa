@@ -52,7 +52,48 @@ export const usePermissions = () => {
 
   const hasModuleAccess = (module: ModuleSlug): boolean => {
     const modulePermissions = permissions[module] || [];
-    return modulePermissions.length > 0;
+    if (modulePermissions.length > 0) {
+      return true;
+    }
+
+    const moduleToParent: Partial<Record<ModuleSlug, ModuleSlug>> = {
+      'plan-cuentas': 'contabilidad',
+      'asientos': 'contabilidad',
+      'mayor': 'contabilidad',
+      'balance-comprobacion': 'contabilidad',
+      'periodos': 'contabilidad',
+      'clientes': 'ventas',
+      'facturas': 'ventas',
+      'notas-credito': 'ventas',
+      'notas-debito': 'ventas',
+      'recibos': 'ventas',
+      'proveedores': 'compras',
+      'partners': 'compras',
+      'comisiones': 'compras',
+      'cuentas-cobrar': 'finanzas',
+      'cuentas-pagar': 'finanzas',
+      'tesoreria': 'finanzas',
+      'conciliacion': 'finanzas',
+      'centros-costo': 'analisis',
+      'balance-general': 'reportes',
+      'empresas': 'administracion',
+      'usuarios': 'administracion',
+      'autorizaciones': 'administracion',
+      'configuracion': 'administracion',
+      'configuracion-mapeo': 'administracion',
+      'impuestos': 'administracion',
+      'integraciones': 'administracion',
+      'auditoria': 'administracion',
+      'multimoneda': 'administracion'
+    };
+
+    const parentModule = moduleToParent[module];
+    if (parentModule) {
+      const parentPermissions = permissions[parentModule] || [];
+      return parentPermissions.length > 0;
+    }
+
+    return false;
   };
 
   return {
