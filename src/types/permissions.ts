@@ -63,6 +63,7 @@ export type ModuleSlug =
   | 'autorizaciones'
   | 'configuracion'
   | 'configuracion-mapeo'
+  | 'configuracion-aprobaciones'
   | 'impuestos'
   | 'integraciones'
   | 'auditoria'
@@ -101,6 +102,7 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
   'autorizaciones': 'Autorizaciones',
   'configuracion': 'Nomencladores',
   'configuracion-mapeo': 'Mapeo de Archivos',
+  'configuracion-aprobaciones': 'Configurar Aprobaciones',
   'impuestos': 'Impuestos',
   'integraciones': 'Integraciones',
   'auditoria': 'Auditoría',
