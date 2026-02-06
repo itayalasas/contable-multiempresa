@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: usuario, error: usuarioError } = await supabase
       .from("usuarios")
-      .select("rol, empresas_asignadas")
+      .select("rol, empresas_asignadas, metadata")
       .eq("id", aprobadorId)
       .single();
 
@@ -56,8 +56,16 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Usuario no encontrado: ${usuarioError?.message}`);
     }
 
-    if (!["supervisor", "admin", "super_admin", "admin_empresa"].includes(usuario.rol)) {
-      throw new Error("El usuario no tiene permisos para aprobar o rechazar solicitudes. Solo los roles: supervisor, admin, super_admin y admin_empresa pueden realizar esta acción.");
+    if (solicitud.solicitado_por === aprobadorId) {
+      throw new Error("No puedes aprobar o rechazar tu propia solicitud");
+    }
+
+    const metadata = usuario.metadata || {};
+    const permisos = metadata.permissions || {};
+    const tieneAccesoAdministracion = permisos.administracion?.ver === true;
+
+    if (!tieneAccesoAdministracion) {
+      throw new Error("No tienes permisos para aprobar o rechazar solicitudes. Solo usuarios con acceso al módulo de Administración pueden realizar esta acción.");
     }
 
     if (!usuario.empresas_asignadas.includes(solicitud.empresa_id)) {
