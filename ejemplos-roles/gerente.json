@@ -1,0 +1,36 @@
+{
+  "user": {
+    "id": "auth0|gerente001",
+    "name": "Patricia Rodríguez",
+    "email": "patricia.rodriguez@example.com",
+    "role": "gerente",
+    "permissions": {
+      "dashboard": ["read"],
+      "contabilidad": ["read"],
+      "plan-cuentas": ["read"],
+      "asientos": ["read"],
+      "mayor": ["read"],
+      "balance-comprobacion": ["read"],
+      "periodos": ["read"],
+      "ventas": ["read"],
+      "clientes": ["read"],
+      "facturas": ["read"],
+      "notas-credito": ["read"],
+      "notas-debito": ["read"],
+      "recibos": ["read"],
+      "compras": ["read"],
+      "proveedores": ["read"],
+      "partners": ["read"],
+      "comisiones": ["read"],
+      "finanzas": ["read"],
+      "cuentas-cobrar": ["read"],
+      "cuentas-pagar": ["read"],
+      "tesoreria": ["read"],
+      "conciliacion": ["read"],
+      "analisis": ["read"],
+      "centros-costo": ["read"],
+      "reportes": ["read"],
+      "balance-general": ["read"]
+    }
+  }
+}

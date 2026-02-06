@@ -17,9 +17,13 @@ import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { Pagination } from '../../components/common/Pagination';
 import { SolicitudAprobacionModal } from '../../components/ventas/SolicitudAprobacionModal';
+import { usePermissions } from '../../hooks/usePermissions';
+import { CanAccess } from '../../components/common/CanAccess';
+import { ProtectedButton } from '../../components/common/ProtectedButton';
 
 export default function Facturas() {
   const { empresaActual, usuario } = useSesion();
+  const { canCreate, canUpdate, canDelete, canRead } = usePermissions();
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -626,7 +630,7 @@ export default function Facturas() {
         </div>
         <div className="flex gap-2">
           {/* Botón para regenerar asientos faltantes */}
-          {facturas.some(f => !f.asiento_generado || f.asiento_error) && (
+          {facturas.some(f => !f.asiento_generado || f.asiento_error) && canUpdate('facturas') && (
             <button
               onClick={handleRegenerarAsientosMasivo}
               disabled={regenerandoAsiento !== null}
@@ -649,12 +653,14 @@ export default function Facturas() {
               Generar Asientos Faltantes
             </button>
           )}
-          <button
+          <ProtectedButton
+            module="facturas"
+            permission="create"
             onClick={handleNuevaFactura}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Nueva Factura
-          </button>
+          </ProtectedButton>
         </div>
       </div>
 

@@ -27,6 +27,8 @@ import {
   ChevronRight,
   CheckCircle
 } from 'lucide-react';
+import { usePermissions } from '../../hooks/usePermissions';
+import { ModuleSlug } from '../../types/permissions';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -34,90 +36,147 @@ interface SidebarProps {
   isMobile: boolean;
 }
 
-const menuItems = [
+interface MenuItem {
+  title: string;
+  icon: any;
+  path?: string;
+  slug?: ModuleSlug;
+  submenu?: SubMenuItem[];
+}
+
+interface SubMenuItem {
+  title: string;
+  icon: any;
+  path: string;
+  slug: ModuleSlug;
+}
+
+const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: LayoutDashboard,
-    path: '/'
+    path: '/',
+    slug: 'dashboard'
   },
   {
     title: 'Contabilidad',
     icon: Calculator,
+    slug: 'contabilidad',
     submenu: [
-      { title: 'Plan de Cuentas', icon: FileText, path: '/contabilidad/plan-cuentas' },
-      { title: 'Asientos Contables', icon: Receipt, path: '/contabilidad/asientos' },
-      { title: 'Libro Mayor', icon: FileBarChart, path: '/contabilidad/mayor' },
-      { title: 'Balance de Comprobación', icon: BarChart3, path: '/contabilidad/balance-comprobacion' },
-      { title: 'Periodos Contables', icon: Calendar, path: '/contabilidad/periodos' }
+      { title: 'Plan de Cuentas', icon: FileText, path: '/contabilidad/plan-cuentas', slug: 'plan-cuentas' },
+      { title: 'Asientos Contables', icon: Receipt, path: '/contabilidad/asientos', slug: 'asientos' },
+      { title: 'Libro Mayor', icon: FileBarChart, path: '/contabilidad/mayor', slug: 'mayor' },
+      { title: 'Balance de Comprobación', icon: BarChart3, path: '/contabilidad/balance-comprobacion', slug: 'balance-comprobacion' },
+      { title: 'Periodos Contables', icon: Calendar, path: '/contabilidad/periodos', slug: 'periodos' }
     ]
   },
   {
     title: 'Ventas',
     icon: ShoppingCart,
+    slug: 'ventas',
     submenu: [
-      { title: 'Clientes', icon: Users, path: '/ventas/clientes' },
-      { title: 'Facturas', icon: Receipt, path: '/ventas/facturas' },
-      { title: 'Notas de Crédito', icon: FileText, path: '/ventas/notas-credito' },
-      { title: 'Notas de Débito', icon: FileText, path: '/ventas/notas-debito' },
-      { title: 'Recibos', icon: Receipt, path: '/ventas/recibos' }
+      { title: 'Clientes', icon: Users, path: '/ventas/clientes', slug: 'clientes' },
+      { title: 'Facturas', icon: Receipt, path: '/ventas/facturas', slug: 'facturas' },
+      { title: 'Notas de Crédito', icon: FileText, path: '/ventas/notas-credito', slug: 'notas-credito' },
+      { title: 'Notas de Débito', icon: FileText, path: '/ventas/notas-debito', slug: 'notas-debito' },
+      { title: 'Recibos', icon: Receipt, path: '/ventas/recibos', slug: 'recibos' }
     ]
   },
   {
     title: 'Compras',
     icon: ShoppingBag,
+    slug: 'compras',
     submenu: [
-      { title: 'Proveedores', icon: Users, path: '/compras/proveedores' },
-      { title: 'Partners', icon: Users, path: '/compras/partners' },
-      { title: 'Comisiones', icon: DollarSign, path: '/compras/comisiones' }
+      { title: 'Proveedores', icon: Users, path: '/compras/proveedores', slug: 'proveedores' },
+      { title: 'Partners', icon: Users, path: '/compras/partners', slug: 'partners' },
+      { title: 'Comisiones', icon: DollarSign, path: '/compras/comisiones', slug: 'comisiones' }
     ]
   },
   {
     title: 'Finanzas',
     icon: Wallet,
+    slug: 'finanzas',
     submenu: [
-      { title: 'Cuentas por Cobrar', icon: CreditCard, path: '/finanzas/cuentas-cobrar' },
-      { title: 'Cuentas por Pagar', icon: Receipt, path: '/finanzas/cuentas-pagar' },
-      { title: 'Tesorería', icon: Wallet, path: '/finanzas/tesoreria' },
-      { title: 'Conciliación Bancaria', icon: ArrowLeftRight, path: '/finanzas/conciliacion' }
+      { title: 'Cuentas por Cobrar', icon: CreditCard, path: '/finanzas/cuentas-cobrar', slug: 'cuentas-cobrar' },
+      { title: 'Cuentas por Pagar', icon: Receipt, path: '/finanzas/cuentas-pagar', slug: 'cuentas-pagar' },
+      { title: 'Tesorería', icon: Wallet, path: '/finanzas/tesoreria', slug: 'tesoreria' },
+      { title: 'Conciliación Bancaria', icon: ArrowLeftRight, path: '/finanzas/conciliacion', slug: 'conciliacion' }
     ]
   },
   {
     title: 'Análisis',
     icon: TrendingUp,
+    slug: 'analisis',
     submenu: [
-      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo' }
+      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo', slug: 'centros-costo' }
     ]
   },
   {
     title: 'Reportes',
     icon: PieChart,
+    slug: 'reportes',
     submenu: [
-      { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general' }
+      { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general', slug: 'balance-general' }
     ]
   },
   {
     title: 'Administración',
     icon: Settings,
+    slug: 'administracion',
     submenu: [
-      { title: 'Empresas', icon: Building2, path: '/admin/empresas' },
-      { title: 'Usuarios', icon: Users, path: '/admin/usuarios' },
-      { title: 'Autorizaciones', icon: CheckCircle, path: '/admin/autorizaciones' },
-      { title: 'Nomencladores', icon: Database, path: '/admin/configuracion' },
-      { title: 'Mapeo de Archivos', icon: FileText, path: '/admin/configuracion-mapeo' },
-      { title: 'Impuestos', icon: DollarSign, path: '/admin/impuestos' },
-      { title: 'Integraciones', icon: Plug, path: '/admin/integraciones' },
-      { title: 'Auditoría', icon: Shield, path: '/admin/auditoria' },
-      { title: 'Multi-moneda', icon: TrendingUp, path: '/admin/multimoneda' }
+      { title: 'Empresas', icon: Building2, path: '/admin/empresas', slug: 'empresas' },
+      { title: 'Usuarios', icon: Users, path: '/admin/usuarios', slug: 'usuarios' },
+      { title: 'Autorizaciones', icon: CheckCircle, path: '/admin/autorizaciones', slug: 'autorizaciones' },
+      { title: 'Nomencladores', icon: Database, path: '/admin/configuracion', slug: 'configuracion' },
+      { title: 'Mapeo de Archivos', icon: FileText, path: '/admin/configuracion-mapeo', slug: 'configuracion-mapeo' },
+      { title: 'Impuestos', icon: DollarSign, path: '/admin/impuestos', slug: 'impuestos' },
+      { title: 'Integraciones', icon: Plug, path: '/admin/integraciones', slug: 'integraciones' },
+      { title: 'Auditoría', icon: Shield, path: '/admin/auditoria', slug: 'auditoria' },
+      { title: 'Multi-moneda', icon: TrendingUp, path: '/admin/multimoneda', slug: 'multimoneda' }
     ]
   }
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) => {
   const [expandedMenu, setExpandedMenu] = React.useState<string | null>('Contabilidad');
+  const { hasModuleAccess, role } = usePermissions();
 
   const toggleSubmenu = (title: string) => {
     setExpandedMenu(expandedMenu === title ? null : title);
   };
+
+  const filteredMenuItems = React.useMemo(() => {
+    if (role === 'administrador_sistema') {
+      return menuItems;
+    }
+
+    return menuItems.filter(item => {
+      if (!item.slug) return true;
+
+      if (item.submenu) {
+        const accessibleSubmenuItems = item.submenu.filter(subItem =>
+          hasModuleAccess(subItem.slug)
+        );
+
+        if (accessibleSubmenuItems.length === 0) return false;
+
+        return {
+          ...item,
+          submenu: accessibleSubmenuItems
+        };
+      }
+
+      return hasModuleAccess(item.slug);
+    }).map(item => {
+      if (item.submenu) {
+        return {
+          ...item,
+          submenu: item.submenu.filter(subItem => hasModuleAccess(subItem.slug))
+        };
+      }
+      return item;
+    });
+  }, [role, hasModuleAccess]);
 
   return (
     <>

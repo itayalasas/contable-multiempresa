@@ -1,0 +1,23 @@
+{
+  "user": {
+    "id": "auth0|tesorero001",
+    "name": "Carlos Martínez",
+    "email": "carlos.martinez@example.com",
+    "role": "tesorero",
+    "permissions": {
+      "dashboard": ["read"],
+      "finanzas": ["read", "create", "update"],
+      "cuentas-cobrar": ["read", "update"],
+      "cuentas-pagar": ["read", "update"],
+      "tesoreria": ["read", "create", "update", "delete"],
+      "conciliacion": ["read", "create", "update"],
+      "ventas": ["read"],
+      "clientes": ["read"],
+      "facturas": ["read"],
+      "compras": ["read"],
+      "proveedores": ["read"],
+      "reportes": ["read"],
+      "balance-general": ["read"]
+    }
+  }
+}

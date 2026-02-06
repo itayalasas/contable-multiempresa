@@ -1,0 +1,21 @@
+{
+  "user": {
+    "id": "auth0|auxiliar001",
+    "name": "María López",
+    "email": "maria.lopez@example.com",
+    "role": "auxiliar_contable",
+    "permissions": {
+      "dashboard": ["read"],
+      "contabilidad": ["read"],
+      "asientos": ["read", "create"],
+      "ventas": ["read"],
+      "clientes": ["read", "create"],
+      "facturas": ["read", "create"],
+      "notas-credito": ["read", "create"],
+      "notas-debito": ["read", "create"],
+      "recibos": ["read", "create"],
+      "compras": ["read"],
+      "proveedores": ["read", "create"]
+    }
+  }
+}

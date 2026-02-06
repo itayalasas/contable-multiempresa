@@ -1,0 +1,37 @@
+{
+  "user": {
+    "id": "auth0|supervisor001",
+    "name": "Roberto Silva",
+    "email": "roberto.silva@example.com",
+    "role": "supervisor_contable",
+    "permissions": {
+      "dashboard": ["read"],
+      "contabilidad": ["read"],
+      "plan-cuentas": ["read"],
+      "asientos": ["read", "update", "delete"],
+      "mayor": ["read"],
+      "balance-comprobacion": ["read"],
+      "periodos": ["read", "update"],
+      "ventas": ["read"],
+      "clientes": ["read"],
+      "facturas": ["read", "update", "delete"],
+      "notas-credito": ["read", "update"],
+      "notas-debito": ["read", "update"],
+      "recibos": ["read", "update"],
+      "compras": ["read"],
+      "proveedores": ["read"],
+      "partners": ["read"],
+      "comisiones": ["read"],
+      "finanzas": ["read"],
+      "cuentas-cobrar": ["read", "update"],
+      "cuentas-pagar": ["read", "update"],
+      "tesoreria": ["read", "update"],
+      "conciliacion": ["read", "update"],
+      "reportes": ["read"],
+      "balance-general": ["read"],
+      "administracion": ["read"],
+      "autorizaciones": ["read", "update"],
+      "auditoria": ["read"]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "user": {
+    "id": "auth0|auditor001",
+    "name": "Ana García",
+    "email": "ana.garcia@example.com",
+    "role": "auditor",
+    "permissions": {
+      "dashboard": ["read"],
+      "contabilidad": ["read"],
+      "plan-cuentas": ["read"],
+      "asientos": ["read"],
+      "mayor": ["read"],
+      "balance-comprobacion": ["read"],
+      "periodos": ["read"],
+      "ventas": ["read"],
+      "clientes": ["read"],
+      "facturas": ["read"],
+      "notas-credito": ["read"],
+      "notas-debito": ["read"],
+      "recibos": ["read"],
+      "compras": ["read"],
+      "proveedores": ["read"],
+      "partners": ["read"],
+      "comisiones": ["read"],
+      "finanzas": ["read"],
+      "cuentas-cobrar": ["read"],
+      "cuentas-pagar": ["read"],
+      "tesoreria": ["read"],
+      "conciliacion": ["read"],
+      "analisis": ["read"],
+      "centros-costo": ["read"],
+      "reportes": ["read"],
+      "balance-general": ["read"],
+      "administracion": ["read"],
+      "auditoria": ["read"]
+    }
+  }
+}
