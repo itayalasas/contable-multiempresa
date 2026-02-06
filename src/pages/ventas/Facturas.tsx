@@ -20,10 +20,12 @@ import { SolicitudAprobacionModal } from '../../components/ventas/SolicitudAprob
 import { usePermissions } from '../../hooks/usePermissions';
 import { CanAccess } from '../../components/common/CanAccess';
 import { ProtectedButton } from '../../components/common/ProtectedButton';
+import { useRequiereAprobacion } from '../../hooks/useRequiereAprobacion';
 
 export default function Facturas() {
   const { empresaActual, usuario } = useSesion();
   const { canCreate, canUpdate, canDelete, canRead } = usePermissions();
+  const { verificarSiRequiereAprobacion, crearSolicitudAprobacion } = useRequiereAprobacion();
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -114,18 +116,30 @@ export default function Facturas() {
     setShowModal(true);
   };
 
-  const handleEditFactura = (factura: FacturaVenta) => {
+  const handleEditFactura = async (factura: FacturaVenta) => {
     if (factura.estado === 'borrador') {
       setFacturaEdit(factura);
       setShowModal(true);
-    } else {
+      return;
+    }
+
+    const { requiereAprobacion } = await verificarSiRequiereAprobacion(
+      'factura_venta',
+      'modificar',
+      factura.total
+    );
+
+    if (requiereAprobacion) {
       setFacturaParaSolicitud(factura);
       setSolicitudTipo('modificar');
       setShowSolicitudModal(true);
+    } else {
+      setFacturaEdit(factura);
+      setShowModal(true);
     }
   };
 
-  const handleEliminarFactura = (factura: FacturaVenta) => {
+  const handleEliminarFactura = async (factura: FacturaVenta) => {
     if (factura.estado === 'borrador') {
       setConfirmModal({
         show: true,
@@ -142,10 +156,35 @@ export default function Facturas() {
           }
         },
       });
-    } else {
+      return;
+    }
+
+    const { requiereAprobacion } = await verificarSiRequiereAprobacion(
+      'factura_venta',
+      'eliminar',
+      factura.total
+    );
+
+    if (requiereAprobacion) {
       setFacturaParaSolicitud(factura);
       setSolicitudTipo('eliminar');
       setShowSolicitudModal(true);
+    } else {
+      setConfirmModal({
+        show: true,
+        title: 'Eliminar Factura',
+        message: `¿Está seguro que desea eliminar la factura ${factura.numero_factura}?`,
+        onConfirm: async () => {
+          try {
+            await eliminarFactura(factura.id);
+            mostrarNotificacion('success', 'Éxito', 'Factura eliminada correctamente');
+            cargarFacturas();
+            cargarEstadisticas();
+          } catch (error: any) {
+            mostrarNotificacion('error', 'Error', error.message);
+          }
+        },
+      });
     }
   };
 

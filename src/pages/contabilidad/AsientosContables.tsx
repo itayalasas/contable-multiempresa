@@ -31,6 +31,7 @@ import { SearchableAccountSelector } from '../../components/common/SearchableAcc
 import { Pagination } from '../../components/common/Pagination';
 import { useModals } from '../../hooks/useModals';
 import { useAsientosContables } from '../../hooks/useAsientosContables';
+import { useRequiereAprobacion } from '../../hooks/useRequiereAprobacion';
 
 function AsientosContables() {
   const { empresaActual } = useSesion();
@@ -75,6 +76,9 @@ function AsientosContables() {
     showSuccess,
     showError
   } = useModals();
+
+  // Hook para sistema de aprobaciones
+  const { procesarConAprobacion } = useRequiereAprobacion();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -368,19 +372,44 @@ function AsientosContables() {
       let asientoGuardado;
       if (modalType === 'create') {
         asientoGuardado = await crearAsiento(asientoData);
+
+        // Recargar asientos
+        await recargarAsientos();
+
+        showSuccess(
+          'Asiento creado',
+          `El asiento "${formData.numero}" ha sido creado exitosamente.`
+        );
       } else if (modalType === 'edit' && selectedAsiento) {
-        asientoGuardado = await actualizarAsiento(selectedAsiento.id, asientoData);
+        const totalDebito = formData.movimientos.reduce((sum, m) => sum + (m.debito || 0), 0);
+
+        const { resultado, solicitudAprobacion, requirioAprobacion } = await procesarConAprobacion(
+          'asiento_contable',
+          'modificar',
+          selectedAsiento.id,
+          selectedAsiento,
+          asientoData,
+          async () => {
+            return await actualizarAsiento(selectedAsiento.id, asientoData);
+          },
+          totalDebito
+        );
+
+        if (requirioAprobacion) {
+          showSuccess(
+            'Solicitud enviada a aprobación',
+            `La modificación del asiento "${formData.numero}" requiere aprobación y ha sido enviada para su revisión. Los cambios se aplicarán una vez aprobada.`
+          );
+        } else {
+          // Recargar asientos
+          await recargarAsientos();
+
+          showSuccess(
+            'Asiento actualizado',
+            `El asiento "${formData.numero}" ha sido actualizado exitosamente.`
+          );
+        }
       }
-
-      // Recargar asientos para obtener el estado actualizado
-      await recargarAsientos();
-
-      // Mostrar mensaje apropiado
-      // Nota: El trigger puede cambiar el estado a 'descuadrado' si detecta un problema
-      showSuccess(
-        modalType === 'create' ? 'Asiento creado' : 'Asiento actualizado',
-        `El asiento "${formData.numero}" ha sido ${modalType === 'create' ? 'creado' : 'actualizado'} exitosamente.`
-      );
 
       setShowModal(false);
       await resetForm();
@@ -400,34 +429,53 @@ function AsientosContables() {
 
     confirmDelete(
       'Confirmar Eliminación',
-      `¿Está seguro de que desea eliminar el asiento "${asiento.numero}"? Esta acción no se puede deshacer.`,
+      `¿Está seguro de que desea eliminar el asiento "${asiento.numero}"?`,
       async () => {
         try {
           // Agregar a la lista de asientos siendo eliminados
           setDeletingAsientos(prev => new Set([...prev, asiento.id]));
 
-          // Eliminación optimista - se remueve inmediatamente de la UI
-          await eliminarAsiento(asiento.id);
+          const totalDebito = asiento.movimientos.reduce((sum, m) => sum + (m.debito || 0), 0);
 
-          showSuccess(
-          'Asiento eliminado',
-          `El asiento "${asiento.numero}" ha sido eliminado exitosamente.`
-        );
-      } catch (error) {
-        console.error('Error eliminando asiento:', error);
-        showError(
-          'Error al eliminar asiento',
-          error instanceof Error ? error.message : 'Error desconocido al eliminar el asiento'
-        );
-      } finally {
-        // Remover de la lista de asientos siendo eliminados
-        setDeletingAsientos(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(asiento.id);
-          return newSet;
-        });
+          const { resultado, solicitudAprobacion, requirioAprobacion } = await procesarConAprobacion(
+            'asiento_contable',
+            'eliminar',
+            asiento.id,
+            asiento,
+            null,
+            async () => {
+              return await eliminarAsiento(asiento.id);
+            },
+            totalDebito
+          );
+
+          if (requirioAprobacion) {
+            showSuccess(
+              'Solicitud enviada a aprobación',
+              `La eliminación del asiento "${asiento.numero}" requiere aprobación y ha sido enviada para su revisión. Se eliminará una vez aprobada.`
+            );
+          } else {
+            showSuccess(
+              'Asiento eliminado',
+              `El asiento "${asiento.numero}" ha sido eliminado exitosamente.`
+            );
+          }
+        } catch (error) {
+          console.error('Error eliminando asiento:', error);
+          showError(
+            'Error al eliminar asiento',
+            error instanceof Error ? error.message : 'Error desconocido al eliminar el asiento'
+          );
+        } finally {
+          // Remover de la lista de asientos siendo eliminados
+          setDeletingAsientos(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(asiento.id);
+            return newSet;
+          });
+        }
       }
-    });
+    );
   };
 
   const getTotalDebito = (asiento: AsientoContable) => {

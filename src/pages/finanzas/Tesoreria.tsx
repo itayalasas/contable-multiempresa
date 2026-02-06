@@ -12,6 +12,7 @@ import { CuentaBancariaModal } from '../../components/tesoreria/CuentaBancariaMo
 import { MovimientoTesoreriaModal } from '../../components/tesoreria/MovimientoTesoreriaModal';
 import { ResumenTesoreria } from '../../components/tesoreria/ResumenTesoreria';
 import { useTesoreria } from '../../hooks/useTesoreria';
+import { useRequiereAprobacion } from '../../hooks/useRequiereAprobacion';
 
 function Tesoreria() {
   const { empresaActual, paisActual, formatearMoneda } = useSesion();
@@ -61,6 +62,9 @@ function Tesoreria() {
     showError,
     showInput
   } = useModals();
+
+  // Hook para sistema de aprobaciones
+  const { procesarConAprobacion } = useRequiereAprobacion();
 
   // Filtrado de movimientos
   const movimientosFiltrados = movimientos.filter(movimiento => {
@@ -215,11 +219,29 @@ function Tesoreria() {
         );
         return movimiento.id;
       } else if (modalType === 'edit' && selectedMovimiento) {
-        await actualizarMovimiento(selectedMovimiento.id, movimientoData);
-        showSuccess(
-          'Movimiento actualizado',
-          `El movimiento ha sido actualizado exitosamente.`
+        const { resultado, solicitudAprobacion, requirioAprobacion } = await procesarConAprobacion(
+          'movimiento_tesoreria',
+          'modificar',
+          selectedMovimiento.id,
+          selectedMovimiento,
+          movimientoData,
+          async () => {
+            return await actualizarMovimiento(selectedMovimiento.id, movimientoData);
+          },
+          movimientoData.monto
         );
+
+        if (requirioAprobacion) {
+          showSuccess(
+            'Solicitud enviada a aprobación',
+            `La modificación del movimiento requiere aprobación y ha sido enviada para su revisión. Los cambios se aplicarán una vez aprobada.`
+          );
+        } else {
+          showSuccess(
+            'Movimiento actualizado',
+            `El movimiento ha sido actualizado exitosamente.`
+          );
+        }
         return selectedMovimiento.id;
       }
       return '';
