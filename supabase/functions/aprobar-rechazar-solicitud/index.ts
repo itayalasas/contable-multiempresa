@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
 
     console.log("🔐 Permisos del usuario:", JSON.stringify(permisos, null, 2));
 
-    const tieneAccesoAdministracion = permisos.administracion?.ver === true;
+    const tieneAccesoAdministracion = Array.isArray(permisos.administracion) && permisos.administracion.length > 0;
 
     console.log("✅ Tiene acceso a administración?", tieneAccesoAdministracion);
 
