@@ -62,7 +62,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
 
             if (dbUser) {
-              setUsuario(dbUser);
+              const enrichedUser: Usuario = {
+                ...dbUser,
+                metadata: {
+                  role: authUser.role,
+                  permissions: authUser.permissions || {}
+                }
+              };
+              setUsuario(enrichedUser);
             } else {
               await syncUserWithDatabase(authUser);
             }
@@ -77,7 +84,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (authUser) {
               const dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
               if (dbUser) {
-                setUsuario(dbUser);
+                const enrichedUser: Usuario = {
+                  ...dbUser,
+                  metadata: {
+                    role: authUser.role,
+                    permissions: authUser.permissions || {}
+                  }
+                };
+                setUsuario(enrichedUser);
               }
             }
           }
@@ -110,6 +124,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               timezone: 'America/Lima',
               formatoFecha: 'DD/MM/YYYY',
               formatoMoneda: 'es-PE'
+            },
+            metadata: {
+              role: authUser.role,
+              permissions: authUser.permissions || {}
             }
           };
 
@@ -119,7 +137,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await usuariosSupabaseService.updateUltimaConexion(authUser.id);
         }
 
-        setUsuario(dbUser);
+        const enrichedUser: Usuario = {
+          ...dbUser,
+          metadata: {
+            role: authUser.role,
+            permissions: authUser.permissions || {}
+          }
+        };
+
+        console.log('👤 Usuario enriquecido con permisos:', enrichedUser);
+        setUsuario(enrichedUser);
       } catch (error) {
         console.error('Error sincronizando usuario:', error);
         throw error;
