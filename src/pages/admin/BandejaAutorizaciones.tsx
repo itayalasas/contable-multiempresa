@@ -125,6 +125,40 @@ function BandejaAutorizaciones() {
     );
   };
 
+  const obtenerTipoTransaccion = (solicitud: any) => {
+    const { tablaAfectada, datosRegistro } = solicitud;
+
+    if (tablaAfectada === 'movimientos_tesoreria' || tablaAfectada === 'transferencias') {
+      return datosRegistro?.tipo_movimiento || datosRegistro?.tipo || 'Movimiento';
+    }
+
+    if (tablaAfectada === 'asientos_contables') {
+      return 'Asiento Contable';
+    }
+
+    if (tablaAfectada === 'facturas_venta') {
+      return 'Factura de Venta';
+    }
+
+    if (tablaAfectada === 'notas_credito') {
+      return 'Nota de Crédito';
+    }
+
+    if (tablaAfectada === 'facturas_compra') {
+      return 'Factura de Compra';
+    }
+
+    if (tablaAfectada === 'pagos_proveedor') {
+      return 'Pago a Proveedor';
+    }
+
+    if (tablaAfectada === 'cobros_cliente' || tablaAfectada === 'pagos_cliente') {
+      return 'Cobro de Cliente';
+    }
+
+    return tablaAfectada?.replace(/_/g, ' ') || 'Transacción';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -220,7 +254,7 @@ function BandejaAutorizaciones() {
                       <div>
                         <span className="text-gray-500">Tipo:</span>
                         <span className="ml-2 font-medium">
-                          {solicitud.datosRegistro?.tipo_movimiento}
+                          {obtenerTipoTransaccion(solicitud)}
                         </span>
                       </div>
                       <div className="col-span-2">
