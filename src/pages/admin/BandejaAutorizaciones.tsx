@@ -4,11 +4,13 @@ import { useSesion } from '../../context/SesionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAutorizaciones } from '../../hooks/useAutorizaciones';
 import { useModals } from '../../hooks/useModals';
+import { usePermissions } from '../../hooks/usePermissions';
 import { InputModal } from '../../components/common/InputModal';
 
 function BandejaAutorizaciones() {
   const { empresaActual, formatearMoneda } = useSesion();
   const { usuario } = useAuth();
+  const { hasModuleAccess } = usePermissions();
   const {
     solicitudes,
     loading,
@@ -25,23 +27,31 @@ function BandejaAutorizaciones() {
     ? solicitudes.filter(s => s.estado === filtroEstado)
     : solicitudes;
 
-  const puedeAprobarRechazar = () => {
+  const puedeAprobarRechazar = (solicitudUsuarioId?: string) => {
     if (!usuario) return false;
-    const rolesAutorizados = ['supervisor', 'admin', 'super_admin', 'admin_empresa'];
-    return rolesAutorizados.includes(usuario.rol);
+
+    const tieneAccesoAdministracion = hasModuleAccess('administracion');
+
+    if (!tieneAccesoAdministracion) return false;
+
+    if (solicitudUsuarioId && solicitudUsuarioId === usuario.id) {
+      return false;
+    }
+
+    return true;
   };
 
   const handleAprobar = async (solicitud: any) => {
-    if (!puedeAprobarRechazar()) {
-      showError(
-        'Permisos insuficientes',
-        'Solo los usuarios con rol de Supervisor, Administrador o Super Administrador pueden aprobar solicitudes.\n\nPara obtener estos permisos, contacte al administrador del sistema en la sección "Gestión de Usuarios".'
-      );
+    if (solicitud.solicitadoPor === usuario?.id) {
+      showError('Error', 'No puedes aprobar tu propia solicitud');
       return;
     }
 
-    if (solicitud.solicitadoPor === usuario?.id) {
-      showError('Error', 'No puedes aprobar tu propia solicitud');
+    if (!puedeAprobarRechazar(solicitud.solicitadoPor)) {
+      showError(
+        'Permisos insuficientes',
+        'Solo los usuarios con acceso al módulo de Administración pueden aprobar solicitudes.\n\nPara obtener estos permisos, contacte al administrador del sistema en la sección "Gestión de Usuarios".'
+      );
       return;
     }
 
@@ -66,16 +76,16 @@ function BandejaAutorizaciones() {
   };
 
   const handleRechazar = async (solicitud: any) => {
-    if (!puedeAprobarRechazar()) {
-      showError(
-        'Permisos insuficientes',
-        'Solo los usuarios con rol de Supervisor, Administrador o Super Administrador pueden rechazar solicitudes.\n\nPara obtener estos permisos, contacte al administrador del sistema en la sección "Gestión de Usuarios".'
-      );
+    if (solicitud.solicitadoPor === usuario?.id) {
+      showError('Error', 'No puedes rechazar tu propia solicitud');
       return;
     }
 
-    if (solicitud.solicitadoPor === usuario?.id) {
-      showError('Error', 'No puedes rechazar tu propia solicitud');
+    if (!puedeAprobarRechazar(solicitud.solicitadoPor)) {
+      showError(
+        'Permisos insuficientes',
+        'Solo los usuarios con acceso al módulo de Administración pueden rechazar solicitudes.\n\nPara obtener estos permisos, contacte al administrador del sistema en la sección "Gestión de Usuarios".'
+      );
       return;
     }
 
@@ -246,7 +256,7 @@ function BandejaAutorizaciones() {
 
                   {solicitud.estado === 'PENDIENTE' && (
                     <div className="ml-4">
-                      {puedeAprobarRechazar() ? (
+                      {puedeAprobarRechazar(solicitud.solicitadoPor) ? (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleAprobar(solicitud)}
@@ -268,8 +278,14 @@ function BandejaAutorizaciones() {
                           <div className="flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
                             <p>
-                              No tienes permisos para aprobar o rechazar solicitudes.
-                              Solo usuarios con rol de <strong>Supervisor</strong>, <strong>Administrador</strong> o <strong>Super Administrador</strong> pueden realizar esta acción.
+                              {solicitud.solicitadoPor === usuario?.id ? (
+                                <>No puedes aprobar o rechazar tu propia solicitud.</>
+                              ) : (
+                                <>
+                                  No tienes permisos para aprobar o rechazar solicitudes.
+                                  Solo usuarios con acceso al módulo de <strong>Administración</strong> pueden realizar esta acción.
+                                </>
+                              )}
                             </p>
                           </div>
                         </div>
