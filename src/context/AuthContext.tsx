@@ -38,41 +38,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const state = AuthService.extractStateFromUrl();
 
         if (code && state === 'authenticated') {
-          console.log('🔐 Código de autenticación detectado, intercambiando por token...');
-
-          try {
-            const authResponse = await AuthService.exchangeCodeForToken(code);
-            AuthService.saveSession(authResponse.data);
-
-            await syncUserWithDatabase(authResponse.data.user);
-
-            console.log('✅ Autenticación exitosa');
-          } catch (error) {
-            console.error('❌ Error al intercambiar código:', error);
-            setError('Error al procesar la autenticación');
-            setIsLoading(false);
-            return;
-          }
+          console.log('🔐 Código de autenticación detectado');
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
 
         if (AuthService.isAuthenticated()) {
           const authUser = AuthService.getUser();
 
           if (authUser) {
-            const dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
-
-            if (dbUser) {
-              const enrichedUser: Usuario = {
-                ...dbUser,
-                metadata: {
-                  role: authUser.role,
-                  permissions: authUser.permissions || {}
-                }
-              };
-              setUsuario(enrichedUser);
-            } else {
-              await syncUserWithDatabase(authUser);
-            }
+            await syncUserWithDatabase(authUser);
           }
         } else {
           const refreshed = await AuthService.refreshAccessToken();
@@ -82,17 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             const authUser = AuthService.getUser();
             if (authUser) {
-              const dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
-              if (dbUser) {
-                const enrichedUser: Usuario = {
-                  ...dbUser,
-                  metadata: {
-                    role: authUser.role,
-                    permissions: authUser.permissions || {}
-                  }
-                };
-                setUsuario(enrichedUser);
-              }
+              await syncUserWithDatabase(authUser);
             }
           }
         }
@@ -113,11 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const newUser: Omit<Usuario, 'fechaCreacion'> = {
             id: authUser.id,
-            nombre: authUser.name,
+            nombre: authUser.name || authUser.email,
             email: authUser.email,
-            rol: authUser.role === 'admin' ? 'admin_empresa' : 'usuario',
+            rol: 'usuario',
             empresasAsignadas: [],
-            permisos: Object.keys(authUser.permissions || {}),
+            permisos: [],
             activo: true,
             configuracion: {
               idioma: 'es',
@@ -126,8 +90,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               formatoMoneda: 'es-PE'
             },
             metadata: {
-              role: authUser.role,
-              permissions: authUser.permissions || {}
+              role: 'usuario',
+              permissions: {}
             }
           };
 
@@ -139,9 +103,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const enrichedUser: Usuario = {
           ...dbUser,
-          metadata: {
-            role: authUser.role,
-            permissions: authUser.permissions || {}
+          metadata: dbUser.metadata || {
+            role: dbUser.rol || 'usuario',
+            permissions: {}
           }
         };
 
