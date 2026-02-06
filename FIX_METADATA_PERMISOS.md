@@ -1,119 +1,100 @@
-# ✅ Solución: Capturar Metadata y Permisos del Sistema Externo
+# ✅ Solución COMPLETA: Mapeo de Roles del Sistema Externo
 
 ## 🔍 Problema Identificado
 
-**Síntomas:**
-- Usuario se autentica correctamente
-- Dashboard se muestra
-- Pero `metadata` está vacío: `{}`
-- `permisos` muestra `{"admin"}` pero no se aplica
+**Error:**
+```
+new row for relation "usuarios" violates check constraint "usuarios_rol_check"
+```
 
 **Causa Raíz:**
-El código estaba creando usuarios con valores por defecto vacíos en lugar de usar los datos que vienen del sistema de autenticación externo.
+El sistema de autenticación externo envía el rol `"administrador_del_sistema"` pero la base de datos **NO acepta** ese valor. 
+
+**Roles permitidos en BD:**
+- `admin`
+- `super_admin`
+- `admin_empresa`
+- `supervisor`
+- `contador`
+- `usuario`
+
+**Rol que viene del sistema externo:**
+- `administrador_del_sistema` ❌ NO PERMITIDO
 
 ## ✅ Solución Implementada
 
-### 1. AuthContext Mejorado para Capturar Metadata
+### Mapeo de Roles Externo → Interno
 
 **Archivo**: `/src/context/AuthContext.tsx`
 
-#### Cambios en `syncUserWithDatabase`:
+Se agregó un diccionario de mapeo que convierte roles del sistema externo a roles internos válidos:
 
-**ANTES** (valores por defecto vacíos):
 ```typescript
-const newUser: Omit<Usuario, 'fechaCreacion'> = {
-  rol: 'usuario',  // ❌ Valor por defecto
-  metadata: {
-    role: 'usuario',  // ❌ Valor por defecto
-    permissions: {}   // ❌ Vacío
-  }
-};
-```
-
-**AHORA** (usa datos del sistema externo):
-```typescript
-// 1. Extraer datos del sistema de autenticación
-const metadataFromAuth = authUser.metadata || {};
-const permissionsFromAuth = authUser.permissions || {};
-const roleFromAuth = authUser.role || 'usuario';
-
-console.log('📋 Metadata del sistema externo:', metadataFromAuth);
-console.log('🔐 Permisos del sistema externo:', permissionsFromAuth);
-
-// 2. Construir metadata combinado
-const userMetadata = {
-  role: metadataFromAuth.role || roleFromAuth,
-  permissions: metadataFromAuth.permissions || permissionsFromAuth || {}
+const roleMapping: Record<string, string> = {
+  'administrador_del_sistema': 'admin',    // ✅ Mapea a admin
+  'admin': 'admin',
+  'supervisor': 'supervisor',
+  'contador': 'contador',
+  'usuario': 'usuario',
+  'super_admin': 'super_admin',
+  'admin_empresa': 'admin_empresa',
 };
 
-// 3. Crear usuario con metadata correcto
-const newUser: Omit<Usuario, 'fechaCreacion'> = {
-  rol: userMetadata.role,  // ✅ Del sistema externo
-  metadata: userMetadata    // ✅ Del sistema externo
-};
+const externalRole = metadataFromAuth.role || roleFromAuth;
+const mappedRole = roleMapping[externalRole] || 'usuario';
+
+console.log('🔄 Rol mapeado:', externalRole, '→', mappedRole);
 ```
 
-### 2. Actualización de Metadata en Usuarios Existentes
+**Flujo:**
+1. Sistema externo envía: `role: "administrador_del_sistema"`
+2. Código mapea: `"administrador_del_sistema"` → `"admin"`
+3. BD recibe: `rol: "admin"` ✅ VÁLIDO
+4. Metadata conserva el rol original: `metadata.role: "administrador_del_sistema"`
 
-**NUEVO**: Si el usuario ya existe, actualiza el metadata si cambió:
+### ¿Por Qué Dos Roles?
 
-```typescript
-if (!dbUser) {
-  // Usuario nuevo - crear con metadata del sistema externo
-} else {
-  // Usuario existente - actualizar metadata si cambió
-  const shouldUpdateMetadata = JSON.stringify(dbUser.metadata) !== JSON.stringify(userMetadata);
+- **`rol` (campo de BD)**: Rol mapeado válido para la BD (`admin`)
+- **`metadata.role` (campo JSON)**: Rol original del sistema externo (`administrador_del_sistema`)
 
-  if (shouldUpdateMetadata) {
-    console.log('📝 Actualizando metadata del usuario...');
-    await usuariosSupabaseService.updateUsuario(authUser.id, {
-      metadata: userMetadata,
-      rol: userMetadata.role
-    });
-  }
-}
-```
-
-### 3. Edge Function con Logs Detallados
-
-**Archivo**: `/supabase/functions/auth-exchange-code/index.ts`
-
-Agregados logs para verificar qué datos llegan del sistema externo:
-
-```typescript
-console.log("📦 Datos completos recibidos:", JSON.stringify(data, null, 2));
-
-if (data.data && data.data.user) {
-  console.log("👤 Usuario recibido:", {
-    id: data.data.user.id,
-    email: data.data.user.email,
-    name: data.data.user.name,
-    role: data.data.user.role,
-    metadata: data.data.user.metadata,
-    permissions: data.data.user.permissions
-  });
-}
-```
+Esto permite:
+- ✅ Guardar el usuario en BD sin errores
+- ✅ Conservar el rol original para auditoría
+- ✅ Compatibilidad con ambos sistemas
 
 ## 🚀 Cómo Probar la Solución
 
-### Paso 1: Limpiar Todo
+### Paso 1: Borrar Usuario Existente (CRÍTICO)
 
+Tu usuario tiene datos inconsistentes. Debes borrarlo:
+
+**Opción A - Supabase Dashboard:**
+1. Table Editor → `usuarios`
+2. Busca: `payalaortiz@gmail.com`
+3. Borra el registro (botón rojo con basura)
+
+**Opción B - SQL:**
+```sql
+DELETE FROM usuarios WHERE email = 'payalaortiz@gmail.com';
+```
+
+### Paso 2: Limpiar Sesión
+
+En consola del navegador (F12):
 ```javascript
-// En la consola del navegador (F12):
 localStorage.clear();
 ```
 
-### Paso 2: Cerrar Sesión y Login
+### Paso 3: Recarga y Login
 
-1. Cierra sesión si estás logueado
+1. Recarga la página (F5)
 2. Ve a `/login`
 3. Haz clic en "Iniciar Sesión"
 4. Autentica en el sistema externo
 
-### Paso 3: Verificar en Consola
+### Paso 4: Verificar en Consola
 
-Deberías ver estos mensajes en la consola:
+Deberías ver:
 
 ```
 🔐 Código de autenticación detectado, intercambiando por token...
@@ -123,180 +104,205 @@ Deberías ver estos mensajes en la consola:
 📋 Metadata del sistema externo: {...}
 🔐 Permisos del sistema externo: {...}
 👤 Rol del sistema externo: administrador_del_sistema
-📝 Creando usuario con metadata: {role: "...", permissions: {...}}
+🔄 Rol mapeado: administrador_del_sistema → admin          ← ✅ NUEVO
+📝 Creando usuario con metadata: {role: "administrador_del_sistema", permissions: {...}}
 ✅ Usuario creado en base de datos
-👤 Usuario enriquecido con permisos: {...}
-🔐 Permisos finales: {dashboard: Array(4), contabilidad: Array(4), ...}
-```
-
-### Paso 4: Verificar Metadata en Consola
-
-Expande el objeto `Usuario enriquecido con permisos` y verifica:
-
-```javascript
-{
-  id: "e762511c-84ee-4d44-9ee4-802cf5f71d2b",
-  email: "payalaortiz@gmail.com",
+👤 Usuario enriquecido con permisos: {
+  rol: "admin",                                            ← ✅ Rol interno
   metadata: {
-    role: "administrador_del_sistema",  // ✅ Del sistema externo
+    role: "administrador_del_sistema",                    ← ✅ Rol original conservado
     permissions: {
       dashboard: ["create", "delete", "read", "update"],
       contabilidad: ["create", "delete", "read", "update"],
-      ventas: ["create", "delete", "read", "update"],
       // ... etc
     }
   }
 }
+🔐 Permisos finales: {dashboard: [...], contabilidad: [...], ...}
 ```
 
-### Paso 5: Verificar el Sidebar
+**SIN errores** ✅
 
-Deberías ver **todos los menús** según los permisos:
-- Dashboard ✅
-- Contabilidad (5 submódulos) ✅
-- Ventas (5 submódulos) ✅
-- Compras (3 submódulos) ✅
-- Finanzas (4 submódulos) ✅
-- Análisis (1 submódulo) ✅
-- Reportes (1 submódulo) ✅
-- Administración (9 submódulos) ✅
+### Paso 5: Verificar en Base de Datos
 
-## 🔍 Verificar en Logs del Edge Function
-
-Para ver los logs del edge function:
-
-1. Ve a Supabase Dashboard
-2. Edge Functions → `auth-exchange-code`
-3. Haz clic en "Logs"
-
-Deberías ver:
-```
-🔐 Intercambiando código por token...
-🌐 Llamando a: https://auth-contaempresa.netlify.app/api/exchange-code
-📥 Respuesta del servidor de auth: {...}
-✅ Código intercambiado exitosamente
-📦 Datos completos recibidos: {...}
-👤 Usuario recibido: {
-  id: "...",
-  email: "...",
-  role: "administrador_del_sistema",
-  metadata: {...},
-  permissions: {...}
-}
-```
-
-## 🐛 Troubleshooting
-
-### Problema: metadata sigue vacío
-
-**Causa**: El sistema de autenticación externo no está enviando metadata o permissions.
-
-**Solución**:
-1. Verifica los logs del edge function en Supabase
-2. Busca la línea `👤 Usuario recibido:`
-3. Verifica que `metadata` y `permissions` tengan datos
-4. Si están vacíos, contacta al administrador del sistema de autenticación
-
-### Problema: Permisos no coinciden con lo esperado
-
-**Causa**: El formato de permisos del sistema externo es diferente.
-
-**Solución**:
-1. Revisa los logs en consola: `📋 Metadata del sistema externo:`
-2. Verifica el formato de los permisos
-3. Si es necesario, modifica `syncUserWithDatabase` para adaptarlo
-
-### Problema: Usuario existente no se actualiza
-
-**Causa**: El metadata no está cambiando o hay error en la actualización.
-
-**Solución**:
-1. Busca en consola: `📝 Actualizando metadata del usuario...`
-2. Si no aparece, el metadata es el mismo que ya tenías
-3. Borra el usuario de la BD y vuelve a autenticar para forzar creación
-
-**SQL para borrar usuario:**
 ```sql
-DELETE FROM usuarios WHERE email = 'tu-email@example.com';
+SELECT id, email, rol, metadata->'role' as metadata_role
+FROM usuarios
+WHERE email = 'payalaortiz@gmail.com';
 ```
 
-### Problema: Error al crear/actualizar usuario
+**Resultado esperado:**
+```
+| rol   | metadata_role               |
+|-------|----------------------------|
+| admin | "administrador_del_sistema" |
+```
 
-**Causa**: Problema de permisos RLS o formato de datos.
+### Paso 6: Verificar el Sidebar
 
-**Solución**:
-1. Verifica logs en consola: `Error sincronizando usuario:`
-2. Verifica que las políticas RLS permitan crear/actualizar
-3. Verifica que el formato de metadata sea JSON válido
+Todos los menús deberían aparecer según tus permisos:
+- ✅ Dashboard
+- ✅ Contabilidad (5 submódulos)
+- ✅ Ventas (5 submódulos)
+- ✅ Compras (3 submódulos)
+- ✅ Finanzas (4 submódulos)
+- ✅ Análisis (1 submódulo)
+- ✅ Reportes (1 submódulo)
+- ✅ Administración (9 submódulos)
 
-## 📊 Flujo Completo de Sincronización
+## 📊 Flujo Completo Corregido
 
 ```
-1. Sistema externo devuelve:
+1. Sistema externo devuelve
    {
      user: {
        id: "...",
        email: "...",
-       role: "administrador_del_sistema",
-       metadata: {
-         role: "...",
-         permissions: {...}
-       },
+       role: "administrador_del_sistema",  ← Rol externo
+       metadata: {...},
        permissions: {...}
      }
    }
    ↓
 2. AuthService guarda en localStorage
    ↓
-3. AuthContext lee el usuario de localStorage
+3. AuthContext lee el usuario
    ↓
-4. syncUserWithDatabase extrae:
-   - metadataFromAuth = user.metadata
-   - permissionsFromAuth = user.permissions
-   - roleFromAuth = user.role
+4. syncUserWithDatabase extrae datos:
+   - roleFromAuth = "administrador_del_sistema"
+   - metadataFromAuth = {...}
+   - permissionsFromAuth = {...}
    ↓
-5. Construye userMetadata combinando metadata + permissions
+5. Mapea el rol:
+   roleMapping["administrador_del_sistema"] = "admin"  ← ✅ NUEVO
    ↓
-6. Busca usuario en BD:
-   - Si NO existe → Crea con metadata del sistema externo
-   - Si existe → Actualiza metadata si cambió
+6. Construye datos del usuario:
+   - rol: "admin"                              ← Para BD
+   - metadata: {
+       role: "administrador_del_sistema",     ← Original
+       permissions: {...}
+     }
    ↓
-7. Enriquece usuario con metadata final
+7. Guarda en BD:
+   INSERT INTO usuarios (
+     rol,                                     ← "admin" ✅
+     metadata                                 ← {"role": "...", permissions: {...}} ✅
+   )
    ↓
-8. usePermissions lee metadata.permissions
+8. Usuario guardado exitosamente ✅
    ↓
-9. Sidebar filtra menús basado en permisos
+9. usePermissions lee metadata.permissions
    ↓
-10. Usuario ve todos los menús según sus permisos ✅
+10. Sidebar filtra menús ✅
+   ↓
+11. Usuario ve todos los menús según permisos ✅
+```
+
+## 🐛 Troubleshooting
+
+### Error: "usuarios_rol_check" persiste
+
+**Causa**: Usuario existente con rol inválido.
+
+**Solución**:
+```sql
+DELETE FROM usuarios WHERE email = 'tu@email.com';
+```
+
+Luego: `localStorage.clear()` y vuelve a autenticar.
+
+### Metadata sigue vacío
+
+**Causa**: El sistema externo no envía metadata/permissions.
+
+**Solución**:
+1. Verifica logs del edge function en Supabase
+2. Busca: `👤 Usuario recibido:`
+3. Contacta al admin del sistema de autenticación si está vacío
+
+### Rol no se mapea correctamente
+
+**Causa**: El rol del sistema externo no está en el diccionario de mapeo.
+
+**Solución**: Agregar el rol al `roleMapping` en AuthContext:
+
+```typescript
+const roleMapping: Record<string, string> = {
+  'administrador_del_sistema': 'admin',
+  'tu_rol_externo': 'admin',  // ← Agregar aquí
+  // ... resto
+};
+```
+
+### Sidebar no muestra menús
+
+**Causa**: Permisos no se cargaron correctamente.
+
+**Solución**:
+1. Verifica en consola: `🔐 Permisos finales:`
+2. Verifica que `metadata.permissions` tenga las categorías
+3. Si está vacío, el sistema externo no envía permisos
+
+## 🔧 Agregar Nuevos Roles
+
+Si necesitas mapear un rol nuevo del sistema externo:
+
+**1. Agregar al diccionario de mapeo:**
+
+```typescript
+// /src/context/AuthContext.tsx
+const roleMapping: Record<string, string> = {
+  'administrador_del_sistema': 'admin',
+  'gestor_contable': 'contador',        // ← NUEVO
+  'super_usuario': 'super_admin',       // ← NUEVO
+  // ... resto
+};
+```
+
+**2. (Opcional) Agregar a la restricción de BD si es un rol completamente nuevo:**
+
+Si quieres crear un rol nuevo (no mapear a uno existente):
+
+```sql
+-- Nueva migración
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check 
+  CHECK (rol IN (
+    'super_admin',
+    'admin_empresa',
+    'admin',
+    'supervisor',
+    'contador',
+    'usuario',
+    'tu_rol_nuevo'  -- ← Agregar aquí
+  ));
 ```
 
 ## 📚 Archivos Modificados
 
 1. **`/src/context/AuthContext.tsx`**
-   - Extrae metadata del sistema externo
-   - Crea usuarios con metadata correcto
-   - Actualiza metadata en usuarios existentes
+   - Agregado diccionario de mapeo de roles
+   - Mapea rol externo → rol interno antes de guardar en BD
+   - Conserva rol original en metadata
 
-2. **`/supabase/functions/auth-exchange-code/index.ts`**
+2. **`/src/services/supabase/usuarios.ts`** (cambio anterior)
+   - Incluye campo `metadata` al crear/actualizar
+
+3. **`/supabase/functions/auth-exchange-code/index.ts`** (cambio anterior)
    - Logs detallados de datos recibidos
-   - Verifica estructura de usuario
 
-3. **`/src/hooks/usePermissions.ts`** (cambio anterior)
-   - Herencia de permisos por categorías
+## 🎯 Resumen
 
-## 🎯 Próximos Pasos
+**Problema:**
+- Sistema externo envía rol no válido para la BD
+- BD rechaza el INSERT/UPDATE con constraint violation
 
-Si después de seguir estos pasos el metadata sigue vacío:
-
-1. **Contacta al administrador del sistema de autenticación** para verificar que esté enviando:
-   - `user.metadata` con estructura `{role: "...", permissions: {...}}`
-   - O `user.permissions` con estructura `{dashboard: [...], contabilidad: [...]}`
-   - O `user.role` con el nombre del rol
-
-2. **Verifica la respuesta real** en los logs del edge function
-
-3. **Adapta el código** si el formato es diferente al esperado
+**Solución:**
+- Mapeo de roles externo → interno usando diccionario
+- BD recibe rol válido
+- Metadata conserva rol original
+- Sistema funciona correctamente ✅
 
 ---
 
-**¡El sistema ahora captura y sincroniza correctamente los permisos del sistema externo!** 🎉
+**¡Ahora borra tu usuario, limpia localStorage y vuelve a autenticar. Funcionará correctamente!** 🎉

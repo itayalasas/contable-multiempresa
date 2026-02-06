@@ -101,8 +101,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('🔐 Permisos del sistema externo:', permissionsFromAuth);
         console.log('👤 Rol del sistema externo:', roleFromAuth);
 
+        const roleMapping: Record<string, string> = {
+          'administrador_del_sistema': 'admin',
+          'admin': 'admin',
+          'supervisor': 'supervisor',
+          'contador': 'contador',
+          'usuario': 'usuario',
+          'super_admin': 'super_admin',
+          'admin_empresa': 'admin_empresa',
+        };
+
+        const externalRole = metadataFromAuth.role || roleFromAuth;
+        const mappedRole = roleMapping[externalRole] || 'usuario';
+
+        console.log('🔄 Rol mapeado:', externalRole, '→', mappedRole);
+
         const userMetadata = {
-          role: metadataFromAuth.role || roleFromAuth,
+          role: externalRole,
           permissions: metadataFromAuth.permissions || permissionsFromAuth || {}
         };
 
@@ -113,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: authUser.id,
             nombre: authUser.name || authUser.email,
             email: authUser.email,
-            rol: userMetadata.role,
+            rol: mappedRole,
             empresasAsignadas: [],
             permisos: [],
             activo: true,
@@ -141,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             await usuariosSupabaseService.updateUsuario(authUser.id, {
               metadata: userMetadata,
-              rol: userMetadata.role
+              rol: mappedRole
             });
 
             dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
