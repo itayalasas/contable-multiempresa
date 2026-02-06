@@ -127,6 +127,7 @@ const menuItems: MenuItem[] = [
       { title: 'Empresas', icon: Building2, path: '/admin/empresas', slug: 'empresas' },
       { title: 'Usuarios', icon: Users, path: '/admin/usuarios', slug: 'usuarios' },
       { title: 'Autorizaciones', icon: CheckCircle, path: '/admin/autorizaciones', slug: 'autorizaciones' },
+      { title: 'Configurar Aprobaciones', icon: Shield, path: '/admin/configuracion-aprobaciones', slug: 'configuracion-aprobaciones' },
       { title: 'Nomencladores', icon: Database, path: '/admin/configuracion', slug: 'configuracion' },
       { title: 'Mapeo de Archivos', icon: FileText, path: '/admin/configuracion-mapeo', slug: 'configuracion-mapeo' },
       { title: 'Impuestos', icon: DollarSign, path: '/admin/impuestos', slug: 'impuestos' },

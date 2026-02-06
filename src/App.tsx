@@ -130,6 +130,10 @@ const BandejaAutorizaciones = React.lazy(() =>
   import('./pages/admin/BandejaAutorizaciones')
 )
 
+const ConfiguracionAprobaciones = React.lazy(() =>
+  import('./pages/admin/ConfiguracionAprobaciones')
+)
+
 const ManualRouter = React.lazy(() =>
   import('./manuales/ManualRouter')
     .then(mod => ({ default: mod.ManualRouter }))
@@ -237,6 +241,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/admin/usuarios" element={<GestionUsuarios />} />
             <Route path="/admin/configuracion" element={<GestionNomencladores />} />
             <Route path="/admin/configuracion-mapeo" element={<ConfiguracionMapeoArchivos />} />
+            <Route path="/admin/configuracion-aprobaciones" element={<ConfiguracionAprobaciones />} />
             <Route path="/admin/impuestos" element={<GestionImpuestos />} />
             <Route path="/admin/integraciones" element={<Integraciones />} />
             <Route path="/admin/auditoria" element={<Auditoria />} />
