@@ -37,6 +37,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             {children}
           </div>
         </main>
+
+        <footer className="bg-white border-t border-gray-200 py-4 px-6">
+          <div className="max-w-[1920px] mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-700">ContaEmpresa</span>
+              <span className="text-xs text-gray-500">v2.0.0</span>
+            </div>
+            <div className="text-xs text-gray-500">
+              Sistema Multi-País
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
