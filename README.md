@@ -82,6 +82,36 @@ npm run lint         # Verificar código
 2. **Variables de entorno**: Copia `.env.example` a `.env`
 3. **Reglas de Firestore**: Aplica las reglas del archivo `firestore.rules`
 
+## 🔧 Scripts de Mantenimiento
+
+El proyecto incluye varios scripts SQL para mantenimiento de la base de datos:
+
+### Limpieza de Transacciones
+
+- **`scripts/reset_transacciones_rapido.sql`** - Reset rápido de todas las transacciones
+- **`scripts/limpiar_todas_transacciones.sql`** - Limpieza completa con mensajes detallados
+- **`scripts/limpiar_una_empresa.sql`** - Limpiar solo una empresa específica
+
+**¿Qué se mantiene?**
+- Empresas y configuración
+- Usuarios y permisos
+- Plan de cuentas
+- Clientes y proveedores
+- Nomencladores
+
+**¿Qué se elimina?**
+- Todas las facturas
+- Todos los asientos contables
+- Todos los movimientos de tesorería
+- Todas las comisiones y pagos
+
+Ver [GUIA_LIMPIEZA_TRANSACCIONES.md](./GUIA_LIMPIEZA_TRANSACCIONES.md) para más detalles.
+
+### Otros Scripts
+
+- **`scripts/sincronizar_tesoreria_completo.sql`** - Sincronizar movimientos de tesorería con registros contables
+- **`scripts/actualizar_permisos_usuario.sql`** - Actualizar permisos de usuarios
+
 ## 🤝 Contribuir
 
 1. Fork el proyecto
