@@ -56,13 +56,20 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Usuario no encontrado: ${usuarioError?.message}`);
     }
 
-    if (solicitud.solicitado_por === aprobadorId) {
+    if (solicitud.solicitante_id === aprobadorId) {
       throw new Error("No puedes aprobar o rechazar tu propia solicitud");
     }
 
+    console.log("📋 Metadata del usuario:", JSON.stringify(usuario.metadata, null, 2));
+
     const metadata = usuario.metadata || {};
     const permisos = metadata.permissions || {};
+
+    console.log("🔐 Permisos del usuario:", JSON.stringify(permisos, null, 2));
+
     const tieneAccesoAdministracion = permisos.administracion?.ver === true;
+
+    console.log("✅ Tiene acceso a administración?", tieneAccesoAdministracion);
 
     if (!tieneAccesoAdministracion) {
       throw new Error("No tienes permisos para aprobar o rechazar solicitudes. Solo usuarios con acceso al módulo de Administración pueden realizar esta acción.");
