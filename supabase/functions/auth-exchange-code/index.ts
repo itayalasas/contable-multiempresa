@@ -102,6 +102,18 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log("✅ Código intercambiado exitosamente");
+    console.log("📦 Datos completos recibidos:", JSON.stringify(data, null, 2));
+
+    if (data.data && data.data.user) {
+      console.log("👤 Usuario recibido:", {
+        id: data.data.user.id,
+        email: data.data.user.email,
+        name: data.data.user.name,
+        role: data.data.user.role,
+        metadata: data.data.user.metadata,
+        permissions: data.data.user.permissions
+      });
+    }
 
     return new Response(JSON.stringify(data), {
       status: 200,

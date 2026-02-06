@@ -89,7 +89,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const syncUserWithDatabase = async (authUser: any) => {
       try {
+        console.log('🔍 Datos del sistema de autenticación:', authUser);
+
         let dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
+
+        const metadataFromAuth = authUser.metadata || {};
+        const permissionsFromAuth = authUser.permissions || {};
+        const roleFromAuth = authUser.role || 'usuario';
+
+        console.log('📋 Metadata del sistema externo:', metadataFromAuth);
+        console.log('🔐 Permisos del sistema externo:', permissionsFromAuth);
+        console.log('👤 Rol del sistema externo:', roleFromAuth);
+
+        const userMetadata = {
+          role: metadataFromAuth.role || roleFromAuth,
+          permissions: metadataFromAuth.permissions || permissionsFromAuth || {}
+        };
 
         if (!dbUser) {
           console.log('👤 Creando nuevo usuario en base de datos...');
@@ -98,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: authUser.id,
             nombre: authUser.name || authUser.email,
             email: authUser.email,
-            rol: 'usuario',
+            rol: userMetadata.role,
             empresasAsignadas: [],
             permisos: [],
             activo: true,
@@ -108,27 +123,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               formatoFecha: 'DD/MM/YYYY',
               formatoMoneda: 'es-PE'
             },
-            metadata: {
-              role: 'usuario',
-              permissions: {}
-            }
+            metadata: userMetadata
           };
 
+          console.log('📝 Creando usuario con metadata:', userMetadata);
           dbUser = await usuariosSupabaseService.createUsuario(newUser);
           console.log('✅ Usuario creado en base de datos');
         } else {
+          console.log('👤 Usuario existente, actualizando metadata si cambió...');
+
+          const shouldUpdateMetadata = JSON.stringify(dbUser.metadata) !== JSON.stringify(userMetadata);
+
+          if (shouldUpdateMetadata) {
+            console.log('📝 Actualizando metadata del usuario...');
+            console.log('Metadata anterior:', dbUser.metadata);
+            console.log('Metadata nueva:', userMetadata);
+
+            await usuariosSupabaseService.updateUsuario(authUser.id, {
+              metadata: userMetadata,
+              rol: userMetadata.role
+            });
+
+            dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
+            console.log('✅ Metadata actualizado');
+          }
+
           await usuariosSupabaseService.updateUltimaConexion(authUser.id);
         }
 
         const enrichedUser: Usuario = {
           ...dbUser,
-          metadata: dbUser.metadata || {
-            role: dbUser.rol || 'usuario',
-            permissions: {}
-          }
+          metadata: dbUser.metadata || userMetadata
         };
 
         console.log('👤 Usuario enriquecido con permisos:', enrichedUser);
+        console.log('🔐 Permisos finales:', enrichedUser.metadata?.permissions);
         setUsuario(enrichedUser);
       } catch (error) {
         console.error('Error sincronizando usuario:', error);
