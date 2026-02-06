@@ -85,11 +85,25 @@ Deno.serve(async (req: Request) => {
 
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Pagado=${totalPagado}/${total}`);
 
+    // Obtener comisiones del marketplace asociadas a esta factura
+    const { data: comisiones } = await supabase
+      .from('comisiones_partners')
+      .select('comision_app, comision_mercadopago_aliado')
+      .eq('factura_venta_comision_id', factura_id);
+
+    const totalComisionApp = comisiones?.reduce((sum, c) => sum + parseFloat(c.comision_app || 0), 0) || 0;
+    const totalComisionMP = comisiones?.reduce((sum, c) => sum + parseFloat(c.comision_mercadopago_aliado || 0), 0) || 0;
+    const totalComisiones = totalComisionApp + totalComisionMP;
+
+    if (totalComisiones > 0) {
+      console.log(`💰 [Comisiones] Esta factura tiene $${totalComisiones.toFixed(2)} en comisiones marketplace`);
+    }
+
     // 5. Generar asiento contable (si está configurado)
     let asientoId = null;
     let mensajeAsiento = '';
     try {
-      asientoId = await generarAsientoCobro(supabase, factura, pago, pagoData.id);
+      asientoId = await generarAsientoCobro(supabase, factura, pago, pagoData.id, totalComisiones);
       mensajeAsiento = 'con asiento contable';
     } catch (asientoError) {
       console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
@@ -98,7 +112,7 @@ Deno.serve(async (req: Request) => {
 
     // 6. Registrar movimiento en tesorería (actualiza saldo automáticamente)
     try {
-      await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId);
+      await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId, totalComisiones);
     } catch (tesoreriaError) {
       console.warn('⚠️ No se pudo registrar movimiento de tesorería:', tesoreriaError.message);
     }
@@ -123,7 +137,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoId: string) {
+async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoId: string, totalComisiones: number = 0) {
   try {
     console.log('📝 [AsientoCobro] Generando asiento para cobro...');
 
@@ -234,6 +248,31 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
       }
     }
 
+    // COBRO DE COMISIONES MARKETPLACE (si hay comisiones de partners)
+    if (totalComisiones > 0) {
+      const cuentaComisionesCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '1213');
+      if (cuentaComisionesCobrarId) {
+        // DEBE: Banco (ya incluido arriba con el ingreso neto + comisiones)
+        // El banco recibe: ingresoNeto + comisiones totales
+
+        // Ajustar el débito del banco para incluir las comisiones
+        movimientos[0].debito = (comisionMP > 0 ? ingresoNeto : monto) + totalComisiones;
+
+        // HABER: Comisiones por Cobrar - Marketplace (se reduce la cuenta por cobrar)
+        movimientos.push({
+          asiento_id: asiento.id,
+          cuenta_id: cuentaComisionesCobrarId,
+          cuenta: '1213 - Comisiones por Cobrar - Marketplace',
+          debito: 0,
+          credito: totalComisiones,
+          descripcion: `Cobro comisiones marketplace - Factura ${factura.numero_factura}`,
+        });
+        console.log(`💰 [ComisionesMarketplace] Registrando cobro: $${totalComisiones.toFixed(2)}`);
+      } else {
+        console.warn('⚠️ No se encontró cuenta 1213 para comisiones por cobrar');
+      }
+    }
+
     // HABER: Cuentas por Cobrar (se reduce por el monto total de la factura)
     movimientos.push({
       asiento_id: asiento.id,
@@ -278,7 +317,8 @@ async function registrarMovimientoTesoreria(
   factura: any,
   pago: any,
   pagoId: string,
-  asientoId: string | null
+  asientoId: string | null,
+  totalComisiones: number = 0
 ) {
   try {
     console.log('💰 [Tesorería] Registrando movimiento bancario...');
@@ -380,6 +420,30 @@ async function registrarMovimientoTesoreria(
           factura_id: factura.id,
         },
       });
+    }
+
+    // 3. INGRESO por comisiones del marketplace (si existen)
+    if (totalComisiones > 0) {
+      movimientos.push({
+        empresa_id: factura.empresa_id,
+        cuenta_bancaria_id: cuentaBancariaId,
+        tipo_movimiento: 'INGRESO',
+        fecha: pago.fechaPago,
+        monto: totalComisiones,
+        descripcion: `Cobro comisiones marketplace - Factura ${factura.numero_factura}`,
+        referencia: `COM-${factura.numero_factura}`,
+        beneficiario: 'Comisiones Marketplace',
+        categoria: 'INGRESO_COMISION',
+        asiento_contable_id: asientoId,
+        documento_origen_tipo: 'comision_marketplace',
+        documento_origen_id: factura.id,
+        metadata: {
+          factura_id: factura.id,
+          pago_cliente_id: pagoId,
+          tipo: 'comision_app',
+        },
+      });
+      console.log(`💰 [ComisionesMarketplace] Registrando ingreso: $${totalComisiones.toFixed(2)}`);
     }
 
     const { error: movError } = await supabase
