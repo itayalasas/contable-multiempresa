@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Usuario no encontrado: ${usuarioError?.message}`);
     }
 
-    if (!["supervisor", "admin"].includes(usuario.rol)) {
+    if (!["supervisor", "admin", "super_admin"].includes(usuario.rol)) {
       throw new Error("El usuario no tiene permisos para aprobar solicitudes");
     }
 
