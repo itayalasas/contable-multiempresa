@@ -2,7 +2,7 @@ export interface Usuario {
   id: string;
   nombre: string;
   email: string;
-  rol: 'super_admin' | 'admin_empresa' | 'contador' | 'usuario';
+  rol: 'super_admin' | 'admin' | 'admin_empresa' | 'supervisor' | 'contador' | 'usuario';
   empresasAsignadas: string[]; // IDs de empresas a las que tiene acceso
   permisos: string[];
   avatar?: string;

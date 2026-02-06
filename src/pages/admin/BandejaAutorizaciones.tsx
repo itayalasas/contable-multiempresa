@@ -25,7 +25,21 @@ function BandejaAutorizaciones() {
     ? solicitudes.filter(s => s.estado === filtroEstado)
     : solicitudes;
 
+  const puedeAprobarRechazar = () => {
+    if (!usuario) return false;
+    const rolesAutorizados = ['supervisor', 'admin', 'super_admin', 'admin_empresa'];
+    return rolesAutorizados.includes(usuario.rol);
+  };
+
   const handleAprobar = async (solicitud: any) => {
+    if (!puedeAprobarRechazar()) {
+      showError(
+        'Permisos insuficientes',
+        'Solo los usuarios con rol de Supervisor, Administrador o Super Administrador pueden aprobar solicitudes.\n\nPara obtener estos permisos, contacte al administrador del sistema en la sección "Gestión de Usuarios".'
+      );
+      return;
+    }
+
     if (solicitud.solicitadoPor === usuario?.id) {
       showError('Error', 'No puedes aprobar tu propia solicitud');
       return;
@@ -52,6 +66,14 @@ function BandejaAutorizaciones() {
   };
 
   const handleRechazar = async (solicitud: any) => {
+    if (!puedeAprobarRechazar()) {
+      showError(
+        'Permisos insuficientes',
+        'Solo los usuarios con rol de Supervisor, Administrador o Super Administrador pueden rechazar solicitudes.\n\nPara obtener estos permisos, contacte al administrador del sistema en la sección "Gestión de Usuarios".'
+      );
+      return;
+    }
+
     if (solicitud.solicitadoPor === usuario?.id) {
       showError('Error', 'No puedes rechazar tu propia solicitud');
       return;
@@ -223,21 +245,35 @@ function BandejaAutorizaciones() {
                   </div>
 
                   {solicitud.estado === 'PENDIENTE' && (
-                    <div className="flex gap-2 ml-4">
-                      <button
-                        onClick={() => handleAprobar(solicitud)}
-                        className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Aprobar
-                      </button>
-                      <button
-                        onClick={() => handleRechazar(solicitud)}
-                        className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Rechazar
-                      </button>
+                    <div className="ml-4">
+                      {puedeAprobarRechazar() ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAprobar(solicitud)}
+                            className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Aprobar
+                          </button>
+                          <button
+                            onClick={() => handleRechazar(solicitud)}
+                            className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            Rechazar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            <p>
+                              No tienes permisos para aprobar o rechazar solicitudes.
+                              Solo usuarios con rol de <strong>Supervisor</strong>, <strong>Administrador</strong> o <strong>Super Administrador</strong> pueden realizar esta acción.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
