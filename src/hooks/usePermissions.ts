@@ -81,6 +81,7 @@ export const usePermissions = () => {
       'autorizaciones': 'administracion',
       'configuracion': 'administracion',
       'configuracion-mapeo': 'administracion',
+      'configuracion-aprobaciones': 'administracion',
       'impuestos': 'administracion',
       'integraciones': 'administracion',
       'auditoria': 'administracion',
