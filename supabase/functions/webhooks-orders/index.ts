@@ -522,58 +522,137 @@ async function handleOrder(
 
     console.log(`💰 [Order] Comisiones registradas: ${comisionesCreadas.length}`);
 
+    // Calcular comisiones totales del marketplace
+    let totalComisionApp = 0;
+    let totalComisionMPAliado = 0;
+
+    if (comisionesCreadas.length > 0) {
+      const { data: comisiones } = await supabase
+        .from('comisiones_partners')
+        .select('comision_app, comision_mercadopago_aliado')
+        .in('id', comisionesCreadas);
+
+      if (comisiones) {
+        totalComisionApp = comisiones.reduce((sum, c) => sum + parseFloat(c.comision_app || 0), 0);
+        totalComisionMPAliado = comisiones.reduce((sum, c) => sum + parseFloat(c.comision_mercadopago_aliado || 0), 0);
+      }
+    }
+
+    const totalComisiones = totalComisionApp + totalComisionMPAliado;
+
+    if (totalComisiones > 0) {
+      console.log(`💰 [Order] Comisiones marketplace: App=$${totalComisionApp.toFixed(2)}, MP Aliado=$${totalComisionMPAliado.toFixed(2)}, Total=$${totalComisiones.toFixed(2)}`);
+    }
+
     // 💳 Registrar cobro del cliente si está pagada
     if (estaPagada && cuentaBancariaMLId) {
       try {
         console.log('💳 [Order] Registrando cobro de cliente en tesorería...');
 
-        // Crear movimiento de INGRESO en MercadoLibre
-        const { data: movIngreso, error: ingresoError } = await supabase
-          .from('movimientos_tesoreria')
-          .insert({
+        const movimientos = [];
+
+        // 1. INGRESO del cliente (monto total de la factura)
+        movimientos.push({
+          empresa_id: payload.empresa_id,
+          cuenta_bancaria_id: cuentaBancariaMLId,
+          tipo_movimiento: 'INGRESO',
+          fecha: new Date().toISOString().split('T')[0],
+          monto: total.toFixed(2),
+          descripcion: `Cobro orden ${payload.order.order_number || payload.order.order_id} - ${payload.customer.name}`,
+          referencia: payload.order.order_id,
+          beneficiario: payload.customer.name,
+          categoria: 'COBRO_CLIENTE',
+          asiento_contable_id: null,
+          documento_origen_tipo: 'factura_venta',
+          documento_origen_id: factura.id,
+          metadata: {
+            order_id: payload.order.order_id,
+            payment_method: payload.order.payment_method,
+            customer_id: payload.customer.customer_id,
+            origen: 'marketplace',
+            automatico: true,
+            tiene_comision_mp: comisionMPMonto > 0,
+            comision_mp: comisionMPMonto,
+          },
+        });
+
+        // 2. EGRESO por comisión de MercadoPago (si existe)
+        if (comisionMPMonto > 0) {
+          movimientos.push({
+            empresa_id: payload.empresa_id,
+            cuenta_bancaria_id: cuentaBancariaMLId,
+            tipo_movimiento: 'EGRESO',
+            fecha: new Date().toISOString().split('T')[0],
+            monto: comisionMPMonto.toFixed(2),
+            descripcion: `Comisión Mercado Pago ${comisionMPPorcentaje}% - Orden ${payload.order.order_number || payload.order.order_id}`,
+            referencia: `MP-${payload.order.order_id}`,
+            beneficiario: 'Mercado Pago',
+            categoria: 'COMISION_PASARELA',
+            asiento_contable_id: null,
+            documento_origen_tipo: 'comision_mercadopago',
+            documento_origen_id: factura.id,
+            metadata: {
+              order_id: payload.order.order_id,
+              factura_id: factura.id,
+              porcentaje: comisionMPPorcentaje,
+              tipo: 'mercadopago',
+              automatico: true,
+            },
+          });
+          console.log(`💳 [Order] Registrando egreso comisión MP: $${comisionMPMonto.toFixed(2)}`);
+        }
+
+        // 3. INGRESO por comisiones del marketplace (si existen)
+        if (totalComisiones > 0) {
+          movimientos.push({
             empresa_id: payload.empresa_id,
             cuenta_bancaria_id: cuentaBancariaMLId,
             tipo_movimiento: 'INGRESO',
             fecha: new Date().toISOString().split('T')[0],
-            monto: total.toFixed(2),
-            descripcion: `Cobro orden ${payload.order.order_number || payload.order.order_id} - ${payload.customer.name}`,
-            referencia: payload.order.order_id,
-            beneficiario: payload.customer.name,
-            categoria: 'COBRO_CLIENTE',
+            monto: totalComisiones.toFixed(2),
+            descripcion: `Comisiones marketplace - Orden ${payload.order.order_number || payload.order.order_id}`,
+            referencia: `COM-${payload.order.order_id}`,
+            beneficiario: 'Comisiones Marketplace',
+            categoria: 'INGRESO_COMISION',
             asiento_contable_id: null,
-            documento_origen_tipo: 'factura_venta',
+            documento_origen_tipo: 'comision_marketplace',
             documento_origen_id: factura.id,
             metadata: {
               order_id: payload.order.order_id,
-              payment_method: payload.order.payment_method,
-              customer_id: payload.customer.customer_id,
-              origen: 'marketplace',
+              factura_id: factura.id,
+              comision_app: totalComisionApp,
+              comision_mp_aliado: totalComisionMPAliado,
               automatico: true,
             },
-          })
-          .select()
-          .single();
-
-        if (ingresoError) {
-          console.error('⚠️ [Order] Error registrando ingreso:', ingresoError);
-        } else {
-          console.log('✅ [Order] Ingreso registrado en MercadoLibre');
-
-          // Generar asiento contable del ingreso
-          try {
-            const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-            await fetch(`${supabaseUrl}/functions/v1/generar-asiento-tesoreria`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ movimientoTesoreriaId: movIngreso.id }),
-            });
-          } catch (e) {
-            console.error('⚠️ [Order] Error generando asiento de ingreso (no crítico):', e);
-          }
+          });
+          console.log(`💰 [Order] Registrando ingreso comisiones marketplace: $${totalComisiones.toFixed(2)}`);
         }
 
-        // Las comisiones de Mercado Pago se registran por item según configuración del partner
-        // No hay comisión genérica a nivel de orden
+        // Insertar todos los movimientos
+        const { data: movimientosData, error: movError } = await supabase
+          .from('movimientos_tesoreria')
+          .insert(movimientos)
+          .select();
+
+        if (movError) {
+          console.error('⚠️ [Order] Error registrando movimientos:', movError);
+        } else {
+          console.log(`✅ [Order] ${movimientosData.length} movimiento(s) registrado(s) en tesorería`);
+
+          // Generar asientos contables de los movimientos
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          for (const mov of movimientosData) {
+            try {
+              await fetch(`${supabaseUrl}/functions/v1/generar-asiento-tesoreria`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ movimientoTesoreriaId: mov.id }),
+              });
+            } catch (e) {
+              console.error('⚠️ [Order] Error generando asiento (no crítico):', e);
+            }
+          }
+        }
 
       } catch (tesoreriaError) {
         console.error('⚠️ [Order] Error en tesorería (no crítico):', tesoreriaError);
