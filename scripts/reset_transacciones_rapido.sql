@@ -19,19 +19,14 @@ TRUNCATE TABLE
   facturas_compra_items,
   facturas_compra,
   notas_credito_items,
-  notas_credito,
-  asientos_contables_detalle,
-  asientos_contables,
-  periodos_snapshots_saldos
-CASCADE;
+  notas_credito,  
+  asientos_contables
+  CASCADE;
 
 -- Resetear saldos bancarios
 UPDATE cuentas_bancarias
 SET saldo_actual = saldo_inicial;
 
--- Resetear contadores de facturas
-UPDATE empresas_config_cfe
-SET ultimo_numero_usado = 0;
 
 -- Reabrir períodos
 UPDATE periodos_contables
