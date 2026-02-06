@@ -69,6 +69,7 @@ interface DetallesErrores {
   facturasConError: FacturaSinContabilizar[];
   comisionesPendientes: ComisionPendiente[];
   comisionesFacturadasSinCuentaPorPagar: ComisionPendiente[];
+  comisionesFacturadasSinCobrar: ComisionPendiente[];
   cuentasBancariasDescuadradas: CuentaBancariaDescuadrada[];
 }
 
@@ -240,6 +241,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
       // 5. Comisiones pendientes
       let comisionesPendientes: ComisionPendiente[] = [];
       let comisionesFacturadasSinCuentaPorPagar: ComisionPendiente[] = [];
+      let comisionesFacturadasSinCobrar: ComisionPendiente[] = [];
 
       try {
         const { data: comisionesPend } = await supabase
@@ -290,6 +292,34 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
           estado_comision: c.estado_comision,
           order_id: c.order_id
         })) || [];
+
+        // Comisiones facturadas pero sin cobrar del cliente
+        const { data: comisionesSinCobrar } = await supabase
+          .from('comisiones_partners')
+          .select(`
+            id,
+            fecha,
+            comision_monto,
+            estado_comision,
+            order_id,
+            factura_venta_id,
+            partners_aliados(razon_social)
+          `)
+          .eq('empresa_id', empresaId)
+          .gte('fecha', periodo.fecha_inicio)
+          .lte('fecha', periodo.fecha_fin)
+          .eq('estado_comision', 'facturada')
+          .eq('estado_pago', 'pendiente')
+          .not('factura_venta_id', 'is', null);
+
+        comisionesFacturadasSinCobrar = comisionesSinCobrar?.map((c: any) => ({
+          id: c.id,
+          partner_razon_social: c.partners_aliados?.razon_social || 'N/A',
+          fecha: c.fecha,
+          comision_monto: parseFloat(c.comision_monto || '0'),
+          estado_comision: c.estado_comision,
+          order_id: c.order_id
+        })) || [];
       } catch (error) {
         console.warn('Error cargando comisiones:', error);
       }
@@ -328,6 +358,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         facturasConError,
         comisionesPendientes,
         comisionesFacturadasSinCuentaPorPagar,
+        comisionesFacturadasSinCobrar,
         cuentasBancariasDescuadradas
       };
 
@@ -342,6 +373,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
       if (facturasConError.length > 0) seccionesConErrores.add('facturas-con-error');
       if (comisionesPendientes.length > 0) seccionesConErrores.add('comisiones-pendientes');
       if (comisionesFacturadasSinCuentaPorPagar.length > 0) seccionesConErrores.add('comisiones-facturadas');
+      if (comisionesFacturadasSinCobrar.length > 0) seccionesConErrores.add('comisiones-sin-cobrar');
       if (cuentasBancariasDescuadradas.length > 0) seccionesConErrores.add('cuentas-descuadradas');
       setExpandedSections(seccionesConErrores);
     } catch (error) {
@@ -466,6 +498,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
     detalles.facturasConError.length +
     detalles.comisionesPendientes.length +
     detalles.comisionesFacturadasSinCuentaPorPagar.length +
+    detalles.comisionesFacturadasSinCobrar.length +
     detalles.cuentasBancariasDescuadradas.length;
 
   return (
@@ -802,6 +835,55 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
                         className="ml-4 flex items-center gap-2 px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm"
                       >
                         Ver Comisiones
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Comisiones Facturadas Sin Cobrar del Cliente */}
+          {detalles.comisionesFacturadasSinCobrar.length > 0 && (
+            <div className="border border-red-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('comisiones-sin-cobrar')}
+                className="w-full p-4 bg-red-50 flex items-center justify-between hover:bg-red-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <span className="font-semibold text-red-900">
+                    Comisiones Facturadas Sin Cobrar del Cliente ({detalles.comisionesFacturadasSinCobrar.length})
+                  </span>
+                </div>
+                {expandedSections.has('comisiones-sin-cobrar') ? (
+                  <ChevronDown className="h-5 w-5 text-red-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-red-600" />
+                )}
+              </button>
+              {expandedSections.has('comisiones-sin-cobrar') && (
+                <div className="p-4 space-y-2">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Acción requerida:</strong> Estas comisiones están facturadas pero no has cobrado el dinero del cliente. Ve a Ventas → Facturas y marca las facturas como cobradas (pagadas) o regístralas en Finanzas → Cuentas por Cobrar.
+                    </p>
+                  </div>
+                  {detalles.comisionesFacturadasSinCobrar.map((comision) => (
+                    <div key={comision.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{comision.partner_razon_social}</div>
+                        <div className="text-sm text-gray-600">Orden: {comision.order_id || 'N/A'}</div>
+                        <div className="text-sm text-gray-600">Fecha: {new Date(comision.fecha).toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-900 mt-1">Comisión: ${comision.comision_monto.toFixed(2)}</div>
+                        <div className="text-xs text-red-600 mt-1">Estado: Facturada pero no cobrada</div>
+                      </div>
+                      <button
+                        onClick={() => navegarA('/ventas/facturas')}
+                        className="ml-4 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                      >
+                        Ver Facturas
                         <ExternalLink className="h-3 w-3" />
                       </button>
                     </div>
