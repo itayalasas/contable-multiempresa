@@ -37,6 +37,7 @@ export const usuariosSupabaseService = {
         auth0_id: usuario.auth0Id,
         activo: usuario.activo,
         configuracion: usuario.configuracion,
+        metadata: usuario.metadata || {},
       })
       .select()
       .single();
@@ -50,6 +51,7 @@ export const usuariosSupabaseService = {
       auth0Id: data.auth0_id,
       fechaCreacion: new Date(data.fecha_creacion),
       ultimaConexion: data.ultima_conexion ? new Date(data.ultima_conexion) : undefined,
+      metadata: data.metadata || {},
     };
   },
 
@@ -65,6 +67,7 @@ export const usuariosSupabaseService = {
     if (updates.paisId !== undefined) updateData.pais_id = updates.paisId;
     if (updates.activo !== undefined) updateData.activo = updates.activo;
     if (updates.configuracion) updateData.configuracion = updates.configuracion;
+    if (updates.metadata !== undefined) updateData.metadata = updates.metadata;
 
     const { error } = await supabase
       .from('usuarios')
