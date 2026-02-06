@@ -107,15 +107,25 @@ export default function BalanceGeneral() {
                 setPeriodoSeleccionado(e.target.value);
                 setFechaCorte('');
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              disabled={periodosCerrados.length === 0}
             >
-              <option value="">Seleccionar periodo...</option>
+              <option value="">
+                {periodosCerrados.length === 0
+                  ? 'No hay periodos cerrados'
+                  : 'Seleccionar periodo...'}
+              </option>
               {periodosCerrados.map(periodo => (
                 <option key={periodo.id} value={periodo.id}>
                   {periodo.nombre} ({new Date(periodo.fecha_inicio).toLocaleDateString()} - {new Date(periodo.fecha_fin).toLocaleDateString()})
                 </option>
               ))}
             </select>
+            {periodosCerrados.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">
+                Debe cerrar un periodo en Contabilidad → Periodos Contables
+              </p>
+            )}
           </div>
 
           <div>
@@ -148,6 +158,39 @@ export default function BalanceGeneral() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-red-600" />
           <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {periodosCerrados.length === 0 && !balance && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-800 mb-1">
+                ¿Cómo generar el Balance General desde periodos cerrados?
+              </h3>
+              <div className="text-sm text-blue-700 space-y-2">
+                <p>
+                  El Balance General puede generarse de dos formas:
+                </p>
+                <ol className="list-decimal ml-5 space-y-1">
+                  <li>
+                    <strong>Desde un periodo cerrado:</strong> Ve a Contabilidad → Periodos Contables
+                    y cierra un periodo mensual o anual. Una vez cerrado, aparecerá en el dropdown
+                    "Periodo Cerrado" de esta pantalla.
+                  </li>
+                  <li>
+                    <strong>Por fecha de corte:</strong> Selecciona cualquier fecha y el sistema
+                    calculará los saldos hasta esa fecha.
+                  </li>
+                </ol>
+                <p className="mt-2">
+                  💡 <strong>Recomendación:</strong> Usar periodos cerrados garantiza que los datos
+                  no cambien y proporciona un balance oficial de la empresa.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
