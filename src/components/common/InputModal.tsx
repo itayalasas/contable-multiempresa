@@ -14,6 +14,7 @@ interface InputModalProps {
   cancelText?: string;
   multiline?: boolean;
   rows?: number;
+  loading?: boolean;
 }
 
 export const InputModal: React.FC<InputModalProps> = ({
@@ -29,6 +30,7 @@ export const InputModal: React.FC<InputModalProps> = ({
   cancelText = 'Cancelar',
   multiline = false,
   rows = 3,
+  loading = false,
 }) => {
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
@@ -124,19 +126,27 @@ export const InputModal: React.FC<InputModalProps> = ({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={required && !value.trim()}
-              className={`w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white sm:ml-3 sm:w-auto sm:text-sm transition ${
-                required && !value.trim()
+              disabled={loading || (required && !value.trim())}
+              className={`w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white sm:ml-3 sm:w-auto sm:text-sm transition ${
+                loading || (required && !value.trim())
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
               }`}
             >
-              {confirmText}
+              {loading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+              )}
+              {loading ? 'Procesando...' : confirmText}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm transition"
+              disabled={loading}
+              className={`mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 sm:mt-0 sm:w-auto sm:text-sm transition ${
+                loading
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              }`}
             >
               {cancelText}
             </button>

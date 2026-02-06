@@ -312,6 +312,7 @@ function BandejaAutorizaciones() {
         cancelText={inputModal.cancelText}
         multiline={inputModal.multiline}
         rows={inputModal.rows}
+        loading={inputModal.loading}
       />
     </div>
   );

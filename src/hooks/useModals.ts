@@ -30,6 +30,7 @@ interface InputModalState {
   cancelText: string;
   multiline: boolean;
   rows: number;
+  loading: boolean;
   onConfirm: (value: string) => void;
 }
 
@@ -64,6 +65,7 @@ export const useModals = () => {
     cancelText: 'Cancelar',
     multiline: false,
     rows: 3,
+    loading: false,
     onConfirm: () => {}
   });
 
@@ -159,7 +161,7 @@ export const useModals = () => {
     cancelText?: string;
     multiline?: boolean;
     rows?: number;
-    onConfirm: (value: string) => void;
+    onConfirm: (value: string) => void | Promise<void>;
   }) => {
     return new Promise<string | null>((resolve) => {
       setInputModal({
@@ -173,17 +175,24 @@ export const useModals = () => {
         cancelText: options.cancelText || 'Cancelar',
         multiline: options.multiline || false,
         rows: options.rows || 3,
-        onConfirm: (value: string) => {
-          options.onConfirm(value);
-          closeInput();
-          resolve(value);
+        loading: false,
+        onConfirm: async (value: string) => {
+          setInputModal(prev => ({ ...prev, loading: true }));
+          try {
+            await options.onConfirm(value);
+            closeInput();
+            resolve(value);
+          } catch (error) {
+            console.error('Error en input modal:', error);
+            setInputModal(prev => ({ ...prev, loading: false }));
+          }
         }
       });
     });
   };
 
   const closeInput = () => {
-    setInputModal(prev => ({ ...prev, isOpen: false }));
+    setInputModal(prev => ({ ...prev, isOpen: false, loading: false }));
   };
 
   const promptInput = (title: string, message: string, required: boolean = false): Promise<string | null> => {
