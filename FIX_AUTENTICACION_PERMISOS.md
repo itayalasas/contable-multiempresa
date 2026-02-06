@@ -1,242 +1,311 @@
-# Fix: Error de Autenticación y Carga de Permisos
+# ✅ Solución Completa: Autenticación y Permisos
 
-## ✅ Problema Identificado
+## 🔍 Problemas Identificados y Resueltos
 
-### Error en el Log
-```
-POST https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code 401 (Unauthorized)
-❌ Error al intercambiar código: Error: Error al intercambiar el código de autenticación
-```
+### Problema 1: Ciclo de Redirección en Login
 
-### Causa del Problema
+**Síntomas:**
+- Usuario se autentica en sistema externo
+- Redirige a la app con código
+- La app redirige inmediatamente de vuelta al login
+- Ciclo infinito
 
-1. **Edge Function no existe**: El endpoint `/functions/v1/auth-exchange-code` no existe en Supabase
-2. **Usuario sin permisos**: El usuario en la BD no tiene el campo `metadata` con `permissions` configurado
+**Causa Raíz:**
+El código de autenticación nunca se intercambiaba por tokens. El flujo era:
+1. Sistema externo redirige con `?code=XXX&state=authenticated`
+2. AuthContext detectaba el código
+3. **Limpiaba la URL pero NUNCA llamaba a `exchangeCodeForToken`**
+4. Verificaba `isAuthenticated()` → retornaba `false`
+5. Callback redirigía al login
 
-### Usuario Actual (Sin Permisos)
-```javascript
-{
-  id: 'e762511c-84ee-4d44-9ee4-802cf5f71d2b',
-  nombre: 'Pedro Ayala Ortiz',
-  email: 'payalaortiz@gmail.com',
-  rol: 'admin_empresa',
-  empresas_asignadas: [],
-  metadata: {}  // ← VACÍO!
+**Solución Aplicada:**
+
+**Archivo**: `/src/context/AuthContext.tsx`
+
+Agregada lógica para intercambiar código por token:
+
+```typescript
+if (code && state === 'authenticated') {
+  console.log('🔐 Código de autenticación detectado, intercambiando por token...');
+
+  try {
+    const authResponse = await AuthService.exchangeCodeForToken(code);
+    console.log('✅ Token obtenido exitosamente');
+
+    AuthService.saveSession(authResponse.data);
+    console.log('✅ Sesión guardada');
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    const authUser = authResponse.data.user;
+    await syncUserWithDatabase(authUser);
+
+    return; // ← Importante: Retornar aquí para no continuar con el flujo
+  } catch (exchangeError) {
+    console.error('❌ Error intercambiando código por token:', exchangeError);
+    setError('Error al validar la autenticación');
+    setIsLoading(false);
+    return;
+  }
 }
 ```
 
-## 🔧 Solución Implementada
+**Archivo**: `/src/pages/Callback.tsx`
 
-### Cambios en el Código
-
-#### 1. AuthContext Simplificado (`/src/context/AuthContext.tsx`)
-
-**Eliminado**:
-- ❌ Intercambio de código con Edge Function que no existe
-- ❌ Dependencia de `authUser.role` y `authUser.permissions` del token
-
-**Nuevo Flujo**:
-1. Usuario se autentica con Auth0 (ya funciona)
-2. Auth0 guarda el usuario en localStorage
-3. AuthContext carga el usuario de la BD de Supabase
-4. **Lee el `metadata` directamente de la BD** (no del token)
-5. Enriquece el usuario con esos datos
+Mejorado para esperar más tiempo y solo redirigir al login si hay error:
 
 ```typescript
-// Ahora usa metadata de la BD
-const enrichedUser: Usuario = {
-  ...dbUser,
-  metadata: dbUser.metadata || {
-    role: dbUser.rol || 'usuario',
-    permissions: {}
-  }
-};
+// Esperar 2 segundos en lugar de 1
+await new Promise(resolve => setTimeout(resolve, 2000));
+
+// Solo redirigir al login si hay error explícito
+if (error) {
+  console.log('❌ Error en autenticación:', error);
+  setTimeout(() => {
+    navigate('/login', { replace: true });
+  }, 1500);
+} else {
+  // Si no hay error pero tampoco está autenticado, seguir esperando
+  console.log('⏳ Esperando autenticación...');
+}
 ```
 
-### 2. Script SQL para Configurar Permisos
+### Problema 2: Edge Function Faltante
 
-**Ubicación**: `/scripts/actualizar_permisos_usuario.sql`
+**Síntomas:**
+- Error al intercambiar código: "Failed to fetch"
+- 404 Not Found en el endpoint
 
-Este script actualiza el campo `metadata` del usuario con todos los permisos necesarios.
+**Causa Raíz:**
+El edge function `auth-exchange-code` no existía en el proyecto.
 
-## 🚀 Cómo Aplicar la Solución
+**Solución Aplicada:**
 
-### Paso 1: Ejecutar el Script SQL
+**Archivo**: `/supabase/functions/auth-exchange-code/index.ts`
 
-**Opción A: Usar Supabase Dashboard**
+Creado edge function que:
+1. Recibe `code` y `application_id`
+2. Llama al servidor de autenticación externo
+3. Intercambia el código por tokens
+4. Retorna los tokens y datos del usuario
 
-1. Ve a tu proyecto en Supabase Dashboard
-2. Ve a "SQL Editor"
-3. Copia y pega el contenido de `/scripts/actualizar_permisos_usuario.sql`
-4. Ejecuta el script
+### Problema 3: Permisos No Reconocidos
 
-**Opción B: Usar CLI (si tienes instalado)**
+**Síntomas:**
+- Sidebar solo mostraba Dashboard
+- Usuario tenía permisos en metadata pero no se aplicaban
+
+**Causa Raíz:**
+Los permisos estaban configurados por **categorías principales** (`contabilidad`, `finanzas`, etc.) pero el código buscaba permisos de **módulos específicos** (`plan-cuentas`, `asientos`, etc.).
+
+**Solución Aplicada:**
+
+**Archivo**: `/src/hooks/usePermissions.ts`
+
+Agregada **herencia de permisos**: cuando busca un submódulo, verifica automáticamente la categoría padre:
+
+```typescript
+const moduleToParent: Partial<Record<ModuleSlug, ModuleSlug>> = {
+  'plan-cuentas': 'contabilidad',      // ← plan-cuentas hereda de contabilidad
+  'asientos': 'contabilidad',
+  'mayor': 'contabilidad',
+  'clientes': 'ventas',
+  'facturas': 'ventas',
+  'tesoreria': 'finanzas',
+  'cuentas-cobrar': 'finanzas',
+  // ... etc
+};
+
+const parentModule = moduleToParent[module];
+if (parentModule) {
+  const parentPermissions = permissions[parentModule] || [];
+  return parentPermissions.length > 0;
+}
+```
+
+## 🚀 Pasos para Aplicar la Solución
+
+### Paso 1: Código Frontend (✅ Ya Aplicado)
+
+Los cambios en el código ya están compilados y listos:
+- `/src/context/AuthContext.tsx` - Intercambio de código por token
+- `/src/pages/Callback.tsx` - Mejor manejo de redirecciones
+- `/src/hooks/usePermissions.ts` - Herencia de permisos
+
+### Paso 2: Desplegar Edge Function
+
+**CRÍTICO**: Debes desplegar el edge function `auth-exchange-code` a Supabase.
+
+**Opción A: Desde la terminal (si tienes Supabase CLI)**
 
 ```bash
-# Desde el directorio del proyecto
-supabase db reset --local
-# O ejecutar el script específico
+supabase functions deploy auth-exchange-code
 ```
 
-**Opción C: Actualización manual en el código**
+**Opción B: Desde el panel de Supabase**
 
-Si no tienes acceso al SQL, puedes modificar temporalmente el código para actualizar el usuario:
+1. Ve a tu proyecto en Supabase Dashboard
+2. Ve a "Edge Functions" en el menú lateral
+3. Haz clic en "New function"
+4. Nombre: `auth-exchange-code`
+5. Copia el contenido de `/supabase/functions/auth-exchange-code/index.ts`
+6. Haz clic en "Deploy"
 
-```typescript
-// En src/context/AuthContext.tsx, en syncUserWithDatabase
-// Agregar TEMPORALMENTE después de línea 109:
+### Paso 3: Configurar Variables de Entorno
 
-if (dbUser && dbUser.email === 'payalaortiz@gmail.com') {
-  console.log('🔧 Actualizando permisos del administrador...');
+Asegúrate de que estas variables estén configuradas en tu `.env`:
 
-  await usuariosSupabaseService.updateUsuario(dbUser.id, {
-    metadata: {
-      role: 'administrador_del_sistema',
-      permissions: {
-        'dashboard': ['create', 'delete', 'read', 'update'],
-        'plan-cuentas': ['create', 'delete', 'read', 'update'],
-        'asientos': ['create', 'delete', 'read', 'update'],
-        // ... todos los demás módulos
-      }
-    }
-  });
-
-  // Recargar usuario
-  dbUser = await usuariosSupabaseService.getUsuarioById(authUser.id);
-}
+```env
+VITE_AUTH_URL=https://auth-contaempresa.netlify.app
+VITE_AUTH_APP_ID=app_b9b5f22b-cda
+VITE_AUTH_API_KEY=ak_production_f3307c60cd281c8e8ff629d7ab3059e5
+VITE_AUTH_CALLBACK_URL=https://tu-dominio.com/callback
+VITE_AUTH_EXCHANGE_URL=https://tu-proyecto.supabase.co/functions/v1/auth-exchange-code
 ```
 
-### Paso 2: Limpiar Caché del Navegador
+**Importante**: Reemplaza `tu-proyecto.supabase.co` con tu URL real de Supabase.
+
+### Paso 4: Limpiar Caché del Navegador
 
 1. Abre DevTools (F12)
-2. Ve a "Application" → "Storage" → "Clear site data"
-3. Cierra sesión
-4. Vuelve a iniciar sesión
+2. Ve a "Application" → "Storage"
+3. Haz clic en "Clear site data"
+4. Recarga la página (F5)
 
-### Paso 3: Verificar en la Consola
+### Paso 5: Probar el Login
+
+1. Ve a `/login`
+2. Haz clic en "Iniciar Sesión"
+3. Deberías ser redirigido al sistema de autenticación externo
+4. Después de autenticarte, deberías volver a la app
+5. Deberías ver todos los menús en el sidebar
+
+## 🔍 Cómo Verificar que Funciona
+
+### En la Consola del Navegador (F12)
+
+Deberías ver esta secuencia de mensajes:
+
+```
+🔐 Código de autenticación detectado, intercambiando por token...
+✅ Token obtenido exitosamente
+✅ Sesión guardada
+👤 Creando nuevo usuario en base de datos... (solo primera vez)
+✅ Usuario creado en base de datos (solo primera vez)
+👤 Usuario enriquecido con permisos: {...}
+Callback page - procesando autenticación...
+isLoading: false isAuthenticated: true
+✅ Autenticación exitosa, redirigiendo al inicio
+```
+
+### En el Sidebar
+
+Deberías ver **todos los menús** (no solo Dashboard):
+- Dashboard
+- Contabilidad (con 5 submódulos)
+- Ventas (con 5 submódulos)
+- Compras (con 3 submódulos)
+- Finanzas (con 4 submódulos)
+- Análisis (con 1 submódulo)
+- Reportes (con 1 submódulo)
+- Administración (con 9 submódulos)
+
+### En el Footer del Sidebar
 
 Deberías ver:
-
 ```
-👤 Usuario enriquecido con permisos: {
-  id: 'e762511c-84ee-4d44-9ee4-802cf5f71d2b',
-  nombre: 'Pedro Ayala Ortiz',
-  email: 'payalaortiz@gmail.com',
-  rol: 'admin_empresa',
-  empresas_asignadas: [],
-  metadata: {
-    role: 'administrador_del_sistema',
-    permissions: {
-      dashboard: ['create', 'delete', 'read', 'update'],
-      'plan-cuentas': ['create', 'delete', 'read', 'update'],
-      asientos: ['create', 'delete', 'read', 'update'],
-      ...
-    }
-  }
-}
-
-🔍 Filtrando menús basado en permisos
-📄 Dashboard (dashboard): ✅ MOSTRAR
-📁 Contabilidad: ✅ MOSTRAR
-...
-🎯 Menús filtrados: ["Dashboard", "Contabilidad", "Ventas", ...]
+ContaEmpresa
+v2.0.0
 ```
 
-### Paso 4: Verificar el Sidebar
+## 🐛 Troubleshooting
 
-Ahora deberías ver TODOS los menús porque el usuario tiene todos los permisos.
+### Error: "Failed to fetch" al intercambiar código
 
-## 📋 Estructura del Metadata en la BD
+**Causa**: El edge function no está desplegado o la URL es incorrecta.
 
-La tabla `usuarios` tiene un campo `metadata` de tipo `jsonb` con esta estructura:
+**Solución**:
+1. Verifica que `VITE_AUTH_EXCHANGE_URL` tenga la URL correcta
+2. Despliega el edge function: `supabase functions deploy auth-exchange-code`
+3. Verifica en Supabase Dashboard → Edge Functions que aparezca
 
-```json
-{
-  "role": "administrador_del_sistema",
-  "permissions": {
-    "dashboard": ["create", "delete", "read", "update"],
-    "plan-cuentas": ["create", "delete", "read", "update"],
-    "asientos": ["create", "delete", "read", "update"],
-    "mayor": ["create", "delete", "read", "update"],
-    "balance-comprobacion": ["create", "delete", "read", "update"],
-    "periodos": ["create", "delete", "read", "update"],
-    "clientes": ["create", "delete", "read", "update"],
-    "facturas": ["create", "delete", "read", "update"],
-    "notas-credito": ["create", "delete", "read", "update"],
-    "notas-debito": ["create", "delete", "read", "update"],
-    "recibos": ["create", "delete", "read", "update"],
-    "proveedores": ["create", "delete", "read", "update"],
-    "partners": ["create", "delete", "read", "update"],
-    "comisiones": ["create", "delete", "read", "update"],
-    "cuentas-cobrar": ["create", "delete", "read", "update"],
-    "cuentas-pagar": ["create", "delete", "read", "update"],
-    "tesoreria": ["create", "delete", "read", "update"],
-    "conciliacion": ["create", "delete", "read", "update"],
-    "centros-costo": ["create", "delete", "read", "update"],
-    "balance-general": ["create", "delete", "read", "update"],
-    "empresas": ["create", "delete", "read", "update"],
-    "usuarios": ["create", "delete", "read", "update"],
-    "autorizaciones": ["create", "delete", "read", "update"],
-    "configuracion": ["create", "delete", "read", "update"],
-    "configuracion-mapeo": ["create", "delete", "read", "update"],
-    "impuestos": ["create", "delete", "read", "update"],
-    "integraciones": ["create", "delete", "read", "update"],
-    "auditoria": ["create", "delete", "read", "update"],
-    "multimoneda": ["create", "delete", "read", "update"]
-  }
-}
+### Error: "Código o application_id faltante"
+
+**Causa**: El sistema de autenticación externo no está enviando el código correctamente.
+
+**Solución**:
+1. Verifica que `VITE_AUTH_CALLBACK_URL` coincida con la URL registrada en el sistema externo
+2. Verifica que `VITE_AUTH_APP_ID` sea correcto
+
+### Error: "Error del servidor de autenticación"
+
+**Causa**: El servidor de autenticación externo no reconoce el código o application_id.
+
+**Solución**:
+1. Verifica que `VITE_AUTH_API_KEY` sea correcta
+2. Contacta al administrador del sistema de autenticación
+3. Verifica los logs del edge function en Supabase Dashboard
+
+### Todavía solo veo el Dashboard
+
+**Causa**: Los permisos no están configurados o el caché no se limpió.
+
+**Solución**:
+1. Limpia el caché del navegador completamente
+2. Verifica en consola que `metadata.permissions` tenga las categorías
+3. Si está vacío, ejecuta el script SQL de `/ACTUALIZAR_PERMISOS_RAPIDO.sql`
+
+### Ciclo infinito de redirección
+
+**Causa**: El código no se está guardando correctamente o hay un error en el intercambio.
+
+**Solución**:
+1. Abre la consola y busca mensajes de error en rojo
+2. Verifica que el edge function esté desplegado
+3. Verifica que todas las variables de entorno estén configuradas
+4. Limpia localStorage: `localStorage.clear()` en consola
+
+## 📊 Flujo Completo de Autenticación
+
+```
+1. Usuario hace clic en "Iniciar Sesión"
+   ↓
+2. Redirige a: https://auth-contaempresa.netlify.app/login?...
+   ↓
+3. Usuario se autentica en sistema externo
+   ↓
+4. Sistema externo redirige a: https://tu-app.com/callback?code=XXX&state=authenticated
+   ↓
+5. AuthContext detecta el código
+   ↓
+6. AuthContext llama al edge function con el código
+   ↓
+7. Edge function intercambia código por tokens con sistema externo
+   ↓
+8. Edge function retorna access_token, refresh_token, user, tenant
+   ↓
+9. AuthContext guarda los tokens en localStorage
+   ↓
+10. AuthContext sincroniza el usuario con la BD de Supabase
+   ↓
+11. AuthContext enriquece el usuario con permisos de metadata
+   ↓
+12. Callback detecta que está autenticado
+   ↓
+13. Callback redirige al Dashboard
+   ↓
+14. Usuario ve todos los menús según sus permisos
 ```
 
-## 🎯 Configurar Permisos para Otros Usuarios
+## 📚 Archivos Modificados/Creados
 
-Para configurar permisos de otros usuarios, usa el script SQL pero cambia el email:
-
-```sql
-UPDATE usuarios
-SET metadata = jsonb_build_object(
-  'role', 'contador',
-  'permissions', jsonb_build_object(
-    'dashboard', ARRAY['read']::text[],
-    'asientos', ARRAY['create', 'read', 'update']::text[],
-    'mayor', ARRAY['read']::text[],
-    'balance-comprobacion', ARRAY['read']::text[]
-    -- Solo los módulos que necesita
-  )
-)
-WHERE email = 'email_del_usuario@example.com';
-```
-
-## ✅ Ventajas de Esta Solución
-
-1. **No depende de Edge Function** - Funciona sin necesidad de crear el endpoint `auth-exchange-code`
-2. **Permisos en la BD** - Fácil de administrar y actualizar
-3. **Flexible** - Puedes dar permisos personalizados a cada usuario
-4. **Seguro** - Los permisos se almacenan en la base de datos, no en el token
-
-## 🚨 Importante
-
-Una vez que actualices los permisos en la BD, debes:
-
-1. **Cerrar sesión**
-2. **Limpiar caché del navegador**
-3. **Volver a iniciar sesión**
-
-Esto es necesario porque el `AuthContext` carga el usuario de la BD al inicio de sesión.
-
-## 📚 Archivos Modificados
-
-1. `/src/context/AuthContext.tsx` - Simplificado el flujo de autenticación
-2. `/scripts/actualizar_permisos_usuario.sql` - Script para configurar permisos
-
-## 🎉 Resultado Esperado
-
-Después de aplicar la solución:
-
-- ✅ No habrá error 401 en la consola
-- ✅ El usuario tendrá `metadata` con `permissions`
-- ✅ El sidebar mostrará los menús según los permisos
-- ✅ Los botones se habilitarán/deshabilitarán según permisos
+1. `/src/context/AuthContext.tsx` - Intercambio de código
+2. `/src/pages/Callback.tsx` - Mejor manejo de redirecciones
+3. `/src/hooks/usePermissions.ts` - Herencia de permisos
+4. `/supabase/functions/auth-exchange-code/index.ts` - Edge function nuevo
+5. `/ACTUALIZAR_PERMISOS_RAPIDO.sql` - Script simplificado
+6. `/SOLUCION_COMPLETA_PERMISOS.md` - Documentación de permisos
 
 ---
 
-**Todo listo para probar!** 🚀
+**¡Listo! Despliega el edge function y prueba el login!** 🎉

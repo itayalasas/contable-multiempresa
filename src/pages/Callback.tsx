@@ -10,11 +10,12 @@ export const Callback: React.FC = () => {
 
   useEffect(() => {
     console.log('Callback page - procesando autenticación...');
+    console.log('isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
 
     const checkAuthAndRedirect = async () => {
       try {
-        // Esperar un momento para que AuthContext procese la autenticación
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Esperar un poco más para que AuthContext procese el intercambio de código
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         if (isAuthenticated) {
           setProcessingStatus('Autenticación exitosa! Redirigiendo...');
@@ -24,13 +25,20 @@ export const Callback: React.FC = () => {
           setTimeout(() => {
             navigate('/', { replace: true });
           }, 500);
-        } else if (!isLoading && !isAuthenticated) {
-          console.log('❌ Error en autenticación, redirigiendo a login');
-          setProcessingStatus('Error en autenticación, redirigiendo...');
+        } else if (!isLoading) {
+          // Solo redirigir al login si hay un error explícito
+          if (error) {
+            console.log('❌ Error en autenticación:', error);
+            setProcessingStatus('Error en autenticación, redirigiendo...');
 
-          setTimeout(() => {
-            navigate('/login', { replace: true });
-          }, 1500);
+            setTimeout(() => {
+              navigate('/login', { replace: true });
+            }, 1500);
+          } else {
+            // Si no hay error pero tampoco está autenticado, seguir esperando
+            console.log('⏳ Esperando autenticación...');
+            setProcessingStatus('Procesando credenciales...');
+          }
         }
       } catch (err) {
         console.error('Error en callback:', err);
@@ -44,7 +52,7 @@ export const Callback: React.FC = () => {
     if (!isLoading) {
       checkAuthAndRedirect();
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, error, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

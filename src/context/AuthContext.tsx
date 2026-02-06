@@ -38,8 +38,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const state = AuthService.extractStateFromUrl();
 
         if (code && state === 'authenticated') {
-          console.log('🔐 Código de autenticación detectado');
-          window.history.replaceState({}, document.title, window.location.pathname);
+          console.log('🔐 Código de autenticación detectado, intercambiando por token...');
+
+          try {
+            const authResponse = await AuthService.exchangeCodeForToken(code);
+            console.log('✅ Token obtenido exitosamente');
+
+            AuthService.saveSession(authResponse.data);
+            console.log('✅ Sesión guardada');
+
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            const authUser = authResponse.data.user;
+            await syncUserWithDatabase(authUser);
+
+            return;
+          } catch (exchangeError) {
+            console.error('❌ Error intercambiando código por token:', exchangeError);
+            setError('Error al validar la autenticación');
+            setIsLoading(false);
+            return;
+          }
         }
 
         if (AuthService.isAuthenticated()) {
