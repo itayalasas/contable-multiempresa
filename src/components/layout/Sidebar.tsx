@@ -139,19 +139,14 @@ const menuItems: MenuItem[] = [
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) => {
   const [expandedMenu, setExpandedMenu] = React.useState<string | null>('Contabilidad');
-  const { hasModuleAccess, isAdmin } = usePermissions();
+  const { hasModuleAccess } = usePermissions();
 
   const toggleSubmenu = (title: string) => {
     setExpandedMenu(expandedMenu === title ? null : title);
   };
 
   const filteredMenuItems = React.useMemo(() => {
-    console.log('🔍 Filtrando menús - isAdmin:', isAdmin);
-
-    if (isAdmin) {
-      console.log('✅ Usuario es admin, mostrando todos los menús');
-      return menuItems;
-    }
+    console.log('🔍 Filtrando menús basado en permisos');
 
     const filtered = menuItems
       .filter(item => {
@@ -184,7 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) =
 
     console.log('🎯 Menús filtrados:', filtered.map(i => i.title));
     return filtered;
-  }, [isAdmin, hasModuleAccess]);
+  }, [hasModuleAccess]);
 
   return (
     <>
