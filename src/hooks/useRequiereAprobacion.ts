@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useSesion } from '../context/SesionContext';
 import { useAuth } from '../context/AuthContext';
 import { verificarRequiereAprobacion } from '../services/supabase/configuracionAprobaciones';
-import { aprobacionesService } from '../services/supabase/aprobaciones';
+import { aprobacionesService, type TipoSolicitud } from '../services/supabase/aprobaciones';
 
 export type TipoTransaccion =
   | 'asiento_contable'
@@ -20,21 +20,34 @@ interface ConfiguracionActiva {
   requiereAprobacion: boolean;
 }
 
-const MAPEO_TRANSACCION_A_ENTIDAD: Record<TipoTransaccion, { modulo: string; entidad: string }> = {
-  'asiento_contable': { modulo: 'contabilidad', entidad: 'asientos_contables' },
-  'factura_venta': { modulo: 'ventas', entidad: 'facturas_venta' },
-  'nota_credito': { modulo: 'ventas', entidad: 'notas_credito' },
-  'factura_compra': { modulo: 'compras', entidad: 'facturas_compra' },
-  'pago_proveedor': { modulo: 'finanzas', entidad: 'pagos_proveedor' },
-  'cobro_cliente': { modulo: 'finanzas', entidad: 'cobros_cliente' },
-  'movimiento_tesoreria': { modulo: 'tesoreria', entidad: 'movimientos_tesoreria' },
-  'transferencia': { modulo: 'tesoreria', entidad: 'transferencias' }
+const MAPEO_TRANSACCION_A_ENTIDAD: Record<TipoTransaccion, { modulo: string; entidad: string; tabla: string }> = {
+  'asiento_contable': { modulo: 'contabilidad', entidad: 'asientos_contables', tabla: 'asientos_contables' },
+  'factura_venta': { modulo: 'ventas', entidad: 'facturas_venta', tabla: 'facturas_venta' },
+  'nota_credito': { modulo: 'ventas', entidad: 'notas_credito', tabla: 'notas_credito' },
+  'factura_compra': { modulo: 'compras', entidad: 'facturas_compra', tabla: 'facturas_compra' },
+  'pago_proveedor': { modulo: 'finanzas', entidad: 'pagos_proveedor', tabla: 'pagos_proveedor' },
+  'cobro_cliente': { modulo: 'finanzas', entidad: 'cobros_cliente', tabla: 'cobros_cliente' },
+  'movimiento_tesoreria': { modulo: 'tesoreria', entidad: 'movimientos_tesoreria', tabla: 'movimientos_tesoreria' },
+  'transferencia': { modulo: 'tesoreria', entidad: 'transferencias', tabla: 'transferencias' }
 };
 
 const MAPEO_OPERACION: Record<TipoOperacion, 'crear' | 'editar' | 'eliminar'> = {
   'crear': 'crear',
   'modificar': 'editar',
   'eliminar': 'eliminar'
+};
+
+const MAPEO_TIPO_SOLICITUD: Record<string, TipoSolicitud> = {
+  'asiento_contable_modificar': 'modificar_asiento',
+  'asiento_contable_eliminar': 'eliminar_asiento',
+  'factura_venta_modificar': 'modificar_factura',
+  'factura_venta_eliminar': 'eliminar_factura',
+  'movimiento_tesoreria_modificar': 'modificar_movimiento_tesoreria',
+  'movimiento_tesoreria_eliminar': 'eliminar_movimiento_tesoreria',
+  'pago_proveedor_modificar': 'modificar_pago_proveedor',
+  'pago_proveedor_eliminar': 'eliminar_pago_proveedor',
+  'cobro_cliente_modificar': 'modificar_pago_cliente',
+  'cobro_cliente_eliminar': 'eliminar_pago_cliente'
 };
 
 export const useRequiereAprobacion = () => {
@@ -83,16 +96,38 @@ export const useRequiereAprobacion = () => {
 
     setLoading(true);
     try {
-      const solicitud = await aprobacionesService.crearSolicitud({
-        empresa_id: empresaActual.id,
-        usuario_solicitante_id: usuario.id,
-        tipo_transaccion: tipoTransaccion,
-        tipo_operacion: tipoOperacion,
-        transaccion_id: transaccionId,
-        datos_originales: datosOriginales,
-        datos_nuevos: datosNuevos,
-        monto: monto
-      });
+      const { tabla } = MAPEO_TRANSACCION_A_ENTIDAD[tipoTransaccion];
+      const tipoSolicitudKey = `${tipoTransaccion}_${tipoOperacion}`;
+      const tipoSolicitud = MAPEO_TIPO_SOLICITUD[tipoSolicitudKey];
+
+      if (!tipoSolicitud) {
+        console.warn(`No hay tipo de solicitud mapeado para: ${tipoSolicitudKey}`);
+        throw new Error('Tipo de solicitud no soportado');
+      }
+
+      let solicitud;
+      if (tipoOperacion === 'modificar') {
+        solicitud = await aprobacionesService.solicitarModificacionGenerica(
+          empresaActual.id,
+          tabla,
+          transaccionId,
+          tipoSolicitud,
+          datosNuevos,
+          'Solicitud de modificación desde el sistema',
+          usuario.id
+        );
+      } else if (tipoOperacion === 'eliminar') {
+        solicitud = await aprobacionesService.solicitarEliminacionGenerica(
+          empresaActual.id,
+          tabla,
+          transaccionId,
+          tipoSolicitud,
+          'Solicitud de eliminación desde el sistema',
+          usuario.id
+        );
+      } else {
+        throw new Error('Operación no soportada para aprobaciones');
+      }
 
       return solicitud;
     } catch (error) {
