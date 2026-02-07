@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, DollarSign, CreditCard, CheckCircle } from 'lucide-react';
-import { FacturaPorCobrar, PagoFactura, TipoPago } from '../../types/cuentasPorCobrar';
+import { X, Save, DollarSign, CheckCircle } from 'lucide-react';
+import { FacturaPorCobrar, PagoFactura } from '../../types/cuentasPorCobrar';
 import { NotificationModal } from '../../components/common/NotificationModal';
 import { useModals } from '../../hooks/useModals';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { useSesion } from '../../context/SesionContext';
 import { useTesoreria } from '../../hooks/useTesoreria';
-import { useNomencladores } from '../../hooks/useNomencladores';
 
 interface PagoModalProps {
   isOpen: boolean;
@@ -23,21 +22,15 @@ export const PagoModal: React.FC<PagoModalProps> = ({
   onSave,
   generarAsientoAutomatico = true // Por defecto, generar asiento automático
 }) => {
-  const { empresaActual, paisActual } = useSesion();
+  const { empresaActual } = useSesion();
   const { notificationModal, showError, showSuccess, closeNotification } = useModals();
   const { cuentas, loading: loadingCuentas } = useTesoreria(empresaActual?.id);
-  const { bancos, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
 
   const [formData, setFormData] = useState({
     fechaPago: new Date().toISOString().split('T')[0],
     monto: factura.saldoPendiente,
-    tipoPago: 'TRANSFERENCIA' as TipoPago,
     cuentaBancariaId: '',
-    referencia: '',
     observaciones: '',
-    banco: '',
-    numeroCuenta: '',
-    numeroOperacion: '',
     generarAsiento: generarAsientoAutomatico
   });
 
@@ -85,12 +78,12 @@ export const PagoModal: React.FC<PagoModalProps> = ({
       const pagoData: Omit<PagoFactura, 'id' | 'facturaId' | 'fechaCreacion'> = {
         fechaPago: formData.fechaPago,
         monto: formData.monto,
-        tipoPago: formData.tipoPago,
-        referencia: formData.referencia,
+        tipoPago: 'TRANSFERENCIA', // Siempre será transferencia a cuenta bancaria
+        referencia: `Pago confirmado en cuenta ${cuentas.find(c => c.id === formData.cuentaBancariaId)?.numero || ''}`,
         observaciones: formData.observaciones,
-        banco: formData.banco,
-        numeroCuenta: formData.numeroCuenta,
-        numeroOperacion: formData.numeroOperacion,
+        banco: '',
+        numeroCuenta: '',
+        numeroOperacion: '',
         creadoPor: 'dev-user-123' // Esto debería venir del contexto
       };
 
@@ -131,10 +124,6 @@ export const PagoModal: React.FC<PagoModalProps> = ({
     setFormData({ ...formData, monto: factura.saldoPendiente });
   };
 
-  // Determinar si se requieren campos adicionales según el tipo de pago
-  const requiereBanco = formData.tipoPago === 'TRANSFERENCIA' || formData.tipoPago === 'CHEQUE';
-  const requiereReferencia = formData.tipoPago !== 'EFECTIVO';
-
   if (!isOpen) return null;
 
   return (
@@ -147,7 +136,7 @@ export const PagoModal: React.FC<PagoModalProps> = ({
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Registrar Pago</h2>
+                <h2 className="text-xl font-bold text-gray-900">Confirmar Pago Recibido</h2>
                 <p className="text-sm text-gray-600">Factura {factura.numero}</p>
               </div>
             </div>
@@ -184,6 +173,14 @@ export const PagoModal: React.FC<PagoModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Mensaje informativo */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-blue-800">
+              <strong>Importante:</strong> Este formulario confirma que el pago se recibió en una cuenta específica.
+              Si necesitas mover el dinero entre cuentas, hazlo después desde <strong>Tesorería</strong> usando "Movimientos" o "Transferencias".
+            </p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Fecha de Pago *
@@ -231,26 +228,11 @@ export const PagoModal: React.FC<PagoModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipo de Pago *
+              Cuenta donde está el pago *
             </label>
-            <select
-              value={formData.tipoPago}
-              onChange={(e) => setFormData({ ...formData, tipoPago: e.target.value as TipoPago })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              disabled={saving || success}
-            >
-              <option value="EFECTIVO">Efectivo</option>
-              <option value="TRANSFERENCIA">Transferencia Bancaria</option>
-              <option value="CHEQUE">Cheque</option>
-              <option value="TARJETA">Tarjeta de Crédito/Débito</option>
-              <option value="OTRO">Otro</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cuenta Bancaria *
-            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Selecciona la cuenta bancaria donde se encuentra el dinero recibido
+            </p>
             {loadingCuentas ? (
               <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
                 Cargando cuentas...
@@ -272,75 +254,6 @@ export const PagoModal: React.FC<PagoModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Campos condicionales según el tipo de pago */}
-          {requiereBanco && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Banco
-                </label>
-                {loadingNomencladores ? (
-                  <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
-                    Cargando bancos...
-                  </div>
-                ) : bancos.length > 0 ? (
-                  <SearchableSelect
-                    options={bancos.map(banco => ({
-                      value: banco.nombre,
-                      label: banco.nombre
-                    }))}
-                    value={formData.banco}
-                    onChange={(value) => setFormData({ ...formData, banco: value })}
-                    placeholder="Seleccionar banco..."
-                    disabled={saving || success}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.banco}
-                    onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Nombre del banco"
-                    disabled={saving || success}
-                  />
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Número de Cuenta
-                </label>
-                <input
-                  type="text"
-                  value={formData.numeroCuenta}
-                  onChange={(e) => setFormData({ ...formData, numeroCuenta: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  disabled={saving || success}
-                />
-              </div>
-            </div>
-          )}
-
-          {requiereReferencia && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {formData.tipoPago === 'TRANSFERENCIA' ? 'Número de Operación' :
-                 formData.tipoPago === 'CHEQUE' ? 'Número de Cheque' : 'Referencia'}
-              </label>
-              <input
-                type="text"
-                value={formData.tipoPago === 'TRANSFERENCIA' ? formData.numeroOperacion : formData.referencia}
-                onChange={(e) => formData.tipoPago === 'TRANSFERENCIA'
-                  ? setFormData({ ...formData, numeroOperacion: e.target.value })
-                  : setFormData({ ...formData, referencia: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder={formData.tipoPago === 'TRANSFERENCIA' ? 'Ej: 000123456' :
-                            formData.tipoPago === 'CHEQUE' ? 'Ej: 123456' : 'Referencia del pago'}
-                disabled={saving || success}
-              />
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
