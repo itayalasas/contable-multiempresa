@@ -108,9 +108,9 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
       }
     } else if (mode === 'create') {
       // Valores por defecto para nuevo movimiento
-      const defaultTipo = tiposMovimientoTesoreria.length > 0 ? tiposMovimientoTesoreria[0].id : 'INGRESO';
+      const defaultTipo = tiposMovimientoTesoreria.length > 0 ? tiposMovimientoTesoreria[0].tipo : 'INGRESO';
       const defaultCuentaId = cuentas.length > 0 ? cuentas[0].id : '';
-      
+
       setFormData({
         fecha: new Date().toISOString().split('T')[0],
         tipo: defaultTipo,
