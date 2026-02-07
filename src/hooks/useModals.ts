@@ -123,21 +123,25 @@ export const useModals = () => {
     setNotificationModal(prev => ({ ...prev, isOpen: false }));
   };
 
-  // Funciones de conveniencia
+  // Funciones de conveniencia - DESHABILITADAS para no interrumpir el flujo
   const showSuccess = (title: string, message: string) => {
-    showNotification({ title, message, type: 'success' });
+    // Notificaciones de éxito deshabilitadas
+    console.log('✅', title, message);
   };
 
   const showError = (title: string, message: string, autoClose: boolean = false) => {
-    showNotification({ title, message, type: 'error', autoClose: autoClose });
+    // Solo mostrar errores en consola, no modal
+    console.error('❌', title, message);
   };
 
   const showWarning = (title: string, message: string) => {
-    showNotification({ title, message, type: 'warning' });
+    // Advertencias deshabilitadas
+    console.warn('⚠️', title, message);
   };
 
   const showInfo = (title: string, message: string) => {
-    showNotification({ title, message, type: 'info' });
+    // Información deshabilitada
+    console.info('ℹ️', title, message);
   };
 
   const confirmDelete = (title: string, message: string, onConfirm: () => void | Promise<void>) => {

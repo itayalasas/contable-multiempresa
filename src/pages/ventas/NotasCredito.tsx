@@ -79,7 +79,9 @@ export default function NotasCredito() {
     title: string,
     message: string
   ) => {
-    setNotification({ show: true, type, title, message });
+    // Notificaciones deshabilitadas - solo consola
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+    console.log(icon, title, message);
   };
 
   const notasFiltradas = notas.filter((nota) => {

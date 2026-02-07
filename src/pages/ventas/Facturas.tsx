@@ -597,7 +597,9 @@ export default function Facturas() {
     title: string,
     message: string
   ) => {
-    setNotification({ show: true, type, title, message });
+    // Notificaciones deshabilitadas - solo consola
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+    console.log(icon, title, message);
   };
 
   const mostrarConfirmacion = (title: string, message: string, onConfirm: () => void) => {

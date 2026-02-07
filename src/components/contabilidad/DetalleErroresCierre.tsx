@@ -401,8 +401,9 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
   };
 
   const mostrarNotificacion = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => {
-    setNotificationConfig({ title, message, type });
-    setShowNotification(true);
+    // Notificaciones deshabilitadas - solo consola
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+    console.log(icon, title, message);
   };
 
   const confirmarCuadrarCuentas = () => {
