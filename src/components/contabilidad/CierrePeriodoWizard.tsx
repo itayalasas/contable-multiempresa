@@ -198,15 +198,16 @@ export function CierrePeriodoWizard({ periodo, onClose, onSuccess, onError }: Ci
         }
 
         // Validar comisiones facturadas pero no cobradas del cliente (ingresos no realizados)
+        // Solo considerar comisiones que tienen factura de venta de comisión generada
         const { data: comisionesFacturadasSinCobrar, error: errorSinCobrar } = await supabase
           .from('comisiones_partners')
-          .select('id, comision_monto, factura_venta_id')
+          .select('id, comision_monto, factura_venta_id, factura_venta_comision_id')
           .eq('empresa_id', empresaActual.id)
           .gte('fecha', periodo.fecha_inicio)
           .lte('fecha', periodo.fecha_fin)
           .eq('estado_comision', 'facturada')
           .eq('estado_pago', 'pendiente')
-          .not('factura_venta_id', 'is', null);
+          .not('factura_venta_comision_id', 'is', null);
 
         if (errorSinCobrar) {
           console.error('Error al consultar comisiones facturadas sin cobrar:', errorSinCobrar);

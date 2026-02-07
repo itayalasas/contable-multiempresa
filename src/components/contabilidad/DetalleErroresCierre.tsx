@@ -294,6 +294,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         })) || [];
 
         // Comisiones facturadas pero sin cobrar del cliente
+        // Solo considerar comisiones que tienen factura de venta de comisión generada
         const { data: comisionesSinCobrar } = await supabase
           .from('comisiones_partners')
           .select(`
@@ -303,6 +304,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
             estado_comision,
             order_id,
             factura_venta_id,
+            factura_venta_comision_id,
             partners_aliados(razon_social)
           `)
           .eq('empresa_id', empresaId)
@@ -310,7 +312,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
           .lte('fecha', periodo.fecha_fin)
           .eq('estado_comision', 'facturada')
           .eq('estado_pago', 'pendiente')
-          .not('factura_venta_id', 'is', null);
+          .not('factura_venta_comision_id', 'is', null);
 
         comisionesFacturadasSinCobrar = comisionesSinCobrar?.map((c: any) => ({
           id: c.id,

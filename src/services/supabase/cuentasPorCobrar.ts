@@ -84,47 +84,71 @@ export const cuentasPorCobrarSupabaseService = {
 
     if (error) throw error;
 
-    return data.map(factura => ({
-      id: factura.id,
-      numero: factura.numero_documento,
-      tipoDocumento: factura.tipo_documento as any,
-      clienteId: factura.cliente_id,
-      cliente: {
-        id: factura.cliente_id,
-        nombre: factura.cliente_nombre,
-        razonSocial: factura.cliente_nombre,
-        numeroDocumento: factura.cliente_documento,
-        tipoDocumento: 'RUT',
-        email: '',
-        telefono: '',
-        direccion: '',
-        contacto: '',
-        activo: true,
-        empresaId: factura.empresa_id,
-        limiteCredito: 0,
-        diasCredito: 0,
-        observaciones: '',
-        fechaCreacion: new Date(factura.fecha_creacion),
-      },
-      fechaEmision: factura.fecha_emision,
-      fechaVencimiento: factura.fecha_vencimiento,
-      descripcion: factura.observaciones || '',
-      montoSubtotal: factura.monto_subtotal,
-      montoImpuestos: factura.monto_impuestos,
-      montoTotal: factura.monto_total,
-      montoPagado: factura.monto_pagado,
-      saldoPendiente: factura.saldo_pendiente,
-      estado: factura.estado_cxc as any,
-      moneda: factura.moneda,
-      items: [],
-      observaciones: factura.observaciones || '',
-      referencia: factura.serie + '-' + factura.numero_documento,
-      condicionesPago: null,
-      empresaId: factura.empresa_id,
-      creadoPor: factura.created_by || '',
-      fechaCreacion: factura.fecha_creacion,
-      fechaModificacion: factura.fecha_modificacion,
-    }));
+    // Cargar items para cada factura
+    const facturasConItems = await Promise.all(
+      data.map(async (factura) => {
+        // Cargar items desde facturas_venta_items
+        const { data: items } = await supabase
+          .from('facturas_venta_items')
+          .select('*')
+          .eq('factura_id', factura.id)
+          .order('numero_linea', { ascending: true });
+
+        const facturaItems = items?.map((item) => ({
+          id: item.id,
+          descripcion: item.descripcion,
+          cantidad: item.cantidad,
+          precioUnitario: parseFloat(item.precio_unitario || '0'),
+          descuento: parseFloat(item.descuento_porcentaje || '0'),
+          impuesto: parseFloat(item.tasa_iva || '0') * 100, // Convertir de decimal a porcentaje
+          total: parseFloat(item.total || '0'),
+        })) || [];
+
+        return {
+          id: factura.id,
+          numero: factura.numero_documento,
+          tipoDocumento: factura.tipo_documento as any,
+          clienteId: factura.cliente_id,
+          cliente: {
+            id: factura.cliente_id,
+            nombre: factura.cliente_nombre,
+            razonSocial: factura.cliente_nombre,
+            numeroDocumento: factura.cliente_documento,
+            tipoDocumento: 'RUT',
+            email: '',
+            telefono: '',
+            direccion: '',
+            contacto: '',
+            activo: true,
+            empresaId: factura.empresa_id,
+            limiteCredito: 0,
+            diasCredito: 0,
+            observaciones: '',
+            fechaCreacion: new Date(factura.fecha_creacion),
+          },
+          fechaEmision: factura.fecha_emision,
+          fechaVencimiento: factura.fecha_vencimiento,
+          descripcion: factura.observaciones || '',
+          montoSubtotal: factura.monto_subtotal,
+          montoImpuestos: factura.monto_impuestos,
+          montoTotal: factura.monto_total,
+          montoPagado: factura.monto_pagado,
+          saldoPendiente: factura.saldo_pendiente,
+          estado: factura.estado_cxc as any,
+          moneda: factura.moneda,
+          items: facturaItems,
+          observaciones: factura.observaciones || '',
+          referencia: factura.serie + '-' + factura.numero_documento,
+          condicionesPago: null,
+          empresaId: factura.empresa_id,
+          creadoPor: factura.created_by || '',
+          fechaCreacion: factura.fecha_creacion,
+          fechaModificacion: factura.fecha_modificacion,
+        };
+      })
+    );
+
+    return facturasConItems;
   },
 
   async createFactura(factura: Omit<FacturaPorCobrar, 'id' | 'cliente' | 'fechaCreacion'>): Promise<FacturaPorCobrar> {
