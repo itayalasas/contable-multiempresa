@@ -47,11 +47,13 @@ export const ResumenCuentasPorCobrar: React.FC<ResumenCuentasPorCobrarProps> = (
     );
   }
 
+  const facturasConSaldo = resumen.facturasPendientes + resumen.facturasVencidas;
+
   const cards = [
     {
       title: 'Total por Cobrar',
       value: formatearMoneda(resumen.totalPorCobrar),
-      subtitle: `${resumen.totalFacturas} facturas`,
+      subtitle: `${facturasConSaldo} facturas`,
       icon: DollarSign,
       color: 'text-blue-600',
       bgColor: 'bg-blue-500',
