@@ -121,13 +121,22 @@ BEGIN
       'pago_cliente_id', pc.id,
       'porcentaje', (fv.metadata->>'comision_mp_porcentaje')::NUMERIC,
       'tipo', 'mercadopago',
+      'tipo_pago', pc.tipo_pago,
       'origen', 'sincronizacion_automatica'
     )
   FROM pagos_cliente pc
   INNER JOIN facturas_venta fv ON fv.id = pc.factura_id
   WHERE pc.cuenta_bancaria_id IS NOT NULL
-    AND fv.metadata->>'comision_mp_monto' IS NOT NULL
-    AND (fv.metadata->>'comision_mp_monto')::NUMERIC > 0
+    AND (
+      -- Buscar por metadata de comisión MP en la factura
+      (fv.metadata->>'comision_mp_monto' IS NOT NULL AND (fv.metadata->>'comision_mp_monto')::NUMERIC > 0)
+      OR
+      -- O por tipo de pago MARKETPLACE (del webhook)
+      (pc.tipo_pago = 'MARKETPLACE' AND fv.comision_mp_monto IS NOT NULL AND fv.comision_mp_monto > 0)
+      OR
+      -- O por campo directo comision_mp_monto en la factura
+      (fv.comision_mp_monto IS NOT NULL AND fv.comision_mp_monto > 0)
+    )
     AND NOT EXISTS (
       SELECT 1 FROM movimientos_tesoreria mt
       WHERE mt.documento_origen_tipo = 'comision_mercadopago'
