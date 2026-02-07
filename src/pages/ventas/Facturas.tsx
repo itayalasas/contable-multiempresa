@@ -973,7 +973,7 @@ export default function Facturas() {
                         )}
 
                         {/* Editar - visible para todas las facturas excepto anuladas */}
-                        {factura.estado !== 'anulada' && !esFacturaComision(factura) && (
+                        {factura.estado !== 'anulada' && (
                           <button
                             onClick={() => handleEditFactura(factura)}
                             className="text-blue-600 hover:text-blue-900"
@@ -1135,7 +1135,7 @@ export default function Facturas() {
                         )}
 
                         {/* Eliminar - visible para todas las facturas excepto anuladas */}
-                        {factura.estado !== 'anulada' && !esFacturaComision(factura) && (
+                        {factura.estado !== 'anulada' && (
                           <button
                             onClick={() => handleEliminarFactura(factura)}
                             className="text-red-600 hover:text-red-900"
