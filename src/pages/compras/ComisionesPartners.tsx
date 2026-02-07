@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Calendar, CheckCircle, Clock, XCircle, FileText, Play } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, CheckCircle, Clock, XCircle, FileText, Play, Edit, Trash2 } from 'lucide-react';
 import { useSesion } from '../../context/SesionContext';
 import { supabase } from '../../config/supabase';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
@@ -54,6 +54,8 @@ export default function ComisionesPartners() {
   const [generandoFacturasCompra, setGenerandoFacturasCompra] = useState(false);
   const [showGenerarModal, setShowGenerarModal] = useState(false);
   const [showGenerarCompraModal, setShowGenerarCompraModal] = useState(false);
+  const [showEliminarModal, setShowEliminarModal] = useState(false);
+  const [comisionAEliminar, setComisionAEliminar] = useState<Comision | null>(null);
   const [notification, setNotification] = useState<{
     show: boolean;
     type: 'success' | 'error' | 'warning' | 'info';
@@ -95,6 +97,7 @@ export default function ComisionesPartners() {
       `)
       .eq('empresa_id', empresaActual.id)
       .eq('ocultar_en_listados', false)
+      .eq('eliminado', false)
       .order('fecha', { ascending: false })
       .limit(200);
 
@@ -350,6 +353,43 @@ export default function ComisionesPartners() {
       message: `La factura ${factura.numero_factura} ha sido marcada como pagada.`,
     });
     await cargarDatos();
+  };
+
+  const confirmarEliminarComision = (comision: Comision) => {
+    setComisionAEliminar(comision);
+    setShowEliminarModal(true);
+  };
+
+  const eliminarComision = async () => {
+    if (!comisionAEliminar) return;
+
+    try {
+      const { error } = await supabase
+        .from('comisiones_partners')
+        .update({ eliminado: true })
+        .eq('id', comisionAEliminar.id);
+
+      if (error) throw error;
+
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Comisión Eliminada',
+        message: 'La comisión ha sido eliminada exitosamente.',
+      });
+
+      setShowEliminarModal(false);
+      setComisionAEliminar(null);
+      await cargarDatos();
+    } catch (error: any) {
+      console.error('Error al eliminar comisión:', error);
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'No se pudo eliminar la comisión.',
+      });
+    }
   };
 
   const comisionesFiltradas = comisiones.filter((c) => {
@@ -671,6 +711,7 @@ export default function ComisionesPartners() {
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">%</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Comisión</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -728,6 +769,19 @@ export default function ComisionesPartners() {
                       </span>
                     </div>
                   </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-end gap-2">
+                      {comision.estado_comision === 'pendiente' && (
+                        <button
+                          onClick={() => confirmarEliminarComision(comision)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar comisión"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -758,6 +812,19 @@ export default function ComisionesPartners() {
           confirmText={`Generar ${cantidadPorEstado.facturadas} Factura(s) de Compra`}
           cancelText="Cancelar"
           loading={generandoFacturasCompra}
+        />
+      )}
+
+      {showEliminarModal && comisionAEliminar && (
+        <ConfirmModal
+          isOpen={showEliminarModal}
+          onClose={() => setShowEliminarModal(false)}
+          onConfirm={eliminarComision}
+          title="Eliminar Comisión"
+          message={`¿Está seguro que desea eliminar la comisión del ${new Date(comisionAEliminar.fecha).toLocaleDateString()} por $${parseFloat(comisionAEliminar.comision_monto.toString()).toFixed(2)}? Esta acción no se puede deshacer.`}
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          type="danger"
         />
       )}
 
