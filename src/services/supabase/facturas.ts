@@ -270,15 +270,16 @@ export async function actualizarFactura(
   return data;
 }
 
-export async function eliminarFactura(facturaId: string) {
-  await supabase.from('facturas_venta_items').delete().eq('factura_id', facturaId);
-
-  const { error } = await supabase
-    .from('facturas_venta')
-    .delete()
-    .eq('id', facturaId);
+export async function eliminarFactura(facturaId: string, empresaId: string) {
+  const { data, error } = await supabase
+    .rpc('eliminar_factura_venta', {
+      p_factura_id: facturaId,
+      p_empresa_id: empresaId,
+    });
 
   if (error) throw error;
+
+  console.log('✅ Factura de venta eliminada completamente:', data);
 }
 
 export async function marcarFacturaComoPagada(
