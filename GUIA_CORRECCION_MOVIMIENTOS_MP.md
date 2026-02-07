@@ -125,13 +125,17 @@ Deberías ver 4 registros (2 INGRESO + 2 EGRESO).
 
 ## Correcciones Aplicadas
 
-✅ **Webhook corregido y desplegado**
+✅ **Webhook corregido y desplegado** (Error #1)
 - Removida columna inexistente `cuenta_bancaria_id` de insert en `pagos_cliente`
 - Función `webhooks-orders` actualizada y desplegada
 
-✅ **Script de corrección actualizado**
+✅ **Script de corrección actualizado** (Error #2)
 - `generar_movimientos_mp_retroactivos.sql` corregido
 - Ya NO intenta insertar `cuenta_bancaria_id`
+- **Agregada obtención dinámica de cuentas contables**:
+  - Busca cuenta banco MercadoLibre por código `112104`
+  - Busca cuenta gasto comisión MP por código `612002` o `630501`
+  - Si no encuentra las cuentas, salta la factura con warning
 - Ahora se puede ejecutar sin errores
 
 ## Prevención Futura

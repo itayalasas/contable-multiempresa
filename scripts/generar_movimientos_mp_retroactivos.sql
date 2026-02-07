@@ -171,6 +171,7 @@ BEGIN
     RAISE NOTICE '   ✅ Movimiento INGRESO creado: $%', factura_record.total;
 
     -- 3. CREAR MOVIMIENTO EGRESO (comisión MP)
+    -- Este movimiento representa el pago de la comisión a Mercado Pago
     INSERT INTO movimientos_tesoreria (
       empresa_id,
       cuenta_bancaria_id,
@@ -211,7 +212,34 @@ BEGIN
 
     RAISE NOTICE '   ✅ Movimiento EGRESO comisión MP creado: $%', factura_record.comision_mp_monto;
 
-    -- 4. CREAR ASIENTO CONTABLE PARA COMISIÓN MP
+    -- 4. OBTENER CUENTAS CONTABLES
+    -- Cuenta Banco MercadoLibre (código 112104)
+    SELECT id INTO cuenta_banco_id
+    FROM plan_cuentas
+    WHERE empresa_id = factura_record.empresa_id
+      AND codigo = '112104'
+      AND activa = true;
+
+    IF cuenta_banco_id IS NULL THEN
+      RAISE NOTICE '   ⚠️  No se encontró cuenta banco MercadoLibre (112104)';
+      CONTINUE; -- Saltar esta factura
+    END IF;
+
+    -- Cuenta Gasto Comisión MP (código 612002 o 630501)
+    SELECT id INTO cuenta_comision_mp_id
+    FROM plan_cuentas
+    WHERE empresa_id = factura_record.empresa_id
+      AND codigo IN ('612002', '630501')
+      AND tipo = 'GASTO'
+      AND activa = true
+    LIMIT 1;
+
+    IF cuenta_comision_mp_id IS NULL THEN
+      RAISE NOTICE '   ⚠️  No se encontró cuenta gasto comisión MP (612002/630501)';
+      CONTINUE; -- Saltar esta factura
+    END IF;
+
+    -- 5. CREAR ASIENTO CONTABLE PARA COMISIÓN MP
     -- Generar número de asiento
     SELECT COALESCE(MAX(
       CASE
