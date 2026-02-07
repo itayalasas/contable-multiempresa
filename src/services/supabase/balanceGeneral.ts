@@ -10,7 +10,7 @@ export interface CuentaBalance {
   saldo_final: number;
   nivel: number;
   es_titulo: boolean;
-  padre_codigo?: string;
+  padre_id?: string;
   subcuentas?: CuentaBalance[];
 }
 
@@ -109,13 +109,13 @@ export const balanceGeneralService = {
           id: cuenta.id,
           codigo: cuenta.codigo,
           nombre: cuenta.nombre,
-          naturaleza: cuenta.naturaleza,
+          naturaleza: cuenta.tipo === 'ACTIVO' ? 'deudora' : 'acreedora',
           saldo_deudor: saldos.deudor,
           saldo_acreedor: saldos.acreedor,
           saldo_final: saldos.final,
           nivel: cuenta.nivel,
-          es_titulo: cuenta.es_titulo,
-          padre_codigo: cuenta.cuenta_padre
+          es_titulo: cuenta.nivel < 4,
+          padre_id: cuenta.cuenta_padre
         };
       })
     );
@@ -144,9 +144,19 @@ export const balanceGeneralService = {
     fechaCorte?: string
   ): Promise<{ deudor: number; acreedor: number; final: number }> {
     let query = supabase
-      .from('movimientos_asientos')
-      .select('tipo, monto')
-      .eq('cuenta_id', cuentaId);
+      .from('movimientos_contables')
+      .select(`
+        debito,
+        credito,
+        asiento_id,
+        asientos_contables!inner(
+          fecha,
+          estado,
+          eliminado
+        )
+      `)
+      .eq('cuenta_id', cuentaId)
+      .eq('asientos_contables.eliminado', false);
 
     if (fechaCorte) {
       query = query.lte('asientos_contables.fecha', fechaCorte);
@@ -162,12 +172,9 @@ export const balanceGeneralService = {
     let deudor = 0;
     let acreedor = 0;
 
-    (movimientos || []).forEach((mov) => {
-      if (mov.tipo === 'debito') {
-        deudor += mov.monto;
-      } else {
-        acreedor += mov.monto;
-      }
+    (movimientos || []).forEach((mov: any) => {
+      deudor += parseFloat(mov.debito || 0);
+      acreedor += parseFloat(mov.credito || 0);
     });
 
     const final = deudor - acreedor;
@@ -180,18 +187,18 @@ export const balanceGeneralService = {
   },
 
   construirJerarquia(cuentas: CuentaBalance[]): CuentaBalance[] {
-    const cuentasPorCodigo = new Map<string, CuentaBalance>();
+    const cuentasPorId = new Map<string, CuentaBalance>();
     const raices: CuentaBalance[] = [];
 
     cuentas.forEach(cuenta => {
-      cuentasPorCodigo.set(cuenta.codigo, { ...cuenta, subcuentas: [] });
+      cuentasPorId.set(cuenta.id, { ...cuenta, subcuentas: [] });
     });
 
     cuentas.forEach(cuenta => {
-      const cuentaActual = cuentasPorCodigo.get(cuenta.codigo)!;
+      const cuentaActual = cuentasPorId.get(cuenta.id)!;
 
-      if (cuenta.padre_codigo) {
-        const padre = cuentasPorCodigo.get(cuenta.padre_codigo);
+      if (cuenta.padre_id) {
+        const padre = cuentasPorId.get(cuenta.padre_id);
         if (padre) {
           if (!padre.subcuentas) padre.subcuentas = [];
           padre.subcuentas.push(cuentaActual);
