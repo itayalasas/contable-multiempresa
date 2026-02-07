@@ -202,22 +202,25 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
         const comisionMPApp = comisionMPTotal - comisionMPAliado;
         const comisionAppNeta = totalComisionApp - comisionMPApp;
-        const totalAPagarSinIVA = totalVentas - comisionAppNeta - comisionMPAliado;
 
-        // IMPORTANTE: Las comisiones son servicios gravados con IVA 22%
-        const ivaComisiones = totalAPagarSinIVA * tasaIVA;
-        const totalAPagar = totalAPagarSinIVA + ivaComisiones;
+        // IMPORTANTE: Los montos de venta YA INCLUYEN IVA
+        // Por lo tanto, lo que el partner recibe es simplemente:
+        // Total de venta (con IVA incluido) - Comisiones
+        const totalAPagar = totalVentas - comisionAppNeta - comisionMPAliado;
+
+        // El IVA ya está incluido en el precio, solo lo separamos para efectos contables
+        const totalAPagarSinIVA = totalAPagar / (1 + tasaIVA);
+        const ivaComisiones = totalAPagar - totalAPagarSinIVA;
 
         console.log(`💰 Cálculos:`);
-        console.log(`   Total ventas cobradas: $${totalVentas.toFixed(2)}`);
+        console.log(`   Total ventas cobradas (IVA incl.): $${totalVentas.toFixed(2)}`);
         console.log(`   - Comisión App base: $${totalComisionApp.toFixed(2)}`);
         console.log(`   - Comisión MP total: $${comisionMPTotal.toFixed(2)}`);
         console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)} (se resta de comisión app)`);
         console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
         console.log(`   - Comisión App NETA: $${comisionAppNeta.toFixed(2)}`);
-        console.log(`   = SUBTOTAL: $${totalAPagarSinIVA.toFixed(2)}`);
-        console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaComisiones.toFixed(2)}`);
-        console.log(`   = TOTAL A PAGAR AL ALIADO: $${totalAPagar.toFixed(2)}`);
+        console.log(`   = TOTAL A PAGAR (IVA incl.): $${totalAPagar.toFixed(2)}`);
+        console.log(`   Desglose: Sin IVA $${totalAPagarSinIVA.toFixed(2)} + IVA (${(tasaIVA * 100).toFixed(0)}%) $${ivaComisiones.toFixed(2)}`);
 
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
 
@@ -351,13 +354,29 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         console.log(`✅ Cuenta por pagar creada: ${cuentaPorPagar.numero}`);
 
+        // Obtener números de orden legibles desde las facturas de venta
+        const facturaIds = [...new Set(comisionesPartner.map(c => c.factura_venta_id))];
+        const { data: facturasVenta } = await supabase
+          .from('facturas_venta')
+          .select('id, metadata')
+          .in('id', facturaIds);
+
+        const orderNumbersMap = new Map();
+        facturasVenta?.forEach(fv => {
+          if (fv.metadata?.order_number) {
+            orderNumbersMap.set(fv.id, fv.metadata.order_number);
+          }
+        });
+
         const itemsCuentaPorPagar = [];
 
         comisionesPartner.forEach((comision, index) => {
           const subtotalVenta = parseFloat(comision.subtotal_venta);
+          const orderNumber = orderNumbersMap.get(comision.factura_venta_id) || comision.order_id?.substring(0, 8) || 'N/A';
+
           itemsCuentaPorPagar.push({
             factura_id: cuentaPorPagar.id,
-            descripcion: `Venta orden #${comision.order_id || comision.id.substring(0, 8)}`,
+            descripcion: `Venta orden #${orderNumber}`,
             cantidad: 1,
             precio_unitario: subtotalVenta,
             descuento: 0,
