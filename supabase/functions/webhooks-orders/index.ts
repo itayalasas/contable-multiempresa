@@ -547,7 +547,31 @@ async function handleOrder(
     // 💳 Registrar cobro del cliente si está pagada
     if (estaPagada && cuentaBancariaMLId) {
       try {
-        console.log('💳 [Order] Registrando cobro de cliente en tesorería...');
+        console.log('💳 [Order] Registrando cobro de cliente...');
+
+        // 0. Crear registro de cobro en pagos_cliente (REQUERIDO para validación de cierre)
+        const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
+        const { data: pagoCliente, error: pagoClienteError } = await supabase
+          .from('pagos_cliente')
+          .insert({
+            factura_id: factura.id,
+            fecha_pago: new Date().toISOString().split('T')[0],
+            monto: total.toFixed(2),
+            tipo_pago: 'MARKETPLACE',
+            referencia: payload.order.order_id,
+            observaciones: `Cobro automático marketplace - Orden ${payload.order.order_number || payload.order.order_id}`,
+            cuenta_bancaria_id: cuentaBancariaMLId,
+            creado_por: SISTEMA_USER_ID,
+          })
+          .select()
+          .single();
+
+        if (pagoClienteError) {
+          console.error('❌ [Order] Error creando registro de cobro:', pagoClienteError);
+          throw pagoClienteError;
+        }
+
+        console.log(`✅ [Order] Registro de cobro creado: ${pagoCliente.id}`);
 
         const movimientos = [];
 
