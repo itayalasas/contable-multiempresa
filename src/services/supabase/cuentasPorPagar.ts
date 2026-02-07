@@ -357,18 +357,17 @@ export const cuentasPorPagarSupabaseService = {
   },
 
   async eliminarFactura(empresaId: string, facturaId: string): Promise<void> {
-    // Usar eliminación lógica en lugar de DELETE
+    // Usar función RPC para evitar problemas de caché de PostgREST
     // Esto dispara el trigger que hace rollback de comisiones, asientos y pagos
-    const { error } = await supabase
-      .from('facturas_por_pagar')
-      .update({
-        eliminado: true,
-        fecha_eliminacion: new Date().toISOString(),
-      })
-      .eq('id', facturaId)
-      .eq('empresa_id', empresaId);
+    const { data, error } = await supabase
+      .rpc('eliminar_factura_por_pagar', {
+        p_factura_id: facturaId,
+        p_empresa_id: empresaId,
+      });
 
     if (error) throw error;
+
+    console.log('✅ Factura eliminada:', data);
   },
 
   async crearFactura(empresaId: string, factura: Omit<FacturaPorPagar, 'id' | 'proveedor' | 'fechaCreacion'>): Promise<string> {
