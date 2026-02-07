@@ -196,31 +196,38 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         const partner = comisionesPartner[0].partner;
         console.log(`\n👤 Procesando partner: ${partner.razon_social}`);
 
-        const totalVentas = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.subtotal_venta), 0);
-        const totalComisionApp = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.comision_monto), 0);
-        const comisionMPTotal = totalVentas * tasaMP;
+        // IMPORTANTE: subtotal_venta viene SIN IVA (base imponible)
+        const totalVentasSinIVA = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.subtotal_venta), 0);
+
+        // Las comisiones guardadas incluyen IVA, pero necesitamos separarlas
+        const totalComisionAppConIVA = comisionesPartner.reduce((sum, c) => sum + parseFloat(c.comision_monto), 0);
+        const totalComisionAppSinIVA = totalComisionAppConIVA / (1 + tasaIVA);
+
+        // Comisión MP se calcula sobre el subtotal sin IVA
+        const comisionMPTotal = totalVentasSinIVA * tasaMP;
         const comisionMPAliado = comisionMPTotal * (divisionMPAliado / 100);
         const comisionMPApp = comisionMPTotal - comisionMPAliado;
-        const comisionAppNeta = totalComisionApp - comisionMPApp;
 
-        // IMPORTANTE: Los montos de venta YA INCLUYEN IVA
-        // Por lo tanto, lo que el partner recibe es simplemente:
-        // Total de venta (con IVA incluido) - Comisiones
-        const totalAPagar = totalVentas - comisionAppNeta - comisionMPAliado;
+        // Comisión App neta (restando la parte de MP que absorbe la app)
+        const comisionAppNetaSinIVA = totalComisionAppSinIVA - comisionMPApp;
 
-        // El IVA ya está incluido en el precio, solo lo separamos para efectos contables
-        const totalAPagarSinIVA = totalAPagar / (1 + tasaIVA);
-        const ivaComisiones = totalAPagar - totalAPagarSinIVA;
+        // Lo que recibe el partner = Ventas sin IVA - Comisiones sin IVA
+        const subtotalAPagar = totalVentasSinIVA - comisionAppNetaSinIVA - comisionMPAliado;
+
+        // Agregar IVA al total a pagar
+        const ivaComisiones = subtotalAPagar * tasaIVA;
+        const totalAPagar = subtotalAPagar + ivaComisiones;
 
         console.log(`💰 Cálculos:`);
-        console.log(`   Total ventas cobradas (IVA incl.): $${totalVentas.toFixed(2)}`);
-        console.log(`   - Comisión App base: $${totalComisionApp.toFixed(2)}`);
+        console.log(`   Total ventas base (sin IVA): $${totalVentasSinIVA.toFixed(2)}`);
+        console.log(`   - Comisión App (sin IVA): $${totalComisionAppSinIVA.toFixed(2)}`);
         console.log(`   - Comisión MP total: $${comisionMPTotal.toFixed(2)}`);
         console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)} (se resta de comisión app)`);
         console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
-        console.log(`   - Comisión App NETA: $${comisionAppNeta.toFixed(2)}`);
-        console.log(`   = TOTAL A PAGAR (IVA incl.): $${totalAPagar.toFixed(2)}`);
-        console.log(`   Desglose: Sin IVA $${totalAPagarSinIVA.toFixed(2)} + IVA (${(tasaIVA * 100).toFixed(0)}%) $${ivaComisiones.toFixed(2)}`);
+        console.log(`   - Comisión App NETA (sin IVA): $${comisionAppNetaSinIVA.toFixed(2)}`);
+        console.log(`   = SUBTOTAL A PAGAR: $${subtotalAPagar.toFixed(2)}`);
+        console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaComisiones.toFixed(2)}`);
+        console.log(`   = TOTAL A PAGAR AL ALIADO: $${totalAPagar.toFixed(2)}`);
 
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
 
@@ -264,15 +271,15 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
-            subtotal: totalAPagarSinIVA,
+            subtotal: subtotalAPagar,
             total_iva: ivaComisiones,
             total: totalAPagar,
             moneda: 'UYU',
             tipo_cambio: 1,
             retencion_porcentaje: 0,
             retencion_monto: comisionMPAliado,
-            comision_sistema_porcentaje: (comisionAppNeta / totalVentas) * 100,
-            comision_sistema_monto: comisionAppNeta,
+            comision_sistema_porcentaje: (comisionAppNetaSinIVA / totalVentasSinIVA) * 100,
+            comision_sistema_monto: comisionAppNetaSinIVA,
             monto_transferir_partner: totalAPagar,
             observaciones: `Pago por servicios - ${comisionesPartner.length} órdenes`,
             metadata: {
@@ -282,13 +289,14 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
               comisiones_ids: comisionesPartner.map((c) => c.id),
               cantidad_ordenes: comisionesPartner.length,
               calculo: {
-                total_ventas: totalVentas,
-                comision_app_base: totalComisionApp,
+                total_ventas_sin_iva: totalVentasSinIVA,
+                comision_app_con_iva: totalComisionAppConIVA,
+                comision_app_sin_iva: totalComisionAppSinIVA,
                 comision_mp_total: comisionMPTotal,
                 comision_mp_app: comisionMPApp,
                 comision_mp_aliado: comisionMPAliado,
-                comision_app_neta: comisionAppNeta,
-                subtotal: totalAPagarSinIVA,
+                comision_app_neta: comisionAppNetaSinIVA,
+                subtotal: subtotalAPagar,
                 iva: ivaComisiones,
                 total: totalAPagar
               }
@@ -308,19 +316,19 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             numero_linea: 1,
             descripcion: `Comisiones por ventas - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
             cantidad: comisionesPartner.length,
-            precio_unitario: totalAPagarSinIVA / comisionesPartner.length,
+            precio_unitario: subtotalAPagar / comisionesPartner.length,
             descuento_porcentaje: 0,
             descuento_monto: 0,
             tasa_iva: tasaIVA * 100,
             monto_iva: ivaComisiones,
-            subtotal: totalAPagarSinIVA,
+            subtotal: subtotalAPagar,
             total: totalAPagar,
             metadata: {
               comision_mp_descontada: comisionMPAliado,
-              comision_app_descontada: comisionAppNeta,
-              comision_app_base: totalComisionApp,
+              comision_app_descontada: comisionAppNetaSinIVA,
+              comision_app_sin_iva: totalComisionAppSinIVA,
               comision_mp_app: comisionMPApp,
-              total_ventas_base: totalVentas,
+              total_ventas_sin_iva: totalVentasSinIVA,
             },
           });
 
@@ -336,7 +344,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             descripcion: `Comisiones por ventas - ${partner.razon_social}`,
-            monto_subtotal: totalAPagarSinIVA,
+            monto_subtotal: subtotalAPagar,
             monto_impuestos: ivaComisiones,
             monto_total: totalAPagar,
             monto_pagado: 0,
@@ -385,17 +393,17 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
           });
         });
 
-        const porcentajeComisionReal = (totalComisionApp / totalVentas) * 100;
-        const comisionMPPorcentaje = (comisionMPAliado / totalVentas) * 100;
+        const porcentajeComisionReal = (totalComisionAppSinIVA / totalVentasSinIVA) * 100;
+        const comisionMPPorcentaje = (comisionMPAliado / totalVentasSinIVA) * 100;
 
         itemsCuentaPorPagar.push({
           factura_id: cuentaPorPagar.id,
           descripcion: `Comisión aplicación (${porcentajeComisionReal.toFixed(2)}%)`,
           cantidad: 1,
-          precio_unitario: -totalComisionApp,
+          precio_unitario: -totalComisionAppSinIVA,
           descuento: 0,
           impuesto: 0,
-          total: -totalComisionApp,
+          total: -totalComisionAppSinIVA,
         });
 
         itemsCuentaPorPagar.push({
