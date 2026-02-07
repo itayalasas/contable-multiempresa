@@ -424,7 +424,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
 
         console.log(`✅ ${itemsCuentaPorPagar.length} item(s) agregados a la cuenta por pagar:`);
         console.log(`   - ${comisionesPartner.length} ventas individuales`);
-        console.log(`   - Comisión app: -$${totalComisionApp.toFixed(2)}`);
+        console.log(`   - Comisión app: -$${totalComisionAppSinIVA.toFixed(2)}`);
         console.log(`   - Comisión MP aliado: -$${comisionMPAliado.toFixed(2)}`);
 
         const comisionIds = comisionesPartner.map((c) => c.id);

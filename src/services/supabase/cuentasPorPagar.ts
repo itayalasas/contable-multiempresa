@@ -81,6 +81,7 @@ export const cuentasPorPagarSupabaseService = {
         items_factura_pagar (*)
       `)
       .eq('empresa_id', empresaId)
+      .eq('eliminado', false)
       .order('fecha_emision', { ascending: false });
 
     if (error) throw error;
@@ -212,6 +213,7 @@ export const cuentasPorPagarSupabaseService = {
       .from('pagos_proveedor')
       .select('*')
       .eq('factura_id', facturaId)
+      .eq('eliminado', false)
       .order('fecha_pago', { ascending: false });
 
     if (error) throw error;
@@ -236,7 +238,8 @@ export const cuentasPorPagarSupabaseService = {
     const { data, error } = await supabase
       .from('facturas_por_pagar')
       .select('estado, monto_total, monto_pagado, saldo_pendiente, fecha_vencimiento, fecha_emision, proveedor_id')
-      .eq('empresa_id', empresaId);
+      .eq('empresa_id', empresaId)
+      .eq('eliminado', false);
 
     if (error) throw error;
 
@@ -354,9 +357,14 @@ export const cuentasPorPagarSupabaseService = {
   },
 
   async eliminarFactura(empresaId: string, facturaId: string): Promise<void> {
+    // Usar eliminación lógica en lugar de DELETE
+    // Esto dispara el trigger que hace rollback de comisiones, asientos y pagos
     const { error } = await supabase
       .from('facturas_por_pagar')
-      .delete()
+      .update({
+        eliminado: true,
+        fecha_eliminacion: new Date().toISOString(),
+      })
       .eq('id', facturaId)
       .eq('empresa_id', empresaId);
 
