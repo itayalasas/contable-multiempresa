@@ -305,42 +305,87 @@ async function registrarMovimientoTesoreria(
 
     console.log('✅ Usando cuenta bancaria:', cuenta.nombre);
 
-    // Registrar movimiento de EGRESO (sale dinero)
+    const movimientos = [];
+
+    // 1. EGRESO: Pago al partner/proveedor (sale dinero)
+    movimientos.push({
+      empresa_id: factura.empresa_id,
+      cuenta_bancaria_id: cuentaBancariaId,
+      tipo_movimiento: 'EGRESO',
+      fecha: pago.fechaPago,
+      monto: pago.monto,
+      descripcion: `Pago factura ${factura.numero} - ${factura.proveedor?.razon_social || 'Proveedor'}`,
+      referencia: pago.numeroOperacion || pago.referencia || factura.numero,
+      beneficiario: factura.proveedor?.razon_social || 'Proveedor',
+      categoria: 'PAGO_PROVEEDOR',
+      asiento_contable_id: asientoId,
+      documento_origen_tipo: 'pago_proveedor',
+      documento_origen_id: pagoId,
+      metadata: {
+        tipo_pago: pago.tipoPago,
+        banco: pago.banco,
+        numero_cuenta: pago.numeroCuenta,
+        numero_operacion: pago.numeroOperacion,
+        factura_id: factura.id,
+      },
+    });
+
+    // 2. Verificar si hay comisiones retenidas (para facturas de partners)
+    const { data: comisionesRetenidas } = await supabase
+      .from('comisiones_partners')
+      .select('id, comision_app, comision_mercadopago_aliado, factura_compra_id')
+      .eq('factura_compra_id', factura.id)
+      .eq('estado', 'facturada');
+
+    if (comisionesRetenidas && comisionesRetenidas.length > 0) {
+      const totalComisionApp = comisionesRetenidas.reduce((sum, c) => sum + parseFloat(c.comision_app || 0), 0);
+      const totalComisionMPAliado = comisionesRetenidas.reduce((sum, c) => sum + parseFloat(c.comision_mercadopago_aliado || 0), 0);
+      const totalComisiones = totalComisionApp + totalComisionMPAliado;
+
+      if (totalComisiones > 0) {
+        console.log(`💰 [Tesorería] Comisiones retenidas: App=$${totalComisionApp.toFixed(2)}, MP Aliado=$${totalComisionMPAliado.toFixed(2)}`);
+
+        // INGRESO: Comisión retenida por la app (la ganancia)
+        // Este dinero YA está en la cuenta, NO sale al pagar al partner
+        movimientos.push({
+          empresa_id: factura.empresa_id,
+          cuenta_bancaria_id: cuentaBancariaId,
+          tipo_movimiento: 'INGRESO',
+          fecha: pago.fechaPago,
+          monto: totalComisiones,
+          descripcion: `Ingreso comisiones retenidas - Factura ${factura.numero}`,
+          referencia: `COM-RETENIDA-${factura.numero}`,
+          beneficiario: 'Comisiones Marketplace',
+          categoria: 'INGRESO_COMISION',
+          asiento_contable_id: asientoId,
+          documento_origen_tipo: 'comision_marketplace',
+          documento_origen_id: factura.id,
+          metadata: {
+            factura_compra_id: factura.id,
+            pago_proveedor_id: pagoId,
+            comision_app: totalComisionApp,
+            comision_mp_aliado: totalComisionMPAliado,
+            tipo: 'comision_retenida',
+          },
+        });
+
+        console.log(`✅ [Tesorería] Registrando ingreso por comisión retenida: $${totalComisiones.toFixed(2)}`);
+      }
+    }
+
     const { error: movError } = await supabase
       .from('movimientos_tesoreria')
-      .insert({
-        empresa_id: factura.empresa_id,
-        cuenta_bancaria_id: cuentaBancariaId,
-        tipo_movimiento: 'EGRESO',
-        fecha: pago.fechaPago,
-        monto: pago.monto,
-        descripcion: `Pago factura ${factura.numero} - ${factura.proveedor?.razon_social || 'Proveedor'}`,
-        referencia: pago.numeroOperacion || pago.referencia || factura.numero,
-        beneficiario: factura.proveedor?.razon_social || 'Proveedor',
-        categoria: 'PAGO_PROVEEDOR',
-        asiento_contable_id: asientoId,
-        documento_origen_tipo: 'pago_proveedor',
-        documento_origen_id: pagoId,
-        metadata: {
-          tipo_pago: pago.tipoPago,
-          banco: pago.banco,
-          numero_cuenta: pago.numeroCuenta,
-          numero_operacion: pago.numeroOperacion,
-          factura_id: factura.id,
-        },
-      });
+      .insert(movimientos);
 
     if (movError) {
       console.error('⚠️ Error registrando movimiento de tesorería:', movError.message);
-      // No lanzar error, solo advertir
       return;
     }
 
-    console.log('✅ Movimiento de tesorería registrado - Saldo bancario actualizado automáticamente');
+    console.log(`✅ ${movimientos.length} movimiento(s) de tesorería registrado(s) - Saldo actualizado`);
 
   } catch (error) {
     console.error('⚠️ Error en tesorería (no crítico):', error);
-    // No lanzar error para no bloquear el pago
   }
 }
 
