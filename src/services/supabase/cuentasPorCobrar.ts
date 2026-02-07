@@ -104,19 +104,9 @@ export const cuentasPorCobrarSupabaseService = {
           total: parseFloat(item.total || '0'),
         })) || [];
 
-        // Construir número completo de factura
-        const numeroCompleto = factura.serie
-          ? `${factura.serie}-${factura.numero_documento}`
-          : factura.numero_documento;
-
-        // Construir referencia segura
-        const referencia = factura.serie && factura.numero_documento
-          ? `${factura.serie}-${factura.numero_documento}`
-          : (factura.numero_documento || 'SIN-REF');
-
         return {
           id: factura.id,
-          numero: numeroCompleto,
+          numero: factura.numero || 'SIN-NUMERO',
           tipoDocumento: factura.tipo_documento as any,
           clienteId: factura.cliente_id,
           cliente: {
@@ -137,14 +127,14 @@ export const cuentasPorCobrarSupabaseService = {
             fechaCreacion: new Date(factura.fecha_creacion),
           },
           fechaEmision: factura.fecha_emision,
-          fechaVencimiento: factura.fecha_vencimiento,
-          descripcion: factura.observaciones || '',
-          montoSubtotal: factura.monto_subtotal,
-          montoImpuestos: factura.monto_impuestos,
-          montoTotal: factura.monto_total,
-          montoPagado: factura.monto_pagado,
-          saldoPendiente: factura.saldo_pendiente,
-          estado: factura.estado_cxc as any,
+          fechaVencimiento: factura.fecha_vencimiento || factura.fecha_emision,
+          descripcion: facturaItems.length > 0 ? facturaItems.map(i => i.descripcion).join(', ') : '',
+          montoSubtotal: parseFloat(factura.monto_subtotal || '0'),
+          montoImpuestos: parseFloat(factura.monto_impuestos || '0'),
+          montoTotal: parseFloat(factura.monto_total || '0'),
+          montoPagado: parseFloat(factura.monto_pagado || '0'),
+          saldoPendiente: parseFloat(factura.saldo_pendiente || '0'),
+          estado: factura.estado as any,
           moneda: factura.moneda,
           items: facturaItems,
           observaciones: factura.observaciones || '',
