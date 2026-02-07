@@ -114,7 +114,6 @@ BEGIN
       tipo_pago,
       referencia,
       observaciones,
-      cuenta_bancaria_id,
       creado_por
     ) VALUES (
       factura_record.factura_id,
@@ -123,7 +122,6 @@ BEGIN
       'MARKETPLACE',
       factura_record.order_id,
       'Cobro automático marketplace - Orden ' || COALESCE(factura_record.order_number, factura_record.order_id),
-      cuenta_bancaria_ml_id,
       SISTEMA_USER_ID
     )
     RETURNING id INTO pago_cliente_id;

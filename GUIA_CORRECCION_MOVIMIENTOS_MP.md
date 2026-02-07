@@ -9,6 +9,8 @@ Las dos facturas del marketplace se crearon correctamente, PERO el webhook NO ge
 3. ❌ Movimiento de EGRESO (comisión Mercado Pago)
 4. ❌ Asiento contable de la comisión MP
 
+**Causa raíz**: El webhook intentaba insertar `cuenta_bancaria_id` en la tabla `pagos_cliente`, pero esa columna NO EXISTE. Esto causó un error silencioso que abortó toda la sección de tesorería.
+
 ## Facturas Afectadas
 
 - **Factura 00000001**: Pedro Ayala - $480 (Comisión MP: $24)
@@ -121,12 +123,21 @@ ORDER BY mt.fecha, mt.tipo_movimiento;
 
 Deberías ver 4 registros (2 INGRESO + 2 EGRESO).
 
+## Correcciones Aplicadas
+
+✅ **Webhook corregido y desplegado**
+- Removida columna inexistente `cuenta_bancaria_id` de insert en `pagos_cliente`
+- Función `webhooks-orders` actualizada y desplegada
+
+✅ **Script de corrección actualizado**
+- `generar_movimientos_mp_retroactivos.sql` corregido
+- Ya NO intenta insertar `cuenta_bancaria_id`
+- Ahora se puede ejecutar sin errores
+
 ## Prevención Futura
 
-✅ **La función webhook ya está corregida**
-
 Para las próximas órdenes del marketplace:
-- ✅ Se crearán automáticamente los pagos_cliente
+- ✅ Se crearán automáticamente los pagos_cliente (sin error)
 - ✅ Se crearán movimientos INGRESO + EGRESO
 - ✅ Se generarán asientos contables automáticamente
 

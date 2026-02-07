@@ -560,7 +560,6 @@ async function handleOrder(
             tipo_pago: 'MARKETPLACE',
             referencia: payload.order.order_id,
             observaciones: `Cobro automático marketplace - Orden ${payload.order.order_number || payload.order.order_id}`,
-            cuenta_bancaria_id: cuentaBancariaMLId,
             creado_por: SISTEMA_USER_ID,
           })
           .select()
