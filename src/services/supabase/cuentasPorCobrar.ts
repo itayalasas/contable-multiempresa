@@ -104,9 +104,19 @@ export const cuentasPorCobrarSupabaseService = {
           total: parseFloat(item.total || '0'),
         })) || [];
 
+        // Construir número completo de factura
+        const numeroCompleto = factura.serie
+          ? `${factura.serie}-${factura.numero_documento}`
+          : factura.numero_documento;
+
+        // Construir referencia segura
+        const referencia = factura.serie && factura.numero_documento
+          ? `${factura.serie}-${factura.numero_documento}`
+          : (factura.numero_documento || 'SIN-REF');
+
         return {
           id: factura.id,
-          numero: factura.numero_documento,
+          numero: numeroCompleto,
           tipoDocumento: factura.tipo_documento as any,
           clienteId: factura.cliente_id,
           cliente: {
@@ -138,7 +148,7 @@ export const cuentasPorCobrarSupabaseService = {
           moneda: factura.moneda,
           items: facturaItems,
           observaciones: factura.observaciones || '',
-          referencia: factura.serie + '-' + factura.numero_documento,
+          referencia: referencia,
           condicionesPago: null,
           empresaId: factura.empresa_id,
           creadoPor: factura.created_by || '',
