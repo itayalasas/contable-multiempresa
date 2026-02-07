@@ -128,8 +128,26 @@ export default function ComisionesPartners() {
     setFacturasCompra(data || []);
   };
 
+  // Calcular cantidad de comisiones por estado
+  const cantidadPorEstado = {
+    pendientes: comisiones.filter(c => c.estado_comision === 'pendiente').length,
+    facturadas: comisiones.filter(c => c.estado_comision === 'facturada').length,
+    pagadas: comisiones.filter(c => c.estado_comision === 'pagada').length,
+  };
+
   const generarFacturasAhora = async () => {
     if (!empresaActual) return;
+
+    // Validar que hay comisiones pendientes
+    if (cantidadPorEstado.pendientes === 0) {
+      setNotification({
+        show: true,
+        type: 'warning',
+        title: 'Sin Comisiones Pendientes',
+        message: 'No hay comisiones pendientes para facturar a clientes. Las comisiones deben estar en estado "pendiente" para poder generar facturas.',
+      });
+      return;
+    }
 
     try {
       setGenerandoFacturas(true);
@@ -179,6 +197,17 @@ export default function ComisionesPartners() {
 
     if (!empresaActual) {
       console.error('❌ [ComisionesPartners] No hay empresa actual');
+      return;
+    }
+
+    // Validar que hay comisiones facturadas
+    if (cantidadPorEstado.facturadas === 0) {
+      setNotification({
+        show: true,
+        type: 'warning',
+        title: 'Sin Comisiones Facturadas',
+        message: 'No hay comisiones facturadas para generar facturas de compra. Primero debes generar las facturas a clientes (Paso 1) para que las comisiones pasen a estado "facturada".',
+      });
       return;
     }
 
@@ -376,22 +405,39 @@ export default function ComisionesPartners() {
           </p>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={() => setShowGenerarModal(true)}
-            disabled={generandoFacturas || generandoFacturasCompra}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-          >
-            <Play className="w-5 h-5" />
-            {generandoFacturas ? 'Generando...' : '1. Generar Facturas a Clientes'}
-          </button>
-          <button
-            onClick={() => setShowGenerarCompraModal(true)}
-            disabled={generandoFacturas || generandoFacturasCompra}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-          >
-            <FileText className="w-5 h-5" />
-            {generandoFacturasCompra ? 'Generando...' : '2. Generar Facturas de Compra'}
-          </button>
+          <div className="relative group">
+            <button
+              onClick={() => setShowGenerarModal(true)}
+              disabled={generandoFacturas || generandoFacturasCompra || cantidadPorEstado.pendientes === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              title={cantidadPorEstado.pendientes === 0 ? 'No hay comisiones pendientes para facturar' : `Facturar ${cantidadPorEstado.pendientes} comisiones pendientes`}
+            >
+              <Play className="w-5 h-5" />
+              {generandoFacturas ? 'Generando...' : `1. Generar Facturas a Clientes (${cantidadPorEstado.pendientes})`}
+            </button>
+            {cantidadPorEstado.pendientes === 0 && (
+              <div className="absolute top-full left-0 mt-2 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                No hay comisiones en estado "pendiente". Las comisiones deben estar pendientes para poder facturarlas a los clientes.
+              </div>
+            )}
+          </div>
+
+          <div className="relative group">
+            <button
+              onClick={() => setShowGenerarCompraModal(true)}
+              disabled={generandoFacturas || generandoFacturasCompra || cantidadPorEstado.facturadas === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              title={cantidadPorEstado.facturadas === 0 ? 'No hay comisiones facturadas para generar compras' : `Generar compras para ${cantidadPorEstado.facturadas} comisiones facturadas`}
+            >
+              <FileText className="w-5 h-5" />
+              {generandoFacturasCompra ? 'Generando...' : `2. Generar Facturas de Compra (${cantidadPorEstado.facturadas})`}
+            </button>
+            {cantidadPorEstado.facturadas === 0 && (
+              <div className="absolute top-full left-0 mt-2 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                No hay comisiones en estado "facturada". Primero ejecuta el Paso 1 para facturar comisiones a clientes.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -695,8 +741,8 @@ export default function ComisionesPartners() {
           onClose={() => !generandoFacturas && setShowGenerarModal(false)}
           onConfirm={generarFacturasAhora}
           title="Generar Facturas de Comisiones a Clientes"
-          message="¿Deseas generar las facturas de comisiones pendientes ahora? Esto agrupará todas las comisiones pendientes por partner y creará facturas electrónicas para enviar a DGI."
-          confirmText="Generar"
+          message={`Se generarán facturas electrónicas para ${cantidadPorEstado.pendientes} comisión(es) pendiente(s). Las comisiones se agruparán por partner/cliente y cambiarán a estado "facturada". ¿Deseas continuar?`}
+          confirmText={`Generar ${cantidadPorEstado.pendientes} Factura(s)`}
           cancelText="Cancelar"
           loading={generandoFacturas}
         />
@@ -708,8 +754,8 @@ export default function ComisionesPartners() {
           onClose={() => !generandoFacturasCompra && setShowGenerarCompraModal(false)}
           onConfirm={generarFacturasCompraAhora}
           title="Generar Facturas de Compra a Partners"
-          message="¿Deseas generar las facturas de compra para las comisiones facturadas? Esto creará cuentas por pagar para cada partner que tenga comisiones facturadas pendientes de registrar como compra."
-          confirmText="Generar"
+          message={`Se generarán facturas de compra y cuentas por pagar para ${cantidadPorEstado.facturadas} comisión(es) facturada(s). Las comisiones cambiarán a estado "por pagar". ¿Deseas continuar?`}
+          confirmText={`Generar ${cantidadPorEstado.facturadas} Factura(s) de Compra`}
           cancelText="Cancelar"
           loading={generandoFacturasCompra}
         />
