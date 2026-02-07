@@ -131,8 +131,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
     console.log('🔍 Buscando comisiones con criterios:');
     console.log('  - empresa_id:', empresaId);
     console.log('  - estado_comision: facturada');
-    console.log('  - factura_venta_comision_id: NOT NULL');
-    console.log('  - factura_compra_id: NULL (sin cuenta por pagar)');
+    console.log('  - factura_venta_id: NOT NULL (comisión en factura de venta)');
+    console.log('  - factura_compra_id: NULL (sin cuenta por pagar generada)');
     if (partnerId) console.log('  - partner_id:', partnerId);
 
     let query = supabase
@@ -143,8 +143,8 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
       `)
       .eq('empresa_id', empresaId)
       .eq('estado_comision', 'facturada')
-      .not('factura_venta_comision_id', 'is', null)
-      .is('factura_compra_id', null)
+      .not('factura_venta_id', 'is', null) // Tiene factura de venta asociada
+      .is('factura_compra_id', null) // No tiene factura de compra generada
       .neq('estado_pago', 'auto_cobrada'); // Excluir comisiones de marketplace/MP (ya cobradas automáticamente)
 
     if (partnerId) {
@@ -160,7 +160,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         id: comisiones[0].id,
         estado_comision: comisiones[0].estado_comision,
         estado_pago: comisiones[0].estado_pago,
-        tiene_factura_venta: !!comisiones[0].factura_venta_comision_id,
+        tiene_factura_venta: !!comisiones[0].factura_venta_id,
         tiene_factura_compra: !!comisiones[0].factura_compra_id
       } : null
     });
