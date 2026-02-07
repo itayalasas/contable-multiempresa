@@ -18,7 +18,9 @@ DECLARE
   movimiento_ingreso_id UUID;
   movimiento_egreso_id UUID;
   cuenta_banco_id UUID;
+  cuenta_banco_codigo TEXT;
   cuenta_comision_mp_id UUID;
+  cuenta_comision_mp_codigo TEXT;
   asiento_egreso_id UUID;
   numero_asiento TEXT;
   siguiente_numero INTEGER;
@@ -214,7 +216,7 @@ BEGIN
 
     -- 4. OBTENER CUENTAS CONTABLES
     -- Cuenta Banco MercadoLibre (código 112104)
-    SELECT id INTO cuenta_banco_id
+    SELECT id, codigo INTO cuenta_banco_id, cuenta_banco_codigo
     FROM plan_cuentas
     WHERE empresa_id = factura_record.empresa_id
       AND codigo = '112104'
@@ -226,7 +228,7 @@ BEGIN
     END IF;
 
     -- Cuenta Gasto Comisión MP (código 612002 o 630501)
-    SELECT id INTO cuenta_comision_mp_id
+    SELECT id, codigo INTO cuenta_comision_mp_id, cuenta_comision_mp_codigo
     FROM plan_cuentas
     WHERE empresa_id = factura_record.empresa_id
       AND codigo IN ('612002', '630501')
@@ -288,6 +290,7 @@ BEGIN
     INSERT INTO movimientos_contables (
       asiento_id,
       cuenta_id,
+      cuenta,
       debito,
       credito,
       descripcion
@@ -295,6 +298,7 @@ BEGIN
     (
       asiento_egreso_id,
       cuenta_comision_mp_id,
+      cuenta_comision_mp_codigo,
       factura_record.comision_mp_monto,
       0,
       'Comisión Mercado Pago'
@@ -302,6 +306,7 @@ BEGIN
     (
       asiento_egreso_id,
       cuenta_banco_id,
+      cuenta_banco_codigo,
       0,
       factura_record.comision_mp_monto,
       'Comisión Mercado Pago'
