@@ -72,6 +72,11 @@ Deno.serve(async (req: Request) => {
         codigoCuentaContraparte = '512003'; // Gasto Comisión ML
         descripcion = `Comisión MercadoLibre - ${movimiento.descripcion}`;
         break;
+      case 'COMISION_PASARELA':
+        // Comisión de Mercado Pago (gasto)
+        codigoCuentaContraparte = '512005'; // Gasto Comisión Mercado Pago
+        descripcion = `Comisión Mercado Pago - ${movimiento.descripcion}`;
+        break;
       case 'INGRESO_COMISION':
         codigoCuentaContraparte = '412001'; // Ingreso Comisión Marketplace
         descripcion = `Ingreso por comisión marketplace - ${movimiento.descripcion}`;
