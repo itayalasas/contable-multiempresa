@@ -28,6 +28,39 @@ export async function generarAsientoFacturaVenta(
   try {
     console.log('🔄 [AsientosAutomaticos] Generando asiento para factura:', numeroFactura);
 
+    const { data: facturaExistente, error: facturaExistenteError } = await supabase
+      .from('facturas_venta')
+      .select('id, asiento_contable_id, asiento_generado, metadata, serie, numero_factura')
+      .eq('id', facturaId)
+      .maybeSingle();
+
+    if (facturaExistenteError) {
+      console.warn('⚠️ [AsientosAutomaticos] No se pudo validar asiento existente:', facturaExistenteError);
+    }
+
+    const esFacturaComision = facturaExistente?.metadata?.tipo === 'factura_comisiones_partner'
+      || facturaExistente?.serie === 'COM'
+      || (typeof facturaExistente?.numero_factura === 'string' && facturaExistente.numero_factura.startsWith('COM-'));
+
+    if (esFacturaComision) {
+      await supabase
+        .from('facturas_venta')
+        .update({
+          asiento_generado: true,
+          asiento_contable_id: null,
+          asiento_error: null
+        })
+        .eq('id', facturaId);
+
+      console.log('ℹ️ [AsientosAutomaticos] Factura de comisión omitida en contabilidad:', facturaId);
+      return null;
+    }
+
+    if (facturaExistente?.asiento_contable_id) {
+      console.log('ℹ️ [AsientosAutomaticos] La factura ya tiene asiento, se omite generación:', facturaExistente.asiento_contable_id);
+      return facturaExistente.asiento_contable_id;
+    }
+
     const numeroAsiento = await generarNumeroAsiento(empresaId);
 
     const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
@@ -105,6 +138,19 @@ export async function generarAsientoFacturaVenta(
 
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
+    }
+
+    const { error: facturaUpdateError } = await supabase
+      .from('facturas_venta')
+      .update({
+        asiento_generado: true,
+        asiento_contable_id: asiento.id,
+        asiento_error: null
+      })
+      .eq('id', facturaId);
+
+    if (facturaUpdateError) {
+      console.warn('⚠️ [AsientosAutomaticos] No se pudo actualizar la factura con el asiento:', facturaUpdateError);
     }
 
     console.log('✅ [AsientosAutomaticos] Asiento contable generado exitosamente:', numeroAsiento);

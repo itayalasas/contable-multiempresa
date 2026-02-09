@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSesion } from '../../context/SesionContext';
 import {
   obtenerFacturas,
@@ -7,6 +7,7 @@ import {
   enviarFacturaDGI,
   obtenerEstadisticasFacturas,
   obtenerFacturaPorId,
+  emitirFactura,
   regenerarAsientoContable,
   type FacturaVenta,
 } from '../../services/supabase/facturas';
@@ -18,14 +19,13 @@ import { NotificationModal } from '../../components/common/NotificationModal';
 import { Pagination } from '../../components/common/Pagination';
 import { SolicitudAprobacionModal } from '../../components/ventas/SolicitudAprobacionModal';
 import { usePermissions } from '../../hooks/usePermissions';
-import { CanAccess } from '../../components/common/CanAccess';
 import { ProtectedButton } from '../../components/common/ProtectedButton';
 import { useRequiereAprobacion } from '../../hooks/useRequiereAprobacion';
 
 export default function Facturas() {
   const { empresaActual, usuario } = useSesion();
-  const { canCreate, canUpdate, canDelete, canRead } = usePermissions();
-  const { verificarSiRequiereAprobacion, crearSolicitudAprobacion } = useRequiereAprobacion();
+  const { canUpdate } = usePermissions();
+  const { verificarSiRequiereAprobacion } = useRequiereAprobacion();
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -139,6 +139,43 @@ export default function Facturas() {
     }
   };
 
+  const handleEmitirFactura = (factura: FacturaVenta) => {
+    setConfirmModal({
+      show: true,
+      title: 'Emitir Prefactura',
+      message: `¿Desea emitir la prefactura ${factura.numero_factura}? Una vez emitida ya no podrá editarse libremente.`,
+      onConfirm: async () => {
+        try {
+          await emitirFactura(factura.id);
+          mostrarNotificacion('success', 'Éxito', 'Prefactura emitida correctamente');
+          cargarFacturas();
+          cargarEstadisticas();
+        } catch (error: any) {
+          mostrarNotificacion('error', 'Error', error.message || 'No se pudo emitir la prefactura');
+        }
+      },
+    });
+  };
+
+  const handleEmitirYEnviarDGI = (factura: FacturaVenta) => {
+    setConfirmModal({
+      show: true,
+      title: 'Emitir y Enviar a DGI',
+      message: `¿Desea emitir la prefactura ${factura.numero_factura} y enviarla a DGI?`,
+      onConfirm: async () => {
+        try {
+          await emitirFactura(factura.id);
+          await enviarFacturaDGI(factura.id);
+          mostrarNotificacion('success', 'Éxito', 'Factura emitida y enviada a DGI');
+          cargarFacturas();
+          cargarEstadisticas();
+        } catch (error: any) {
+          mostrarNotificacion('error', 'Error', error.message || 'No se pudo emitir y enviar a DGI');
+        }
+      },
+    });
+  };
+
   const handleEliminarFactura = async (factura: FacturaVenta) => {
     if (factura.estado === 'borrador') {
       setConfirmModal({
@@ -147,7 +184,8 @@ export default function Facturas() {
         message: `¿Está seguro que desea eliminar la factura ${factura.numero_factura}?`,
         onConfirm: async () => {
           try {
-            await eliminarFactura(factura.id);
+            if (!empresaActual) return;
+            await eliminarFactura(factura.id, empresaActual.id);
             mostrarNotificacion('success', 'Éxito', 'Factura eliminada correctamente');
             cargarFacturas();
             cargarEstadisticas();
@@ -176,7 +214,8 @@ export default function Facturas() {
         message: `¿Está seguro que desea eliminar la factura ${factura.numero_factura}?`,
         onConfirm: async () => {
           try {
-            await eliminarFactura(factura.id);
+            if (!empresaActual) return;
+            await eliminarFactura(factura.id, empresaActual.id);
             mostrarNotificacion('success', 'Éxito', 'Factura eliminada correctamente');
             cargarFacturas();
             cargarEstadisticas();
@@ -421,8 +460,8 @@ export default function Facturas() {
 
   <div class="header">
     <div class="company-info">
-      <div class="company-name">${empresaActual?.razon_social || 'Empresa'}</div>
-      <div>RUT: ${empresaActual?.numero_identificacion || 'N/A'}</div>
+      <div class="company-name">${empresaActual?.razonSocial || 'Empresa'}</div>
+      <div>RUT: ${empresaActual?.numeroIdentificacion || 'N/A'}</div>
       <div>${empresaActual?.direccion || ''}</div>
       <div>${empresaActual?.email || ''}</div>
     </div>
@@ -486,15 +525,15 @@ export default function Facturas() {
   <div class="totals">
     <div class="total-row">
       <span>Subtotal:</span>
-      <span>$${parseFloat(facturaCompleta.subtotal).toFixed(2)}</span>
+      <span>$${Number(facturaCompleta.subtotal).toFixed(2)}</span>
     </div>
     <div class="total-row">
       <span>IVA:</span>
-      <span>$${parseFloat(facturaCompleta.total_iva).toFixed(2)}</span>
+      <span>$${Number(facturaCompleta.total_iva).toFixed(2)}</span>
     </div>
     <div class="total-row final">
       <span>TOTAL:</span>
-      <span>$${parseFloat(facturaCompleta.total).toFixed(2)} ${facturaCompleta.moneda}</span>
+      <span>$${Number(facturaCompleta.total).toFixed(2)} ${facturaCompleta.moneda}</span>
     </div>
   </div>
 
@@ -700,7 +739,7 @@ export default function Facturas() {
             onClick={handleNuevaFactura}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Nueva Factura
+            Nueva Prefactura
           </ProtectedButton>
         </div>
       </div>
@@ -796,7 +835,7 @@ export default function Facturas() {
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900">Sin facturas</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Comience creando una nueva factura de venta
+                Comience creando una nueva prefactura de venta
             </p>
           </div>
         ) : (
@@ -859,7 +898,7 @@ export default function Facturas() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-semibold text-gray-900">
-                        ${parseFloat(factura.total).toLocaleString()}
+                        ${Number(factura.total).toLocaleString()}
                       </div>
                       <div className="text-xs text-gray-500">{factura.moneda}</div>
                     </td>
@@ -938,6 +977,28 @@ export default function Facturas() {
                             />
                           </svg>
                         </button>
+
+                        {/* Emitir prefactura */}
+                        {factura.estado === 'borrador' && canUpdate('facturas') && (
+                          <button
+                            onClick={() => handleEmitirFactura(factura)}
+                            className="px-2 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                            title="Emitir prefactura"
+                          >
+                            Emitir
+                          </button>
+                        )}
+
+                        {/* Emitir y Enviar a DGI */}
+                        {factura.estado === 'borrador' && canUpdate('facturas') && (
+                          <button
+                            onClick={() => handleEmitirYEnviarDGI(factura)}
+                            className="px-2 py-1 text-xs font-medium rounded bg-blue-50 text-blue-700 hover:bg-blue-100"
+                            title="Emitir y enviar a DGI"
+                          >
+                            Emitir + DGI
+                          </button>
+                        )}
 
                         {/* Regenerar asiento - si falló o si no se ha generado */}
                         {(factura.asiento_error || !factura.asiento_generado) && (
@@ -1035,7 +1096,7 @@ export default function Facturas() {
                         )}
 
                         {/* Enviar a DGI - botón visible si no está enviada o si tuvo error */}
-                        {((!factura.dgi_enviada || factura.dgi_response?.error) && factura.estado !== 'anulada') && (
+                        {((!factura.dgi_enviada || factura.dgi_response?.error) && factura.estado !== 'anulada' && factura.estado !== 'borrador') && (
                           <button
                             onClick={() => handleEnviarDGI(factura)}
                             disabled={enviandoDGI === factura.id}
@@ -1226,6 +1287,7 @@ export default function Facturas() {
             setShowDetalleModal(false);
             setFacturaDetalle(null);
           }}
+          onDownload={() => handleDescargarPDF(facturaDetalle)}
         />
       )}
 

@@ -90,6 +90,7 @@ export const PagoProveedorModal: React.FC<PagoProveedorModalProps> = ({
         numeroCuenta: cuentaSeleccionada?.numero || '',
         numeroOperacion: '',
         cuentaBancariaId: formData.cuentaBancariaId,
+        generarAsientoAutomatico: formData.generarAsiento,
         creadoPor: 'dev-user-123' // Esto debería venir del contexto
       };
 

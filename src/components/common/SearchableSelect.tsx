@@ -17,6 +17,7 @@ interface SearchableSelectProps {
   className?: string;
   error?: string;
   loading?: boolean;
+  allowCustom?: boolean;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -30,6 +31,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   className = '',
   error,
   loading = false,
+  allowCustom = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,6 +41,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(opt => opt.value === value);
+  const displayLabel = selectedOption?.label || (value ? value : placeholder);
 
   const filteredOptions = options.filter(option =>
     option.label.toLowerCase().includes(searchTerm.toLowerCase())
@@ -92,6 +95,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           onChange(filteredOptions[highlightedIndex].value);
           setIsOpen(false);
           setSearchTerm('');
+        } else if (allowCustom && searchTerm.trim()) {
+          onChange(searchTerm.trim());
+          setIsOpen(false);
+          setSearchTerm('');
         }
         break;
       case 'Escape':
@@ -117,6 +124,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     setSearchTerm('');
   };
 
+  const handleSelectCustom = () => {
+    if (!allowCustom || !searchTerm.trim()) return;
+    onChange(searchTerm.trim());
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     onChange('');
@@ -124,7 +138,12 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   };
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div
+      className={`relative ${className}`}
+      ref={containerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
       {label && (
         <label className="block text-sm font-medium text-gray-700 mb-2">
           {label} {required && <span className="text-red-500">*</span>}
@@ -151,7 +170,6 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder="Buscar..."
               className="flex-1 outline-none bg-transparent text-sm"
               disabled={disabled}
@@ -159,8 +177,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           </div>
         ) : (
           <div className="flex items-center justify-between">
-            <span className={`text-sm ${selectedOption ? 'text-gray-900' : 'text-gray-400'}`}>
-              {loading ? 'Cargando...' : selectedOption?.label || placeholder}
+            <span className={`text-sm ${selectedOption || value ? 'text-gray-900' : 'text-gray-400'}`}>
+              {loading ? 'Cargando...' : displayLabel}
             </span>
             <div className="flex items-center space-x-1">
               {value && !disabled && (
@@ -190,7 +208,17 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             </div>
           ) : filteredOptions.length === 0 ? (
             <div className="px-3 py-2 text-sm text-gray-500 text-center">
-              No se encontraron resultados
+              {allowCustom && searchTerm.trim() ? (
+                <button
+                  type="button"
+                  onClick={handleSelectCustom}
+                  className="w-full text-left text-blue-600 hover:text-blue-700"
+                >
+                  Crear "{searchTerm.trim()}"
+                </button>
+              ) : (
+                'No se encontraron resultados'
+              )}
             </div>
           ) : (
             <div ref={dropdownRef}>

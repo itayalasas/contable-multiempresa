@@ -63,45 +63,72 @@ Deno.serve(async (req: Request) => {
     let codigoCuentaContraparte: string | null = null;
     let descripcion = '';
 
-    switch (movimiento.categoria) {
-      case 'COBRO_CLIENTE':
-        codigoCuentaContraparte = '1212'; // Cuentas por Cobrar
-        descripcion = `Cobro de cliente - ${movimiento.descripcion}`;
-        break;
-      case 'COMISION_MARKETPLACE':
-        codigoCuentaContraparte = '512003'; // Gasto Comisión ML
-        descripcion = `Comisión MercadoLibre - ${movimiento.descripcion}`;
-        break;
-      case 'COMISION_PASARELA':
-        // Comisión de Mercado Pago (gasto)
-        codigoCuentaContraparte = '512005'; // Gasto Comisión Mercado Pago
-        descripcion = `Comisión Mercado Pago - ${movimiento.descripcion}`;
-        break;
-      case 'INGRESO_COMISION':
-        codigoCuentaContraparte = '412001'; // Ingreso Comisión Marketplace
-        descripcion = `Ingreso por comisión marketplace - ${movimiento.descripcion}`;
-        break;
-      case 'PAGO_PROVEEDOR':
-        codigoCuentaContraparte = '2121'; // Cuentas por Pagar
-        descripcion = `Pago a proveedor - ${movimiento.descripcion}`;
-        break;
-      default:
-        return new Response(
-          JSON.stringify({ success: false, message: `Categoría ${movimiento.categoria} no requiere asiento automático` }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    if (movimiento.tipo_movimiento === 'TRANSFERENCIA' && movimiento.metadata?.cuenta_destino_id) {
+      descripcion = `Transferencia bancaria - ${movimiento.descripcion}`;
+    } else {
+      switch (movimiento.categoria) {
+        case 'COBRO_CLIENTE':
+          codigoCuentaContraparte = '1212'; // Cuentas por Cobrar
+          descripcion = `Cobro de cliente - ${movimiento.descripcion}`;
+          break;
+        case 'GANANCIA_MARKETPLACE':
+        case 'INGRESO_OTRO':
+          codigoCuentaContraparte = '751002'; // Otros ingresos diversos
+          descripcion = `Ingreso - ${movimiento.descripcion}`;
+          break;
+        case 'COMISION_MARKETPLACE':
+          codigoCuentaContraparte = '651003'; // Otros gastos diversos
+          descripcion = `Comisión marketplace - ${movimiento.descripcion}`;
+          break;
+        case 'COMISION_PASARELA':
+          // Comisión de Mercado Pago (gasto)
+          codigoCuentaContraparte = '630501'; // Gastos Comisiones Mercado Pago
+          descripcion = `Comisión Mercado Pago - ${movimiento.descripcion}`;
+          break;
+        case 'INGRESO_COMISION':
+          codigoCuentaContraparte = '412001'; // Ingreso Comisión Marketplace
+          descripcion = `Ingreso por comisión marketplace - ${movimiento.descripcion}`;
+          break;
+        case 'PAGO_PROVEEDOR':
+          codigoCuentaContraparte = '213001'; // Facturas emitidas por pagar
+          descripcion = `Pago a proveedor - ${movimiento.descripcion}`;
+          break;
+        case 'PAGO_PARTNER':
+          codigoCuentaContraparte = '212001'; // Comisiones por Pagar - Partners
+          descripcion = `Pago a partner - ${movimiento.descripcion}`;
+          break;
+        case 'PAGO_IMPUESTO':
+        case 'PAGO_IVA':
+        case 'PAGO_DGI':
+          codigoCuentaContraparte = '2113'; // IVA por Pagar
+          descripcion = `Pago de impuestos - ${movimiento.descripcion}`;
+          break;
+        case 'GASTO_OTRO':
+          codigoCuentaContraparte = '651003'; // Otros gastos diversos
+          descripcion = `Gasto - ${movimiento.descripcion}`;
+          break;
+        default:
+          return new Response(
+            JSON.stringify({ success: false, message: `Categoría ${movimiento.categoria} no requiere asiento automático` }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+      }
     }
 
-    // Obtener cuenta contraparte
-    const { data: cuentaContraparte } = await supabase
-      .from('plan_cuentas')
-      .select('id')
-      .eq('empresa_id', movimiento.empresa_id)
-      .eq('codigo', codigoCuentaContraparte)
-      .maybeSingle();
+    let cuentaContraparte: { id: string } | null = null;
+    if (codigoCuentaContraparte) {
+      const { data: cuentaContraparteData } = await supabase
+        .from('plan_cuentas')
+        .select('id')
+        .eq('empresa_id', movimiento.empresa_id)
+        .eq('codigo', codigoCuentaContraparte)
+        .maybeSingle();
 
-    if (!cuentaContraparte) {
-      throw new Error(`No se encontró cuenta contraparte: ${codigoCuentaContraparte}`);
+      if (!cuentaContraparteData) {
+        throw new Error(`No se encontró cuenta contraparte: ${codigoCuentaContraparte}`);
+      }
+
+      cuentaContraparte = cuentaContraparteData;
     }
 
     // Generar número de asiento
@@ -148,7 +175,34 @@ Deno.serve(async (req: Request) => {
 
     // Crear movimientos contables
     const movimientos = [];
-    if (movimiento.tipo_movimiento === 'INGRESO') {
+    if (movimiento.tipo_movimiento === 'TRANSFERENCIA' && movimiento.metadata?.cuenta_destino_id) {
+      const { data: cuentaDestino } = await supabase
+        .from('cuentas_bancarias')
+        .select('cuenta_contable_id')
+        .eq('id', movimiento.metadata.cuenta_destino_id)
+        .single();
+
+      if (!cuentaDestino?.cuenta_contable_id) {
+        throw new Error('Cuenta destino sin cuenta contable vinculada');
+      }
+
+      movimientos.push(
+        {
+          asiento_id: asiento.id,
+          cuenta_id: cuentaDestino.cuenta_contable_id,
+          debito: parseFloat(movimiento.monto),
+          credito: 0,
+          descripcion: descripcion,
+        },
+        {
+          asiento_id: asiento.id,
+          cuenta_id: cuentaBancaria.cuenta_contable_id,
+          debito: 0,
+          credito: parseFloat(movimiento.monto),
+          descripcion: descripcion,
+        }
+      );
+    } else if (movimiento.tipo_movimiento === 'INGRESO') {
       // INGRESO: Debe → Banco, Haber → Cuenta Contraparte
       movimientos.push(
         {
@@ -160,7 +214,7 @@ Deno.serve(async (req: Request) => {
         },
         {
           asiento_id: asiento.id,
-          cuenta_id: cuentaContraparte.id,
+          cuenta_id: cuentaContraparte!.id,
           debito: 0,
           credito: parseFloat(movimiento.monto),
           descripcion: descripcion,
@@ -171,7 +225,7 @@ Deno.serve(async (req: Request) => {
       movimientos.push(
         {
           asiento_id: asiento.id,
-          cuenta_id: cuentaContraparte.id,
+          cuenta_id: cuentaContraparte!.id,
           debito: parseFloat(movimiento.monto),
           credito: 0,
           descripcion: descripcion,

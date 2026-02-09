@@ -9,6 +9,7 @@ interface ResumenTesoreria {
   saldoDisponible: number;
   ingresosDelMes: number;
   egresosDelMes: number;
+  comisionesPasarelaDelMes: number;
   movimientosPendientes: number;
   saldoPorMoneda: {
     moneda: string;
@@ -32,6 +33,7 @@ export function useTesoreria(empresaId: string | undefined) {
     saldoDisponible: 0,
     ingresosDelMes: 0,
     egresosDelMes: 0,
+    comisionesPasarelaDelMes: 0,
     movimientosPendientes: 0,
     saldoPorMoneda: [],
     saldoPorTipoCuenta: [],
@@ -106,6 +108,10 @@ export function useTesoreria(empresaId: string | undefined) {
         .filter(m => m.tipoMovimiento === 'EGRESO')
         .reduce((sum, m) => sum + m.monto, 0);
 
+      const comisionesPasarelaDelMes = movimientosMes
+        .filter(m => m.categoria === 'COMISION_PASARELA')
+        .reduce((sum, m) => sum + m.monto, 0);
+
       const movimientosPendientes = 0;
 
       // Distribución por tipo de cuenta
@@ -144,6 +150,7 @@ export function useTesoreria(empresaId: string | undefined) {
         saldoDisponible: saldoTotal, // Por ahora es el mismo
         ingresosDelMes: ingresosMes,
         egresosDelMes: egresosMes,
+        comisionesPasarelaDelMes,
         movimientosPendientes,
         saldoPorMoneda,
         saldoPorTipoCuenta,

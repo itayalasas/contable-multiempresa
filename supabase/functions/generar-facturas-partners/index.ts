@@ -98,6 +98,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           .select('*')
           .eq('partner_id', partner.id)
           .eq('estado_comision', 'pendiente')
+          .is('factura_venta_comision_id', null)
           .order('fecha', { ascending: true });
 
         if (comisionesError) throw comisionesError;
@@ -111,10 +112,13 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
         const fechaInicio = comisiones[0].fecha;
         const fechaFin = comisiones[comisiones.length - 1].fecha;
 
-        const montoIVA = totalComisiones * tasaIVA;
-        const totalConIVA = totalComisiones + montoIVA;
+        // La comisión ya viene con IVA incluido
+        const factorIva = 1 + tasaIVA;
+        const subtotalComisiones = totalComisiones / factorIva;
+        const montoIVA = totalComisiones - subtotalComisiones;
+        const totalConIVA = totalComisiones;
 
-        console.log('Total comisiones:', totalComisiones.toFixed(2), '+ IVA (' + (tasaIVA * 100) + '%):', montoIVA.toFixed(2), '= Total:', totalConIVA.toFixed(2));
+        console.log('Total comisiones (IVA incluido):', totalComisiones.toFixed(2), '| Subtotal:', subtotalComisiones.toFixed(2), '| IVA (' + (tasaIVA * 100) + '%):', montoIVA.toFixed(2));
 
         const { data: partnerCompleto } = await supabase
           .from('partners_aliados')
@@ -212,7 +216,7 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
             dgi_enviada: false,
-            subtotal: totalComisiones,
+            subtotal: subtotalComisiones,
             total_iva: montoIVA,
             descuento: 0,
             total: totalConIVA,
@@ -238,12 +242,12 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           codigo: 'COMISION',
           descripcion: 'Comisiones por ventas - ' + partner.razon_social + ' (' + fechaInicio + ' a ' + fechaFin + ')',
           cantidad: comisiones.length,
-          precio_unitario: totalComisiones / comisiones.length,
+          precio_unitario: subtotalComisiones / comisiones.length,
           descuento_porcentaje: 0,
           descuento_monto: 0,
           tasa_iva: tasaIVA,
           monto_iva: montoIVA,
-          subtotal: totalComisiones,
+          subtotal: subtotalComisiones,
           total: totalConIVA,
         }];
 
@@ -283,6 +287,31 @@ async function procesarEmpresa(supabase: any, empresaId: string, forzar: boolean
           }
         } catch (asientoErr: any) {
           console.error('Error al invocar generacion de asiento:', asientoErr.message);
+        }
+
+        // Envío automático a DGI (asíncrono, no bloquea)
+        try {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const autoSendUrl = `${supabaseUrl}/functions/v1/auto-send-dgi`;
+
+          fetch(autoSendUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ facturaId: factura.id }),
+          }).then(async (response) => {
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('Error al invocar auto-send-dgi para factura', factura.numero_factura, errorText);
+            } else {
+              console.log('Auto-send DGI iniciado para factura', factura.numero_factura);
+            }
+          }).catch((dgiErr: any) => {
+            console.error('Error al invocar auto-send-dgi:', dgiErr.message);
+          });
+        } catch (dgiErr: any) {
+          console.error('Error al invocar auto-send-dgi:', dgiErr.message);
         }
 
         console.log('Factura', factura.numero_factura, 'creada: Subtotal:', totalComisiones.toFixed(2), '+ IVA:', montoIVA.toFixed(2), '= Total:', totalConIVA.toFixed(2));

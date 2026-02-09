@@ -188,22 +188,28 @@ export const tesoreriaSupabaseService = {
 
     if (error) throw error;
 
-    return {
-      id: data.id,
-      cuentaBancariaId: data.cuenta_bancaria_id,
-      tipoMovimiento: data.tipo_movimiento as any,
-      fecha: data.fecha,
-      monto: data.monto,
-      descripcion: data.descripcion,
-      referencia: data.referencia,
-      beneficiario: data.beneficiario,
-      categoria: data.categoria,
-      cuentaDestinoId: data.metadata?.cuenta_destino_id || null,
-      estadoConciliacion: data.estado_conciliacion || 'PENDIENTE',
-      documentoSoporte: data.documento_soporte,
-      empresaId: data.empresa_id,
-      creadoPor: data.creado_por,
-    };
+    if (this.shouldAutoGenerateAsiento(movimiento)) {
+      const { data: asientoData, error: asientoError } = await supabase.functions.invoke(
+        'generar-asiento-tesoreria',
+        { body: { movimientoTesoreriaId: data.id } }
+      );
+
+      if (asientoError || asientoData?.success === false) {
+        throw new Error(
+          asientoData?.message || asientoError?.message || 'No se pudo generar el asiento automático'
+        );
+      }
+    }
+
+    const { data: actualizado, error: fetchError } = await supabase
+      .from('movimientos_tesoreria')
+      .select('*')
+      .eq('id', data.id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    return this.mapMovimiento(actualizado);
   },
 
   async updateMovimiento(movimientoId: string, updates: Partial<MovimientoTesoreria>): Promise<void> {
@@ -220,6 +226,49 @@ export const tesoreriaSupabaseService = {
       .eq('id', movimientoId);
 
     if (error) throw error;
+  },
+
+  shouldAutoGenerateAsiento(movimiento: Omit<MovimientoTesoreria, 'id'>): boolean {
+    const categoria = movimiento.categoria || '';
+
+    const categoriasAuto = new Set([
+      'COBRO_CLIENTE',
+      'GANANCIA_MARKETPLACE',
+      'INGRESO_OTRO',
+      'PAGO_PROVEEDOR',
+      'PAGO_PARTNER',
+      'PAGO_IMPUESTO',
+      'PAGO_IVA',
+      'PAGO_DGI',
+      'COMISION_PASARELA',
+      'COMISION_MARKETPLACE',
+      'GASTO_OTRO'
+    ]);
+
+    if (movimiento.tipoMovimiento === 'TRANSFERENCIA' && movimiento.cuentaDestinoId) {
+      return true;
+    }
+
+    return categoriasAuto.has(categoria);
+  },
+
+  mapMovimiento(mov: any): MovimientoTesoreria {
+    return {
+      id: mov.id,
+      cuentaBancariaId: mov.cuenta_bancaria_id,
+      tipoMovimiento: mov.tipo_movimiento as any,
+      fecha: mov.fecha,
+      monto: mov.monto,
+      descripcion: mov.descripcion,
+      referencia: mov.referencia,
+      beneficiario: mov.beneficiario,
+      categoria: mov.categoria,
+      cuentaDestinoId: mov.metadata?.cuenta_destino_id || null,
+      estadoConciliacion: mov.estado_conciliacion || 'PENDIENTE',
+      documentoSoporte: mov.documento_soporte,
+      empresaId: mov.empresa_id,
+      creadoPor: mov.creado_por,
+    };
   },
 
   async solicitarEliminacionMovimiento(params: {

@@ -211,12 +211,13 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         // Comisión App neta (restando la parte de MP que absorbe la app)
         const comisionAppNetaSinIVA = totalComisionAppSinIVA - comisionMPApp;
 
-        // Lo que recibe el partner = Ventas sin IVA - Comisiones sin IVA
-        const subtotalAPagar = totalVentasSinIVA - comisionAppNetaSinIVA - comisionMPAliado;
+        // Lo que recibe el partner (IVA incluido en el total)
+        const totalAPagar = totalVentasSinIVA - comisionAppNetaSinIVA - comisionMPAliado;
 
-        // Agregar IVA al total a pagar
-        const ivaComisiones = subtotalAPagar * tasaIVA;
-        const totalAPagar = subtotalAPagar + ivaComisiones;
+        // Extraer IVA incluido del total
+        const factorIva = 1 + tasaIVA;
+        const subtotalAPagarSinIVA = totalAPagar / factorIva;
+        const ivaComisiones = totalAPagar - subtotalAPagarSinIVA;
 
         console.log(`💰 Cálculos:`);
         console.log(`   Total ventas base (sin IVA): $${totalVentasSinIVA.toFixed(2)}`);
@@ -225,9 +226,9 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
         console.log(`     · Parte App (${100 - divisionMPAliado}%): $${comisionMPApp.toFixed(2)} (se resta de comisión app)`);
         console.log(`     · Parte Aliado (${divisionMPAliado}%): $${comisionMPAliado.toFixed(2)}`);
         console.log(`   - Comisión App NETA (sin IVA): $${comisionAppNetaSinIVA.toFixed(2)}`);
-        console.log(`   = SUBTOTAL A PAGAR: $${subtotalAPagar.toFixed(2)}`);
-        console.log(`   + IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaComisiones.toFixed(2)}`);
-        console.log(`   = TOTAL A PAGAR AL ALIADO: $${totalAPagar.toFixed(2)}`);
+        console.log(`   = TOTAL A PAGAR (IVA incluido): $${totalAPagar.toFixed(2)}`);
+        console.log(`   · Subtotal sin IVA: $${subtotalAPagarSinIVA.toFixed(2)}`);
+        console.log(`   · IVA (${(tasaIVA * 100).toFixed(0)}%): $${ivaComisiones.toFixed(2)}`);
 
         const proveedorId = await crearActualizarProveedor(supabase, empresaId, partner, empresa.pais_id);
 
@@ -271,7 +272,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             fecha_emision: fechaEmision,
             fecha_vencimiento: fechaVencimiento,
             estado: 'pendiente',
-            subtotal: subtotalAPagar,
+            subtotal: subtotalAPagarSinIVA,
             total_iva: ivaComisiones,
             total: totalAPagar,
             moneda: 'UYU',
@@ -296,7 +297,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
                 comision_mp_app: comisionMPApp,
                 comision_mp_aliado: comisionMPAliado,
                 comision_app_neta: comisionAppNetaSinIVA,
-                subtotal: subtotalAPagar,
+                subtotal: subtotalAPagarSinIVA,
                 iva: ivaComisiones,
                 total: totalAPagar
               }
@@ -316,12 +317,12 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             numero_linea: 1,
             descripcion: `Comisiones por ventas - ${partner.razon_social} (${comisionesPartner.length} órdenes)`,
             cantidad: comisionesPartner.length,
-            precio_unitario: subtotalAPagar / comisionesPartner.length,
+            precio_unitario: subtotalAPagarSinIVA / comisionesPartner.length,
             descuento_porcentaje: 0,
             descuento_monto: 0,
             tasa_iva: tasaIVA * 100,
             monto_iva: ivaComisiones,
-            subtotal: subtotalAPagar,
+            subtotal: subtotalAPagarSinIVA,
             total: totalAPagar,
             metadata: {
               comision_mp_descontada: comisionMPAliado,
@@ -350,7 +351,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
           // ACTUALIZAR FACTURA EXISTENTE
           console.log(`📝 Actualizando factura existente: ${facturaExistente.numero}`);
 
-          const nuevoSubtotal = parseFloat(facturaExistente.monto_subtotal) + subtotalAPagar;
+          const nuevoSubtotal = parseFloat(facturaExistente.monto_subtotal) + subtotalAPagarSinIVA;
           const nuevoIVA = parseFloat(facturaExistente.monto_impuestos) + ivaComisiones;
           const nuevoTotal = parseFloat(facturaExistente.monto_total) + totalAPagar;
           const nuevoSaldo = parseFloat(facturaExistente.saldo_pendiente) + totalAPagar;
@@ -386,7 +387,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
               fecha_emision: fechaEmision,
               fecha_vencimiento: fechaVencimiento,
               descripcion: `Comisiones por ventas - ${partner.razon_social}`,
-              monto_subtotal: subtotalAPagar,
+              monto_subtotal: subtotalAPagarSinIVA,
               monto_impuestos: ivaComisiones,
               monto_total: totalAPagar,
               monto_pagado: 0,
@@ -511,7 +512,7 @@ async function procesarCuentasPorPagar(supabase: any, empresaId: string, partner
             empresa.pais_id,
             facturaCompra,
             partner,
-            totalAPagarSinIVA,
+            subtotalAPagarSinIVA,
             ivaComisiones,
             totalAPagar
           );

@@ -358,8 +358,10 @@ export const asientosSupabaseService = {
       return `${prefijo}-000001`;
     }
 
-    const ultimoNumero = parseInt(data.numero.split('-')[1]);
-    const siguienteNumero = (ultimoNumero + 1).toString().padStart(6, '0');
+    const match = data.numero.match(/(\d+)/g);
+    const ultimoNumero = match ? parseInt(match[match.length - 1], 10) : NaN;
+    const baseNumero = Number.isFinite(ultimoNumero) ? ultimoNumero : 0;
+    const siguienteNumero = (baseNumero + 1).toString().padStart(6, '0');
     return `${prefijo}-${siguienteNumero}`;
   },
 };

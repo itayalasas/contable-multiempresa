@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSesion } from '../../context/SesionContext';
+import { supabase } from '../../config/supabase';
+import { Download, Loader2 } from 'lucide-react';
 
 interface EventoAuditoria {
   id: string;
   fecha: string;
   usuario: string;
+  usuarioId: string;
   accion: string;
   modulo: string;
   detalles: string;
@@ -15,63 +18,143 @@ export default function Auditoria() {
   const { empresaActual } = useSesion();
   const [filtroModulo, setFiltroModulo] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
+  const [filtroUsuario, setFiltroUsuario] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [eventos, setEventos] = useState<EventoAuditoria[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [eventos] = useState<EventoAuditoria[]>([
-    {
-      id: '1',
-      fecha: new Date().toISOString(),
-      usuario: 'Pedro Ayala',
-      accion: 'Crear',
-      modulo: 'Facturas',
-      detalles: 'Creó factura A-00000123',
-      ip: '192.168.1.100',
-    },
-    {
-      id: '2',
-      fecha: new Date(Date.now() - 3600000).toISOString(),
-      usuario: 'Pedro Ayala',
-      accion: 'Editar',
-      modulo: 'Clientes',
-      detalles: 'Modificó cliente Juan Pérez',
-      ip: '192.168.1.100',
-    },
-    {
-      id: '3',
-      fecha: new Date(Date.now() - 7200000).toISOString(),
-      usuario: 'Pedro Ayala',
-      accion: 'Eliminar',
-      modulo: 'Asientos',
-      detalles: 'Eliminó asiento ASI-000045',
-      ip: '192.168.1.100',
-    },
-    {
-      id: '4',
-      fecha: new Date(Date.now() - 10800000).toISOString(),
-      usuario: 'Pedro Ayala',
-      accion: 'Enviar',
-      modulo: 'Facturas',
-      detalles: 'Envió factura A-00000122 a DGI',
-      ip: '192.168.1.100',
-    },
-    {
-      id: '5',
-      fecha: new Date(Date.now() - 14400000).toISOString(),
-      usuario: 'Pedro Ayala',
-      accion: 'Login',
-      modulo: 'Sistema',
-      detalles: 'Inició sesión en el sistema',
-      ip: '192.168.1.100',
-    },
-  ]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
-  const eventosFiltrados = eventos.filter((evento) => {
-    const cumpleFiltro = filtroModulo === 'todos' || evento.modulo === filtroModulo;
-    const cumpleBusqueda =
-      evento.usuario.toLowerCase().includes(busqueda.toLowerCase()) ||
-      evento.accion.toLowerCase().includes(busqueda.toLowerCase()) ||
-      evento.detalles.toLowerCase().includes(busqueda.toLowerCase());
-    return cumpleFiltro && cumpleBusqueda;
-  });
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroModulo, busqueda, filtroUsuario, fechaDesde, fechaHasta]);
+
+  const mapAccion = (accion: string) => {
+    const normal = accion?.toUpperCase?.() || accion;
+    const map: Record<string, string> = {
+      INSERT: 'Crear',
+      UPDATE: 'Editar',
+      DELETE: 'Eliminar',
+      SELECT: 'Ver',
+      LOGIN: 'Login'
+    };
+    return map[normal] || accion;
+  };
+
+  const fetchEventos = async (options?: { exportAll?: boolean }) => {
+    if (!empresaActual?.id) return;
+
+    setLoading(!options?.exportAll);
+    setError(null);
+
+    try {
+      let usuarioIds: string[] | null = null;
+      if (filtroUsuario.trim()) {
+        const { data: usuarios, error: usuariosError } = await supabase
+          .from('usuarios')
+          .select('id, nombre, email')
+          .or(`nombre.ilike.%${filtroUsuario.trim()}%,email.ilike.%${filtroUsuario.trim()}%`);
+
+        if (usuariosError) throw usuariosError;
+        usuarioIds = (usuarios || [])
+          .filter(u => u.nombre || u.email)
+          .map(u => u.id);
+
+        if (usuarioIds.length === 0) {
+          setEventos([]);
+          setTotalItems(0);
+          return;
+        }
+      }
+
+      let query = supabase
+        .from('auditoria')
+        .select('id, fecha_creacion, usuario_id, accion, modulo, descripcion, ip_address, usuarios:usuarios(nombre, email)', { count: 'exact' })
+        .eq('empresa_id', empresaActual.id);
+
+      if (filtroModulo !== 'todos') {
+        query = query.eq('modulo', filtroModulo);
+      }
+
+      if (fechaDesde) {
+        query = query.gte('fecha_creacion', `${fechaDesde}T00:00:00`);
+      }
+
+      if (fechaHasta) {
+        query = query.lte('fecha_creacion', `${fechaHasta}T23:59:59`);
+      }
+
+      if (busqueda.trim()) {
+        const term = busqueda.trim();
+        query = query.or(
+          `accion.ilike.%${term}%,modulo.ilike.%${term}%,descripcion.ilike.%${term}%,tabla.ilike.%${term}%,registro_id.ilike.%${term}%`
+        );
+      }
+
+      if (usuarioIds) {
+        query = query.in('usuario_id', usuarioIds);
+      }
+
+      query = query.order('fecha_creacion', { ascending: false });
+
+      if (!options?.exportAll) {
+        const from = (currentPage - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
+        query = query.range(from, to);
+      }
+
+      const { data, error: fetchError, count } = await query;
+      if (fetchError) throw fetchError;
+
+      const mapped = (data || []).map((row: any) => ({
+        id: row.id,
+        fecha: row.fecha_creacion,
+        usuario: row.usuarios?.nombre || row.usuario_id,
+        usuarioId: row.usuario_id,
+        accion: mapAccion(row.accion),
+        modulo: row.modulo || 'Sistema',
+        detalles: row.descripcion || '',
+        ip: row.ip_address || ''
+      }));
+
+      if (options?.exportAll) {
+        return { eventos: mapped, total: count || mapped.length };
+      }
+
+      setEventos(mapped);
+      setTotalItems(count || 0);
+    } catch (err: any) {
+      console.error('Error cargando auditoría:', err);
+      setError(err.message || 'No se pudo cargar la auditoría');
+      setEventos([]);
+      setTotalItems(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEventos();
+  }, [empresaActual?.id, filtroModulo, busqueda, filtroUsuario, fechaDesde, fechaHasta, currentPage, itemsPerPage]);
+
+  const eventosFiltrados = eventos;
+
+  const resumenPaginacion = totalItems === 0
+    ? 'Mostrando 0 a 0 de 0 eventos'
+    : `Mostrando ${(currentPage - 1) * itemsPerPage + 1} a ${Math.min(currentPage * itemsPerPage, totalItems)} de ${totalItems} eventos`;
+
+  const modulosDisponibles = useMemo(() => {
+    const base = new Set(['Sistema']);
+    eventos.forEach(e => base.add(e.modulo));
+    return Array.from(base).sort();
+  }, [eventos]);
 
   const getAccionColor = (accion: string) => {
     const colores: Record<string, string> = {
@@ -79,9 +162,54 @@ export default function Auditoria() {
       Editar: 'bg-blue-100 text-blue-700',
       Eliminar: 'bg-red-100 text-red-700',
       Enviar: 'bg-purple-100 text-purple-700',
+      Ver: 'bg-gray-100 text-gray-700',
       Login: 'bg-gray-100 text-gray-700',
     };
     return colores[accion] || 'bg-gray-100 text-gray-700';
+  };
+
+  const handleExportCsv = async () => {
+    if (!empresaActual?.id) return;
+
+    setExporting(true);
+    try {
+      const resultado = await fetchEventos({ exportAll: true });
+      const exportEventos = resultado?.eventos || [];
+
+      const headers = ['Fecha', 'Usuario', 'Acción', 'Módulo', 'Detalles', 'IP'];
+      const rows = exportEventos.map(evento => [
+        new Date(evento.fecha).toLocaleString(),
+        evento.usuario,
+        evento.accion,
+        evento.modulo,
+        evento.detalles,
+        evento.ip || ''
+      ]);
+
+      const escapeCell = (value: string) => {
+        const text = String(value ?? '');
+        if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+          return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+      };
+
+      const csvContent = [headers, ...rows]
+        .map(row => row.map(escapeCell).join(','))
+        .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `auditoria_${empresaActual.nombre}_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exportando CSV:', err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (!empresaActual) {
@@ -101,15 +229,20 @@ export default function Auditoria() {
             Registro completo de acciones realizadas por los usuarios
           </p>
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-          Exportar Log
+        <button
+          onClick={handleExportCsv}
+          disabled={exporting || loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+        >
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Exportar CSV
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="text-sm text-gray-600">Total Eventos</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{eventos.length}</div>
+          <div className="text-2xl font-bold text-gray-900 mt-1">{totalItems}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="text-sm text-gray-600">Creaciones</div>
@@ -150,16 +283,36 @@ export default function Auditoria() {
               />
             </div>
             <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Filtrar por usuario..."
+                value={filtroUsuario}
+                onChange={(e) => setFiltroUsuario(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <input
+                type="date"
+                value={fechaDesde}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <input
+                type="date"
+                value={fechaHasta}
+                onChange={(e) => setFechaHasta(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
               <select
                 value={filtroModulo}
                 onChange={(e) => setFiltroModulo(e.target.value)}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="todos">Todos los módulos</option>
-                <option value="Facturas">Facturas</option>
-                <option value="Clientes">Clientes</option>
-                <option value="Asientos">Asientos</option>
-                <option value="Sistema">Sistema</option>
+                {modulosDisponibles.map(modulo => (
+                  <option key={modulo} value={modulo}>
+                    {modulo}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -190,34 +343,90 @@ export default function Auditoria() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {eventosFiltrados.map((evento) => (
-                <tr key={evento.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(evento.fecha).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {evento.usuario}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getAccionColor(
-                        evento.accion
-                      )}`}
-                    >
-                      {evento.accion}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {evento.modulo}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{evento.detalles}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {evento.ip}
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                    Cargando auditoría...
                   </td>
                 </tr>
-              ))}
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-red-600">
+                    {error}
+                  </td>
+                </tr>
+              ) : eventosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    No hay eventos de auditoría con los filtros seleccionados.
+                  </td>
+                </tr>
+              ) : (
+                eventosFiltrados.map((evento) => (
+                  <tr key={evento.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(evento.fecha).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {evento.usuario}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getAccionColor(
+                          evento.accion
+                        )}`}
+                      >
+                        {evento.accion}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {evento.modulo}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{evento.detalles}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {evento.ip}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="text-sm text-gray-500">
+            {resumenPaginacion}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <span className="text-sm text-gray-600">Página {currentPage} de {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+            >
+              Siguiente
+            </button>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="ml-2 px-2 py-1 border border-gray-300 rounded-md text-sm"
+            >
+              <option value={10}>10 / pág</option>
+              <option value={20}>20 / pág</option>
+              <option value={50}>50 / pág</option>
+            </select>
+          </div>
         </div>
       </div>
 

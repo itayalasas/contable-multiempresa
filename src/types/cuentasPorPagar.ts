@@ -76,6 +76,7 @@ export interface PagoProveedor {
   numeroCuenta?: string;
   numeroOperacion?: string;
   cuentaBancariaId?: string;
+  generarAsientoAutomatico?: boolean;
 }
 
 export interface ResumenCuentasPorPagar {

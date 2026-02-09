@@ -17,6 +17,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
+    const isManual = !!body.manual;
 
     // Detectar si es una llamada manual o un trigger automático
     if (body.factura_id) {
@@ -34,6 +35,35 @@ Deno.serve(async (req: Request) => {
         throw new Error(`No se pudo obtener la factura: ${facturaError.message}`);
       }
 
+      const esFacturaComision = factura?.metadata?.tipo === 'factura_comisiones_partner'
+        || factura?.serie === 'COM'
+        || (typeof factura?.numero_factura === 'string' && factura.numero_factura.startsWith('COM-'));
+
+      if (esFacturaComision) {
+        await supabase
+          .from('facturas_venta')
+          .update({
+            asiento_generado: true,
+            asiento_contable_id: null,
+            asiento_error: null
+          })
+          .eq('id', factura.id);
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Factura de comisión omitida en contabilidad' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (isManual) {
+        await eliminarAsientosFactura(supabase, factura);
+      } else if (factura.asiento_contable_id || factura.asiento_generado) {
+        return new Response(
+          JSON.stringify({ success: true, message: 'La factura ya tiene asiento generado' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       await generarAsientoFacturaVenta(supabase, factura);
 
       return new Response(
@@ -46,7 +76,24 @@ Deno.serve(async (req: Request) => {
       console.log('🔄 [AsientoAutomatico] Procesando:', type, record.id);
 
       if (type === 'INSERT' && record.table === 'facturas_venta') {
-        await generarAsientoFacturaVenta(supabase, record);
+        const esFacturaComision = record?.metadata?.tipo === 'factura_comisiones_partner'
+          || record?.serie === 'COM'
+          || (typeof record?.numero_factura === 'string' && record.numero_factura.startsWith('COM-'));
+
+        if (esFacturaComision) {
+          await supabase
+            .from('facturas_venta')
+            .update({
+              asiento_generado: true,
+              asiento_contable_id: null,
+              asiento_error: null
+            })
+            .eq('id', record.id);
+        } else if (!record.asiento_contable_id && !record.asiento_generado) {
+          await generarAsientoFacturaVenta(supabase, record);
+        } else {
+          console.log('ℹ️ [AsientoAutomatico] La factura ya tiene asiento, se omite');
+        }
       }
 
       return new Response(
@@ -416,5 +463,45 @@ async function obtenerCuentaId(supabase: any, empresaId: string, codigo: string)
   } catch (error) {
     console.warn(`⚠️ Error buscando cuenta ${codigo}:`, error);
     return null;
+  }
+}
+
+async function eliminarAsientosFactura(supabase: any, factura: any) {
+  try {
+    const { data: asientos } = await supabase
+      .from('asientos_contables')
+      .select('id')
+      .eq('empresa_id', factura.empresa_id)
+      .eq('documento_soporte->>tipo', 'factura_venta')
+      .eq('documento_soporte->>id', factura.id);
+
+    if (!asientos || asientos.length === 0) {
+      return;
+    }
+
+    const ids = asientos.map((a: any) => a.id);
+
+    const { error: deleteError } = await supabase
+      .from('asientos_contables')
+      .delete()
+      .in('id', ids);
+
+    if (deleteError) {
+      console.warn('⚠️ [AsientoManual] Error eliminando asientos previos:', deleteError);
+      return;
+    }
+
+    await supabase
+      .from('facturas_venta')
+      .update({
+        asiento_contable_id: null,
+        asiento_generado: false,
+        asiento_error: null
+      })
+      .eq('id', factura.id);
+
+    console.log(`🧹 [AsientoManual] Asientos previos eliminados: ${ids.length}`);
+  } catch (error) {
+    console.warn('⚠️ [AsientoManual] Error limpiando asientos previos:', error);
   }
 }

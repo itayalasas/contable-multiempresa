@@ -68,6 +68,10 @@ export const useTesoreriaFirebase = (empresaId: string | undefined) => {
     const egresosDelMes = movimientosDelMes
       .filter(m => m.tipo === 'EGRESO')
       .reduce((sum, m) => sum + m.monto, 0);
+
+    const comisionesPasarelaDelMes = movimientosDelMes
+      .filter(m => m.categoria === 'COMISION_PASARELA')
+      .reduce((sum, m) => sum + m.monto, 0);
     
     // Contar movimientos pendientes
     const movimientosPendientes = movimientosData.filter(m => m.estado === 'PENDIENTE').length;
@@ -92,6 +96,7 @@ export const useTesoreriaFirebase = (empresaId: string | undefined) => {
       saldoDisponible,
       ingresosDelMes,
       egresosDelMes,
+      comisionesPasarelaDelMes,
       movimientosPendientes,
       saldoPorMoneda: Array.from(saldoPorMoneda.entries()).map(([moneda, saldo]) => ({ moneda, saldo })),
       saldoPorTipoCuenta: Array.from(saldoPorTipoCuenta.entries()).map(([tipo, saldo]) => ({ tipo, saldo }))

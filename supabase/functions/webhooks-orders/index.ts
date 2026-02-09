@@ -574,18 +574,19 @@ async function handleOrder(
 
         const movimientos = [];
 
-        // 1. INGRESO del cliente (monto total de la factura)
+        // 1. INGRESO del cliente (monto neto después de comisión MP)
         movimientos.push({
           empresa_id: payload.empresa_id,
           cuenta_bancaria_id: cuentaBancariaMLId,
           tipo_movimiento: 'INGRESO',
           fecha: new Date().toISOString().split('T')[0],
-          monto: total.toFixed(2),
-          descripcion: `Cobro orden ${payload.order.order_number || payload.order.order_id} - ${payload.customer.name}`,
+          monto: ingresoNeto.toFixed(2),
+          descripcion: `Cobro orden ${payload.order.order_number || payload.order.order_id} - ${payload.customer.name} (neto)`,
           referencia: payload.order.order_id,
           beneficiario: payload.customer.name,
           categoria: 'COBRO_CLIENTE',
           asiento_contable_id: null,
+          estado_conciliacion: 'CONCILIADO',
           documento_origen_tipo: 'factura_venta',
           documento_origen_id: factura.id,
           metadata: {
@@ -594,17 +595,20 @@ async function handleOrder(
             customer_id: payload.customer.customer_id,
             origen: 'marketplace',
             automatico: true,
+            no_requiere_asiento: true,
             tiene_comision_mp: comisionMPMonto > 0,
+            monto_bruto: total,
             comision_mp: comisionMPMonto,
+            ingreso_neto: ingresoNeto,
           },
         });
 
-        // 2. EGRESO por comisión de MercadoPago (si existe)
+        // 2. TRANSFERENCIA por comisión de MercadoPago (si existe)
         if (comisionMPMonto > 0) {
           movimientos.push({
             empresa_id: payload.empresa_id,
             cuenta_bancaria_id: cuentaBancariaMLId,
-            tipo_movimiento: 'EGRESO',
+            tipo_movimiento: 'TRANSFERENCIA',
             fecha: new Date().toISOString().split('T')[0],
             monto: comisionMPMonto.toFixed(2),
             descripcion: `Comisión Mercado Pago ${comisionMPPorcentaje}% - Orden ${payload.order.order_number || payload.order.order_id}`,
@@ -612,6 +616,7 @@ async function handleOrder(
             beneficiario: 'Mercado Pago',
             categoria: 'COMISION_PASARELA',
             asiento_contable_id: null,
+            estado_conciliacion: 'CONCILIADO',
             documento_origen_tipo: 'comision_mercadopago',
             documento_origen_id: factura.id,
             metadata: {
@@ -620,35 +625,11 @@ async function handleOrder(
               porcentaje: comisionMPPorcentaje,
               tipo: 'mercadopago',
               automatico: true,
+              no_requiere_asiento: true,
+              cuenta_destino_id: cuentaBancariaMLId,
             },
           });
-          console.log(`💳 [Order] Registrando egreso comisión MP: $${comisionMPMonto.toFixed(2)}`);
-        }
-
-        // 3. INGRESO por comisiones del marketplace (si existen)
-        if (totalComisiones > 0) {
-          movimientos.push({
-            empresa_id: payload.empresa_id,
-            cuenta_bancaria_id: cuentaBancariaMLId,
-            tipo_movimiento: 'INGRESO',
-            fecha: new Date().toISOString().split('T')[0],
-            monto: totalComisiones.toFixed(2),
-            descripcion: `Comisiones marketplace - Orden ${payload.order.order_number || payload.order.order_id}`,
-            referencia: `COM-${payload.order.order_id}`,
-            beneficiario: 'Comisiones Marketplace',
-            categoria: 'INGRESO_COMISION',
-            asiento_contable_id: null,
-            documento_origen_tipo: 'comision_marketplace',
-            documento_origen_id: factura.id,
-            metadata: {
-              order_id: payload.order.order_id,
-              factura_id: factura.id,
-              comision_app: totalComisionApp,
-              comision_mp_aliado: totalComisionMPAliado,
-              automatico: true,
-            },
-          });
-          console.log(`💰 [Order] Registrando ingreso comisiones marketplace: $${totalComisiones.toFixed(2)}`);
+          console.log(`💳 [Order] Registrando comisión MP como transferencia: $${comisionMPMonto.toFixed(2)}`);
         }
 
         // Insertar todos los movimientos
@@ -662,10 +643,15 @@ async function handleOrder(
         } else {
           console.log(`✅ [Order] ${movimientosData.length} movimiento(s) registrado(s) en tesorería`);
 
-          // Generar asientos contables de los movimientos
+          // Generar asientos contables de los movimientos (solo los que lo requieren)
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           for (const mov of movimientosData) {
             try {
+              const noRequiereAsiento = mov.metadata?.no_requiere_asiento === true || mov.metadata?.no_requiere_asiento === 'true';
+              if (mov.tipo_movimiento === 'TRANSFERENCIA' || noRequiereAsiento) {
+                continue;
+              }
+
               await fetch(`${supabaseUrl}/functions/v1/generar-asiento-tesoreria`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

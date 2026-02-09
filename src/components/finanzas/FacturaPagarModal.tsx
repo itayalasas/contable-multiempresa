@@ -201,7 +201,17 @@ export const FacturaPagarModal: React.FC<FacturaPagarModalProps> = ({
     }
   };
 
-  const { subtotal, impuestos, total } = calcularTotales();
+  const { subtotal, impuestos, total } = useMemo(() => {
+    if (mode === 'view' && factura) {
+      return {
+        subtotal: factura.montoSubtotal ?? 0,
+        impuestos: factura.montoImpuestos ?? 0,
+        total: factura.montoTotal ?? 0
+      };
+    }
+
+    return calcularTotales();
+  }, [mode, factura, items]);
 
   if (!isOpen) return null;
 

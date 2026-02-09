@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSesion } from '../../context/SesionContext';
-import { crearFactura, enviarFacturaDGI, type CrearFacturaInput, type FacturaVenta } from '../../services/supabase/facturas';
+import { crearFactura, obtenerFacturaPorId, actualizarFacturaConItems, type CrearFacturaInput, type FacturaVenta } from '../../services/supabase/facturas';
 import { obtenerClientes, type Cliente } from '../../services/supabase/clientes';
+import { SearchableSelect } from '../common/SearchableSelect';
 
 interface FacturaModalProps {
   factura: FacturaVenta | null;
@@ -21,6 +22,8 @@ interface ItemFactura {
 export default function FacturaModal({ factura, onClose, onSuccess }: FacturaModalProps) {
   const { empresaActual } = useSesion();
   const [loading, setLoading] = useState(false);
+  const [cargandoFactura, setCargandoFactura] = useState(false);
+  const esBorrador = !factura || factura.estado === 'borrador';
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteId, setClienteId] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState('e-ticket');
@@ -44,6 +47,48 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
       cargarClientes();
     }
   }, [empresaActual]);
+
+  useEffect(() => {
+    const cargarFactura = async () => {
+      if (!factura?.id) return;
+      setCargandoFactura(true);
+      try {
+        const detalle = await obtenerFacturaPorId(factura.id);
+        setClienteId(detalle.cliente_id);
+        setTipoDocumento(detalle.tipo_documento || 'e-ticket');
+        setFechaEmision(detalle.fecha_emision || new Date().toISOString().split('T')[0]);
+        setFechaVencimiento(detalle.fecha_vencimiento || '');
+        setMoneda(detalle.moneda || 'UYU');
+        setObservaciones(detalle.observaciones || '');
+
+        const itemsDetalle = (detalle.items || []).map((item) => ({
+          id: item.id,
+          descripcion: item.descripcion,
+          cantidad: Number(item.cantidad),
+          precio_unitario: Number(item.precio_unitario),
+          descuento_porcentaje: Number(item.descuento_porcentaje || 0),
+          tasa_iva: Number(item.tasa_iva ?? 0.22),
+        }));
+
+        setItems(itemsDetalle.length > 0 ? itemsDetalle : [
+          {
+            id: Math.random().toString(),
+            descripcion: '',
+            cantidad: 1,
+            precio_unitario: 0,
+            descuento_porcentaje: 0,
+            tasa_iva: 0.22,
+          },
+        ]);
+      } catch (error) {
+        console.error('Error cargando factura:', error);
+      } finally {
+        setCargandoFactura(false);
+      }
+    };
+
+    cargarFactura();
+  }, [factura?.id]);
 
   const cargarClientes = async () => {
     if (!empresaActual) return;
@@ -136,6 +181,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
         fecha_vencimiento: fechaVencimiento || undefined,
         moneda,
         observaciones,
+        estado: 'borrador',
         items: items.map((item) => ({
           descripcion: item.descripcion,
           cantidad: item.cantidad,
@@ -145,7 +191,11 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
         })),
       };
 
-      await crearFactura(input);
+      if (factura?.id) {
+        await actualizarFacturaConItems(factura.id, input);
+      } else {
+        await crearFactura(input);
+      }
       onSuccess();
     } catch (error: any) {
       alert(`Error: ${error.message}`);
@@ -160,7 +210,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900">
-              {factura ? 'Editar Factura' : 'Nueva Factura'}
+              {factura ? (esBorrador ? 'Editar Prefactura' : 'Editar Factura') : 'Nueva Prefactura'}
             </h2>
             <button
               onClick={onClose}
@@ -179,41 +229,34 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {cargandoFactura && (
+            <div className="text-sm text-gray-500">Cargando datos de la prefactura...</div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cliente *
-              </label>
-              <select
-                value={clienteId}
-                onChange={(e) => setClienteId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="">Seleccione un cliente</option>
-                {clientes.map((cliente) => (
-                  <option key={cliente.id} value={cliente.id}>
-                    {cliente.razon_social} - {cliente.numero_documento}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableSelect
+              label="Cliente"
+              required
+              options={clientes.map((cliente) => ({
+                value: cliente.id,
+                label: `${cliente.razon_social} - ${cliente.numero_documento}`
+              }))}
+              value={clienteId}
+              onChange={setClienteId}
+              placeholder="Buscar cliente..."
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tipo de Documento *
-              </label>
-              <select
-                value={tipoDocumento}
-                onChange={(e) => setTipoDocumento(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="e-ticket">e-Ticket</option>
-                <option value="e-factura">e-Factura</option>
-                <option value="factura_exportacion">Factura Exportación</option>
-              </select>
-            </div>
+            <SearchableSelect
+              label="Tipo de Documento"
+              required
+              options={[
+                { value: 'e-ticket', label: 'e-Ticket' },
+                { value: 'e-factura', label: 'e-Factura' },
+                { value: 'factura_exportacion', label: 'Factura Exportación' },
+              ]}
+              value={tipoDocumento}
+              onChange={setTipoDocumento}
+              placeholder="Buscar tipo de documento..."
+            />
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -240,19 +283,18 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Moneda *</label>
-              <select
-                value={moneda}
-                onChange={(e) => setMoneda(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="UYU">Pesos Uruguayos (UYU)</option>
-                <option value="USD">Dólares (USD)</option>
-                <option value="EUR">Euros (EUR)</option>
-              </select>
-            </div>
+            <SearchableSelect
+              label="Moneda"
+              required
+              options={[
+                { value: 'UYU', label: 'Pesos Uruguayos (UYU)' },
+                { value: 'USD', label: 'Dólares (USD)' },
+                { value: 'EUR', label: 'Euros (EUR)' },
+              ]}
+              value={moneda}
+              onChange={setMoneda}
+              placeholder="Buscar moneda..."
+            />
           </div>
 
           <div>
@@ -425,10 +467,10 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || cargandoFactura}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Guardando...' : 'Crear Factura'}
+              {loading ? 'Guardando...' : factura ? 'Guardar cambios' : 'Guardar Prefactura'}
             </button>
           </div>
         </form>

@@ -61,6 +61,16 @@ interface CuentaBancariaDescuadrada {
   diferencia: number;
 }
 
+interface MovimientoTesoreriaSinAsiento {
+  id: string;
+  fecha: string;
+  descripcion: string;
+  monto: number;
+  tipo_movimiento: string;
+  referencia?: string | null;
+  cuenta_nombre?: string | null;
+}
+
 interface DetallesErrores {
   asientosDescuadrados: AsientoDescuadrado[];
   asientosBorrador: Array<{ id: string; numero: string; fecha: string; descripcion: string }>;
@@ -71,6 +81,7 @@ interface DetallesErrores {
   comisionesFacturadasSinCuentaPorPagar: ComisionPendiente[];
   comisionesFacturadasSinCobrar: ComisionPendiente[];
   cuentasBancariasDescuadradas: CuentaBancariaDescuadrada[];
+  movimientosTesoreriaSinAsiento: MovimientoTesoreriaSinAsiento[];
 }
 
 export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErroresCierreProps) {
@@ -352,6 +363,41 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         console.warn('Error validando tesorería:', error);
       }
 
+      // 7. Movimientos de tesorería sin asiento contable
+      let movimientosTesoreriaSinAsiento: MovimientoTesoreriaSinAsiento[] = [];
+      try {
+        const { data: movimientosSinAsiento } = await supabase
+          .from('movimientos_tesoreria')
+          .select(`
+            id,
+            fecha,
+            descripcion,
+            monto,
+            tipo_movimiento,
+            referencia,
+            cuenta_bancaria_id,
+            cuentas_bancarias(nombre)
+          `)
+          .eq('empresa_id', empresaId)
+          .eq('eliminado', false)
+          .gte('fecha', periodo.fecha_inicio)
+          .lte('fecha', periodo.fecha_fin)
+          .is('asiento_contable_id', null)
+          .order('fecha', { ascending: false });
+
+        movimientosTesoreriaSinAsiento = movimientosSinAsiento?.map((m: any) => ({
+          id: m.id,
+          fecha: m.fecha,
+          descripcion: m.descripcion || 'Sin descripción',
+          monto: parseFloat(m.monto || '0'),
+          tipo_movimiento: m.tipo_movimiento || 'N/A',
+          referencia: m.referencia,
+          cuenta_nombre: m.cuentas_bancarias?.nombre || 'Cuenta no encontrada'
+        })) || [];
+      } catch (error) {
+        console.warn('Error cargando movimientos de tesorería sin asiento:', error);
+      }
+
       const detallesData = {
         asientosDescuadrados,
         asientosBorrador,
@@ -361,7 +407,8 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
         comisionesPendientes,
         comisionesFacturadasSinCuentaPorPagar,
         comisionesFacturadasSinCobrar,
-        cuentasBancariasDescuadradas
+        cuentasBancariasDescuadradas,
+        movimientosTesoreriaSinAsiento
       };
 
       setDetalles(detallesData);
@@ -377,6 +424,7 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
       if (comisionesFacturadasSinCuentaPorPagar.length > 0) seccionesConErrores.add('comisiones-facturadas');
       if (comisionesFacturadasSinCobrar.length > 0) seccionesConErrores.add('comisiones-sin-cobrar');
       if (cuentasBancariasDescuadradas.length > 0) seccionesConErrores.add('cuentas-descuadradas');
+      if (movimientosTesoreriaSinAsiento.length > 0) seccionesConErrores.add('tesoreria-sin-asiento');
       setExpandedSections(seccionesConErrores);
     } catch (error) {
       console.error('Error cargando detalles:', error);
@@ -502,7 +550,8 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
     detalles.comisionesPendientes.length +
     detalles.comisionesFacturadasSinCuentaPorPagar.length +
     detalles.comisionesFacturadasSinCobrar.length +
-    detalles.cuentasBancariasDescuadradas.length;
+    detalles.cuentasBancariasDescuadradas.length +
+    detalles.movimientosTesoreriaSinAsiento.length;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
@@ -998,6 +1047,61 @@ export function DetalleErroresCierre({ periodo, empresaId, onClose }: DetalleErr
                         Ver Tesorería
                         <ExternalLink className="h-3 w-3" />
                       </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Movimientos de Tesorería Sin Asiento */}
+          {detalles.movimientosTesoreriaSinAsiento.length > 0 && (
+            <div className="border border-red-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('tesoreria-sin-asiento')}
+                className="w-full p-4 bg-red-50 flex items-center justify-between hover:bg-red-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <span className="font-semibold text-red-900">
+                    Movimientos de Tesorería Sin Asiento ({detalles.movimientosTesoreriaSinAsiento.length})
+                  </span>
+                </div>
+                {expandedSections.has('tesoreria-sin-asiento') ? (
+                  <ChevronDown className="h-5 w-5 text-red-600" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-red-600" />
+                )}
+              </button>
+              {expandedSections.has('tesoreria-sin-asiento') && (
+                <div className="p-4 space-y-2">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Acción requerida:</strong> Estos movimientos no tienen asiento contable. Revísalos en Tesorería y genera/ajusta su asiento.
+                    </p>
+                  </div>
+                  {detalles.movimientosTesoreriaSinAsiento.map((mov) => (
+                    <div key={mov.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 transition-colors">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{mov.descripcion}</div>
+                        <div className="text-sm text-gray-600">Cuenta: {mov.cuenta_nombre}</div>
+                        <div className="text-sm text-gray-600">Fecha: {new Date(mov.fecha).toLocaleDateString()}</div>
+                        {mov.referencia && (
+                          <div className="text-xs text-gray-500 mt-1">Ref: {mov.referencia}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-sm font-medium ${mov.tipo_movimiento === 'INGRESO' ? 'text-green-600' : mov.tipo_movimiento === 'EGRESO' ? 'text-red-600' : 'text-blue-600'}`}>
+                          ${mov.monto.toFixed(2)}
+                        </span>
+                        <button
+                          onClick={() => navegarA('/finanzas/tesoreria')}
+                          className="ml-2 flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                        >
+                          Ver Tesorería
+                          <ExternalLink className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

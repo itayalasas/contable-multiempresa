@@ -30,19 +30,24 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  let supabase: any;
+  let facturaId: string | null = null;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { facturaId } = await req.json();
+    const body = await req.json();
+    facturaId = body?.facturaId || null;
+    const { facturaId: facturaIdLocal } = body;
 
-    console.log('🚀 [AutoSendDGI] Procesando factura:', facturaId);
+    console.log('🚀 [AutoSendDGI] Procesando factura:', facturaIdLocal);
 
     const { data: factura, error: facturaError } = await supabase
       .from('facturas_venta')
       .select('*')
-      .eq('id', facturaId)
+      .eq('id', facturaIdLocal)
       .single();
 
     if (facturaError || !factura) {
@@ -74,7 +79,7 @@ Deno.serve(async (req: Request) => {
     const { data: items, error: itemsError } = await supabase
       .from('facturas_venta_items')
       .select('*')
-      .eq('factura_id', facturaId)
+      .eq('factura_id', facturaIdLocal)
       .order('numero_linea', { ascending: true });
 
     if (itemsError || !items || items.length === 0) {
@@ -199,7 +204,7 @@ Deno.serve(async (req: Request) => {
     const { error: updateError } = await supabase
       .from('facturas_venta')
       .update(updateData)
-      .eq('id', facturaId);
+      .eq('id', facturaIdLocal);
 
     if (updateError) {
       throw updateError;
@@ -223,7 +228,7 @@ Deno.serve(async (req: Request) => {
           ciudad
         )
       `)
-      .eq('factura_venta_id', facturaId)
+      .eq('factura_venta_id', facturaIdLocal)
       .limit(1)
       .maybeSingle();
 
@@ -267,12 +272,32 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error: any) {
     console.error('❌ [AutoSendDGI] Error:', error.message);
+    if (supabase && facturaId) {
+      await registrarErrorDGI(supabase, facturaId, error);
+    }
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
+
+async function registrarErrorDGI(supabase: any, facturaId: string, error: any) {
+  try {
+    await supabase
+      .from('facturas_venta')
+      .update({
+        dgi_response: {
+          error: error?.message || 'Error desconocido',
+          timestamp: new Date().toISOString(),
+        },
+        dgi_enviada: false,
+      })
+      .eq('id', facturaId);
+  } catch (updateError: any) {
+    console.warn('⚠️ [AutoSendDGI] No se pudo registrar error en factura:', updateError?.message || updateError);
+  }
+}
 
 function generarJSONCFE(factura: any, items: any[], cliente: any, config: any, tipoDocumento: string, paisCodigo: string, empresa: any): any {
   const numeroFactura = factura.numero_factura || '';

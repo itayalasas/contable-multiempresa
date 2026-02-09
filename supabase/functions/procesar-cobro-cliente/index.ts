@@ -85,34 +85,25 @@ Deno.serve(async (req: Request) => {
 
     console.log(`✅ Factura actualizada: Estado=${nuevoEstado}, Pagado=${totalPagado}/${total}`);
 
-    // Obtener comisiones del marketplace asociadas a esta factura
-    const { data: comisiones } = await supabase
-      .from('comisiones_partners')
-      .select('comision_app, comision_mercadopago_aliado')
-      .eq('factura_venta_comision_id', factura_id);
-
-    const totalComisionApp = comisiones?.reduce((sum, c) => sum + parseFloat(c.comision_app || 0), 0) || 0;
-    const totalComisionMP = comisiones?.reduce((sum, c) => sum + parseFloat(c.comision_mercadopago_aliado || 0), 0) || 0;
-    const totalComisiones = totalComisionApp + totalComisionMP;
-
-    if (totalComisiones > 0) {
-      console.log(`💰 [Comisiones] Esta factura tiene $${totalComisiones.toFixed(2)} en comisiones marketplace`);
-    }
-
     // 5. Generar asiento contable (si está configurado)
+    const generarAsientoAutomatico = pago?.generarAsientoAutomatico !== false;
     let asientoId = null;
     let mensajeAsiento = '';
-    try {
-      asientoId = await generarAsientoCobro(supabase, factura, pago, pagoData.id, totalComisiones);
-      mensajeAsiento = 'con asiento contable';
-    } catch (asientoError) {
-      console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
-      mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+    if (generarAsientoAutomatico) {
+      try {
+        asientoId = await generarAsientoCobro(supabase, factura, pago, pagoData.id);
+        mensajeAsiento = 'con asiento contable';
+      } catch (asientoError) {
+        console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
+        mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+      }
+    } else {
+      mensajeAsiento = 'sin asiento (desactivado)';
     }
 
     // 6. Registrar movimiento en tesorería (actualiza saldo automáticamente)
     try {
-      await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId, totalComisiones);
+      await registrarMovimientoTesoreria(supabase, factura, pago, pagoData.id, asientoId);
     } catch (tesoreriaError) {
       console.warn('⚠️ No se pudo registrar movimiento de tesorería:', tesoreriaError.message);
     }
@@ -137,7 +128,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoId: string, totalComisiones: number = 0) {
+async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoId: string) {
   try {
     console.log('📝 [AsientoCobro] Generando asiento para cobro...');
 
@@ -152,29 +143,44 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
       throw new Error('Empresa no encontrada');
     }
 
-    // Determinar la cuenta de destino según el tipo de pago
+    // Determinar la cuenta de destino según la cuenta bancaria seleccionada
+    let cuentaDestinoId: string | null = null;
     let cuentaDestinoCodigo = '111101'; // Efectivo/Caja por defecto
     let nombreCuentaDestino = 'Caja - Efectivo';
 
-    if (pago.tipoPago === 'TRANSFERENCIA') {
-      cuentaDestinoCodigo = '112101'; // Bancos - Transferencias
-      nombreCuentaDestino = 'Bancos - Transferencias';
-    } else if (pago.tipoPago === 'CHEQUE') {
-      cuentaDestinoCodigo = '112102'; // Bancos - Cheques
-      nombreCuentaDestino = 'Bancos - Cheques';
-    } else if (pago.tipoPago === 'TARJETA_CREDITO') {
-      cuentaDestinoCodigo = '113101'; // Tarjetas de Crédito
-      nombreCuentaDestino = 'Tarjetas de Crédito';
+    if (pago.cuentaBancariaId) {
+      const { data: cuentaBancaria } = await supabase
+        .from('cuentas_bancarias')
+        .select('cuenta_contable_id, nombre')
+        .eq('id', pago.cuentaBancariaId)
+        .maybeSingle();
+
+      if (cuentaBancaria?.cuenta_contable_id) {
+        cuentaDestinoId = cuentaBancaria.cuenta_contable_id;
+        nombreCuentaDestino = cuentaBancaria.nombre || nombreCuentaDestino;
+      }
     }
 
-    // Obtener IDs de cuentas
-    const cuentaDestinoId = await obtenerCuentaId(supabase, factura.empresa_id, cuentaDestinoCodigo);
-    const cuentaCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '121201'); // Cuentas por Cobrar - Clientes
+    if (!cuentaDestinoId) {
+      if (pago.tipoPago === 'TRANSFERENCIA') {
+        cuentaDestinoCodigo = '112101'; // Bancos - Transferencias
+        nombreCuentaDestino = 'Bancos - Transferencias';
+      } else if (pago.tipoPago === 'CHEQUE') {
+        cuentaDestinoCodigo = '112102'; // Bancos - Cheques
+        nombreCuentaDestino = 'Bancos - Cheques';
+      } else if (pago.tipoPago === 'TARJETA_CREDITO') {
+        cuentaDestinoCodigo = '113101'; // Tarjetas de Crédito
+        nombreCuentaDestino = 'Tarjetas de Crédito';
+      }
+
+      cuentaDestinoId = await obtenerCuentaId(supabase, factura.empresa_id, cuentaDestinoCodigo);
+    }
+    const cuentaCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '1212'); // Cuentas por Cobrar
 
     if (!cuentaDestinoId || !cuentaCobrarId) {
       const cuentasFaltantes = [];
       if (!cuentaDestinoId) cuentasFaltantes.push(`${cuentaDestinoCodigo} (${pago.tipoPago})`);
-      if (!cuentaCobrarId) cuentasFaltantes.push('121201 (Cuentas por Cobrar - Clientes)');
+      if (!cuentaCobrarId) cuentasFaltantes.push('1212 (Cuentas por Cobrar)');
 
       throw new Error(`Faltan cuentas en el plan de cuentas: ${cuentasFaltantes.join(', ')}`);
     }
@@ -248,36 +254,11 @@ async function generarAsientoCobro(supabase: any, factura: any, pago: any, pagoI
       }
     }
 
-    // COBRO DE COMISIONES MARKETPLACE (si hay comisiones de partners)
-    if (totalComisiones > 0) {
-      const cuentaComisionesCobrarId = await obtenerCuentaId(supabase, factura.empresa_id, '1213');
-      if (cuentaComisionesCobrarId) {
-        // DEBE: Banco (ya incluido arriba con el ingreso neto + comisiones)
-        // El banco recibe: ingresoNeto + comisiones totales
-
-        // Ajustar el débito del banco para incluir las comisiones
-        movimientos[0].debito = (comisionMP > 0 ? ingresoNeto : monto) + totalComisiones;
-
-        // HABER: Comisiones por Cobrar - Marketplace (se reduce la cuenta por cobrar)
-        movimientos.push({
-          asiento_id: asiento.id,
-          cuenta_id: cuentaComisionesCobrarId,
-          cuenta: '1213 - Comisiones por Cobrar - Marketplace',
-          debito: 0,
-          credito: totalComisiones,
-          descripcion: `Cobro comisiones marketplace - Factura ${factura.numero_factura}`,
-        });
-        console.log(`💰 [ComisionesMarketplace] Registrando cobro: $${totalComisiones.toFixed(2)}`);
-      } else {
-        console.warn('⚠️ No se encontró cuenta 1213 para comisiones por cobrar');
-      }
-    }
-
     // HABER: Cuentas por Cobrar (se reduce por el monto total de la factura)
     movimientos.push({
       asiento_id: asiento.id,
       cuenta_id: cuentaCobrarId,
-      cuenta: '121201 - Cuentas por Cobrar - Clientes',
+      cuenta: '1212 - Cuentas por Cobrar',
       debito: 0,
       credito: monto,
       descripcion: `Cobro ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
@@ -317,8 +298,7 @@ async function registrarMovimientoTesoreria(
   factura: any,
   pago: any,
   pagoId: string,
-  asientoId: string | null,
-  totalComisiones: number = 0
+  asientoId: string | null
 ) {
   try {
     console.log('💰 [Tesorería] Registrando movimiento bancario...');
@@ -347,25 +327,53 @@ async function registrarMovimientoTesoreria(
     console.log('✅ Usando cuenta bancaria:', cuenta.nombre);
 
     const comisionMP = parseFloat(factura.comision_mp_monto || 0);
-    const ingresoNeto = parseFloat(factura.ingreso_neto || pago.monto);
     const montoTotal = parseFloat(pago.monto);
+    const ingresoNeto = comisionMP > 0 ? (montoTotal - comisionMP) : parseFloat(factura.ingreso_neto || montoTotal);
+    const estadoConciliacion = asientoId ? 'CONTABILIZADO' : 'CONCILIADO';
+    const noRequiereAsiento = !asientoId;
+    const esFacturaComision = factura?.metadata?.tipo === 'factura_comisiones_partner'
+      || factura?.serie === 'COM'
+      || (typeof factura?.numero_factura === 'string' && factura.numero_factura.startsWith('COM-'));
 
     // Si hay comisión MP, registrar dos movimientos para visibilidad
     const movimientos = [];
 
-    if (comisionMP > 0) {
-      // 1. INGRESO bruto (lo que el cliente pagó)
+    if (esFacturaComision) {
       movimientos.push({
         empresa_id: factura.empresa_id,
         cuenta_bancaria_id: cuentaBancariaId,
         tipo_movimiento: 'INGRESO',
         fecha: pago.fechaPago,
         monto: montoTotal,
-        descripcion: `Cobro factura ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
+        descripcion: `Ganancia marketplace ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'}`,
+        referencia: pago.referencia || factura.numero_factura,
+        beneficiario: factura.cliente?.razon_social || 'Cliente',
+        categoria: 'GANANCIA_MARKETPLACE',
+        asiento_contable_id: asientoId,
+        estado_conciliacion: estadoConciliacion,
+        documento_origen_tipo: 'pago_cliente',
+        documento_origen_id: pagoId,
+        metadata: {
+          tipo_pago: pago.tipoPago,
+          factura_id: factura.id,
+          origen_marketplace: true,
+          no_requiere_asiento: noRequiereAsiento,
+        },
+      });
+    } else if (comisionMP > 0) {
+      // 1. INGRESO neto (después de comisión MP)
+      movimientos.push({
+        empresa_id: factura.empresa_id,
+        cuenta_bancaria_id: cuentaBancariaId,
+        tipo_movimiento: 'INGRESO',
+        fecha: pago.fechaPago,
+        monto: ingresoNeto,
+        descripcion: `Cobro factura ${factura.numero_factura} - ${factura.cliente?.razon_social || 'Cliente'} (neto)`,
         referencia: pago.referencia || factura.numero_factura,
         beneficiario: factura.cliente?.razon_social || 'Cliente',
         categoria: 'COBRO_CLIENTE',
         asiento_contable_id: asientoId,
+        estado_conciliacion: estadoConciliacion,
         documento_origen_tipo: 'pago_cliente',
         documento_origen_id: pagoId,
         metadata: {
@@ -373,15 +381,17 @@ async function registrarMovimientoTesoreria(
           factura_id: factura.id,
           tiene_comision_mp: true,
           comision_mp: comisionMP,
+          monto_bruto: montoTotal,
           ingreso_neto: ingresoNeto,
+          no_requiere_asiento: noRequiereAsiento,
         },
       });
 
-      // 2. EGRESO por comisión de Mercado Pago
+      // 2. TRANSFERENCIA por comisión de Mercado Pago
       movimientos.push({
         empresa_id: factura.empresa_id,
         cuenta_bancaria_id: cuentaBancariaId,
-        tipo_movimiento: 'EGRESO',
+        tipo_movimiento: 'TRANSFERENCIA',
         fecha: pago.fechaPago,
         monto: comisionMP,
         descripcion: `Comisión Mercado Pago ${factura.comision_mp_porcentaje}% - Factura ${factura.numero_factura}`,
@@ -389,6 +399,7 @@ async function registrarMovimientoTesoreria(
         beneficiario: 'Mercado Pago',
         categoria: 'COMISION_PASARELA',
         asiento_contable_id: asientoId,
+        estado_conciliacion: estadoConciliacion,
         documento_origen_tipo: 'comision_mercadopago',
         documento_origen_id: factura.id,
         metadata: {
@@ -396,10 +407,12 @@ async function registrarMovimientoTesoreria(
           pago_cliente_id: pagoId,
           porcentaje: factura.comision_mp_porcentaje,
           tipo: 'mercadopago',
+          no_requiere_asiento: true,
+          cuenta_destino_id: cuentaBancariaId,
         },
       });
 
-      console.log(`💳 [ComisionMP] Registrando: Ingreso $${montoTotal.toFixed(2)} - Comisión MP $${comisionMP.toFixed(2)} = Neto $${ingresoNeto.toFixed(2)}`);
+      console.log(`💳 [ComisionMP] Registrando: Ingreso neto $${ingresoNeto.toFixed(2)} | Comisión MP $${comisionMP.toFixed(2)}`);
     } else {
       // Sin comisión MP, registrar solo el ingreso
       movimientos.push({
@@ -413,37 +426,15 @@ async function registrarMovimientoTesoreria(
         beneficiario: factura.cliente?.razon_social || 'Cliente',
         categoria: 'COBRO_CLIENTE',
         asiento_contable_id: asientoId,
+        estado_conciliacion: estadoConciliacion,
         documento_origen_tipo: 'pago_cliente',
         documento_origen_id: pagoId,
         metadata: {
           tipo_pago: pago.tipoPago,
           factura_id: factura.id,
+          no_requiere_asiento: noRequiereAsiento,
         },
       });
-    }
-
-    // 3. INGRESO por comisiones del marketplace (si existen)
-    if (totalComisiones > 0) {
-      movimientos.push({
-        empresa_id: factura.empresa_id,
-        cuenta_bancaria_id: cuentaBancariaId,
-        tipo_movimiento: 'INGRESO',
-        fecha: pago.fechaPago,
-        monto: totalComisiones,
-        descripcion: `Cobro comisiones marketplace - Factura ${factura.numero_factura}`,
-        referencia: `COM-${factura.numero_factura}`,
-        beneficiario: 'Comisiones Marketplace',
-        categoria: 'INGRESO_COMISION',
-        asiento_contable_id: asientoId,
-        documento_origen_tipo: 'comision_marketplace',
-        documento_origen_id: factura.id,
-        metadata: {
-          factura_id: factura.id,
-          pago_cliente_id: pagoId,
-          tipo: 'comision_app',
-        },
-      });
-      console.log(`💰 [ComisionesMarketplace] Registrando ingreso: $${totalComisiones.toFixed(2)}`);
     }
 
     const { error: movError } = await supabase

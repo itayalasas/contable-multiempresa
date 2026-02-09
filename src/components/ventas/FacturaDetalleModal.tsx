@@ -4,10 +4,23 @@ import { X, Calendar, User, FileText, Package, CreditCard, CheckCircle, Clock, X
 interface FacturaDetalleModalProps {
   factura: any;
   onClose: () => void;
+  onDownload?: () => void;
 }
 
-export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factura, onClose }) => {
+export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factura, onClose, onDownload }) => {
   if (!factura) return null;
+
+  const descuentosTotal = (factura.items || []).reduce((sum: number, item: any) => {
+    const cantidad = Number(item.cantidad || 0);
+    const precio = Number(item.precio_unitario || 0);
+    const subtotalBruto = cantidad * precio;
+    const descuentoMonto = Number(item.descuento_monto || 0);
+    const descuentoPorcentaje = Number(item.descuento_porcentaje || 0);
+    const descuentoCalc = descuentoMonto > 0
+      ? descuentoMonto
+      : subtotalBruto * (descuentoPorcentaje / 100);
+    return sum + descuentoCalc;
+  }, 0);
 
   const getEstadoBadge = (estado: string) => {
     const badges: Record<string, { color: string; text: string; icon: any }> = {
@@ -173,6 +186,11 @@ export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factur
                         </td>
                         <td className="px-4 py-3 text-sm text-right font-mono">
                           ${parseFloat(item.subtotal || 0).toFixed(2)}
+                          {tieneDescuento && (
+                            <div className="text-xs text-gray-400">
+                              Antes: ${(parseFloat(item.cantidad) * parseFloat(item.precio_unitario)).toFixed(2)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm text-right">
                           {tieneDescuento ? (
@@ -220,10 +238,10 @@ export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factur
                 <span>Subtotal:</span>
                 <span className="font-mono font-medium">${parseFloat(factura.subtotal).toFixed(2)}</span>
               </div>
-              {factura.descuento && parseFloat(factura.descuento) > 0 && (
+              {descuentosTotal > 0 && (
                 <div className="flex justify-between text-orange-700">
                   <span>Descuento:</span>
-                  <span className="font-mono font-medium">-${parseFloat(factura.descuento).toFixed(2)}</span>
+                  <span className="font-mono font-medium">-${descuentosTotal.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-700">
@@ -251,6 +269,14 @@ export const FacturaDetalleModal: React.FC<FacturaDetalleModalProps> = ({ factur
 
         {/* Footer */}
         <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
+          {onDownload && (
+            <button
+              onClick={onDownload}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            >
+              Descargar
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"

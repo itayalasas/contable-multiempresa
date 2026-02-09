@@ -178,6 +178,44 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
       console.log('Guardando empresa:', formData);
       console.log('Modo:', mode);
 
+      let resolvedPaisId = formData.pais_id;
+      if (!resolvedPaisId) {
+        const { data: paisByCodigo } = await supabase
+          .from('paises')
+          .select('id')
+          .eq('codigo', formData.pais_iso2)
+          .maybeSingle();
+
+        if (paisByCodigo?.id) {
+          resolvedPaisId = paisByCodigo.id;
+        } else {
+          const { data: paisByIso3 } = await supabase
+            .from('paises')
+            .select('id')
+            .eq('codigo_iso', formData.pais_iso3)
+            .maybeSingle();
+
+          if (paisByIso3?.id) {
+            resolvedPaisId = paisByIso3.id;
+          } else if (formData.pais_nombre) {
+            const { data: paisByNombre } = await supabase
+              .from('paises')
+              .select('id')
+              .ilike('nombre', formData.pais_nombre)
+              .maybeSingle();
+
+            if (paisByNombre?.id) {
+              resolvedPaisId = paisByNombre.id;
+            }
+          }
+        }
+      }
+
+      if (!resolvedPaisId) {
+        alert('No se pudo determinar el país. Verifique el país seleccionado.');
+        return;
+      }
+
       // Convertir fecha de dd/mm/aaaa a yyyy-mm-dd
       let fechaInicioISO = null;
       if (formData.fecha_inicio_actividades) {
@@ -192,7 +230,7 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
         razon_social: formData.razon_social,
         nombre_fantasia: formData.nombre_fantasia || null,
         numero_identificacion: formData.numero_identificacion,
-        pais_id: formData.pais_id,
+        pais_id: resolvedPaisId,
         tipo_contribuyente_id: formData.tipo_contribuyente_id || null,
         fecha_inicio_actividades: fechaInicioISO,
         estado_tributario: formData.estado_tributario || 'activa',
@@ -266,8 +304,21 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      tabIndex={-1}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-2xl font-bold text-gray-900">

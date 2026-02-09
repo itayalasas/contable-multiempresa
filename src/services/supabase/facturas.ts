@@ -18,6 +18,10 @@ export interface FacturaVenta {
   observaciones?: string;
   dgi_enviada: boolean;
   dgi_cae?: string;
+  dgi_cae_numero?: string;
+  dgi_serie?: string;
+  dgi_numero?: string;
+  dgi_cae_vencimiento?: string;
   dgi_fecha_envio?: string;
   dgi_response?: any;
   nota_credito_id?: string;
@@ -36,6 +40,9 @@ export interface FacturaVenta {
     razon_social: string;
     numero_documento: string;
     email?: string;
+    tipo_documento?: string;
+    direccion?: string;
+    telefono?: string;
   };
   items?: FacturaVentaItem[];
 }
@@ -68,6 +75,7 @@ export interface CrearFacturaInput {
   tipo_cambio?: number;
   observaciones?: string;
   metadata?: any;
+  estado?: FacturaVenta['estado'];
   items: {
     descripcion: string;
     cantidad: number;
@@ -77,6 +85,32 @@ export interface CrearFacturaInput {
     cuenta_contable_id?: string;
   }[];
 }
+
+const calcularTotalesFactura = (items: CrearFacturaInput['items']) => {
+  const subtotal = items.reduce((sum, item) => {
+    const itemSubtotal = item.cantidad * item.precio_unitario;
+    const descuento = item.descuento_porcentaje
+      ? itemSubtotal * (item.descuento_porcentaje / 100)
+      : 0;
+    return sum + (itemSubtotal - descuento);
+  }, 0);
+
+  const totalIva = items.reduce((sum, item) => {
+    const itemSubtotal = item.cantidad * item.precio_unitario;
+    const descuento = item.descuento_porcentaje
+      ? itemSubtotal * (item.descuento_porcentaje / 100)
+      : 0;
+    const baseImponible = itemSubtotal - descuento;
+    const tasa = item.tasa_iva ?? 0.22;
+    return sum + baseImponible * tasa;
+  }, 0);
+
+  return {
+    subtotal,
+    totalIva,
+    total: subtotal + totalIva,
+  };
+};
 
 export async function obtenerFacturas(empresaId: string) {
   const { data, error } = await supabase
@@ -132,25 +166,8 @@ export async function crearFactura(input: CrearFacturaInput) {
     ? String(parseInt(ultimaFactura.numero_factura) + 1).padStart(8, '0')
     : '00000001';
 
-  const subtotal = input.items.reduce((sum, item) => {
-    const itemSubtotal = item.cantidad * item.precio_unitario;
-    const descuento = item.descuento_porcentaje
-      ? itemSubtotal * (item.descuento_porcentaje / 100)
-      : 0;
-    return sum + (itemSubtotal - descuento);
-  }, 0);
-
-  const totalIva = input.items.reduce((sum, item) => {
-    const itemSubtotal = item.cantidad * item.precio_unitario;
-    const descuento = item.descuento_porcentaje
-      ? itemSubtotal * (item.descuento_porcentaje / 100)
-      : 0;
-    const baseImponible = itemSubtotal - descuento;
-    const tasa = item.tasa_iva ?? 0.22;
-    return sum + baseImponible * tasa;
-  }, 0);
-
-  const total = subtotal + totalIva;
+  const { subtotal, totalIva, total } = calcularTotalesFactura(input.items);
+  const estadoFactura = input.estado || 'borrador';
 
   const { data: factura, error: facturaError } = await supabase
     .from('facturas_venta')
@@ -161,7 +178,7 @@ export async function crearFactura(input: CrearFacturaInput) {
       tipo_documento: input.tipo_documento || 'e-ticket',
       fecha_emision: input.fecha_emision || new Date().toISOString().split('T')[0],
       fecha_vencimiento: input.fecha_vencimiento,
-      estado: 'borrador',
+      estado: estadoFactura,
       subtotal: subtotal.toFixed(2),
       total_iva: totalIva.toFixed(2),
       total: total.toFixed(2),
@@ -211,6 +228,10 @@ export async function crearFactura(input: CrearFacturaInput) {
     throw itemsError;
   }
 
+  if (estadoFactura === 'borrador') {
+    return factura;
+  }
+
   try {
     console.log('🔄 [crearFactura] Generando asiento contable automático...');
 
@@ -253,6 +274,139 @@ export async function crearFactura(input: CrearFacturaInput) {
   }
 
   return factura;
+}
+
+export async function actualizarFacturaConItems(
+  facturaId: string,
+  input: CrearFacturaInput
+) {
+  const { subtotal, totalIva, total } = calcularTotalesFactura(input.items);
+
+  const { data: facturaActualizada, error: facturaError } = await supabase
+    .from('facturas_venta')
+    .update({
+      cliente_id: input.cliente_id,
+      tipo_documento: input.tipo_documento || 'e-ticket',
+      fecha_emision: input.fecha_emision || new Date().toISOString().split('T')[0],
+      fecha_vencimiento: input.fecha_vencimiento,
+      subtotal: subtotal.toFixed(2),
+      total_iva: totalIva.toFixed(2),
+      total: total.toFixed(2),
+      moneda: input.moneda || 'UYU',
+      tipo_cambio: input.tipo_cambio || 1,
+      observaciones: input.observaciones,
+      metadata: input.metadata || {},
+    })
+    .eq('id', facturaId)
+    .select()
+    .single();
+
+  if (facturaError) throw facturaError;
+
+  const { error: deleteError } = await supabase
+    .from('facturas_venta_items')
+    .delete()
+    .eq('factura_id', facturaId);
+
+  if (deleteError) throw deleteError;
+
+  const itemsToInsert = input.items.map((item, index) => {
+    const itemSubtotal = item.cantidad * item.precio_unitario;
+    const descuentoMonto = item.descuento_porcentaje
+      ? itemSubtotal * (item.descuento_porcentaje / 100)
+      : 0;
+    const baseImponible = itemSubtotal - descuentoMonto;
+    const tasa = item.tasa_iva ?? 0.22;
+    const montoIva = baseImponible * tasa;
+    const itemTotal = baseImponible + montoIva;
+
+    return {
+      factura_id: facturaId,
+      numero_linea: index + 1,
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      precio_unitario: item.precio_unitario,
+      descuento_porcentaje: item.descuento_porcentaje || 0,
+      descuento_monto: descuentoMonto,
+      tasa_iva: tasa,
+      monto_iva: montoIva.toFixed(2),
+      subtotal: baseImponible.toFixed(2),
+      total: itemTotal.toFixed(2),
+      cuenta_contable_id: item.cuenta_contable_id,
+    };
+  });
+
+  const { error: itemsError } = await supabase
+    .from('facturas_venta_items')
+    .insert(itemsToInsert);
+
+  if (itemsError) throw itemsError;
+
+  return facturaActualizada as FacturaVenta;
+}
+
+export async function emitirFactura(facturaId: string) {
+  const factura = await obtenerFacturaPorId(facturaId);
+
+  if (factura.estado !== 'borrador') {
+    throw new Error('Solo se pueden emitir facturas en borrador');
+  }
+
+  const { data: actualizada, error } = await supabase
+    .from('facturas_venta')
+    .update({
+      estado: 'pendiente',
+      dgi_enviada: false,
+      dgi_response: null,
+    })
+    .eq('id', facturaId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  try {
+    console.log('🔄 [emitirFactura] Generando asiento contable...');
+
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('razon_social')
+      .eq('id', factura.cliente_id)
+      .maybeSingle();
+
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', factura.empresa_id)
+      .single();
+
+    if (!empresa?.pais_id) {
+      console.warn('⚠️ [emitirFactura] No se encontró pais_id de la empresa, no se puede crear asiento');
+      return actualizada as FacturaVenta;
+    }
+
+    const { generarAsientoFacturaVenta } = await import('./asientosAutomaticos');
+
+    await generarAsientoFacturaVenta(
+      factura.id,
+      factura.empresa_id,
+      empresa.pais_id,
+      cliente?.razon_social || 'Cliente',
+      factura.numero_factura,
+      parseFloat(factura.subtotal),
+      parseFloat(factura.total_iva),
+      parseFloat(factura.total),
+      factura.fecha_emision,
+      factura.creado_por || undefined
+    );
+
+    console.log('✅ [emitirFactura] Asiento contable generado exitosamente');
+  } catch (asientoError: any) {
+    console.error('⚠️ [emitirFactura] Error al generar asiento contable:', asientoError);
+    console.error('⚠️ [emitirFactura] Detalle del error:', asientoError.message);
+  }
+
+  return actualizada as FacturaVenta;
 }
 
 export async function actualizarFactura(
@@ -352,7 +506,17 @@ export async function enviarFacturaDGI(facturaId: string) {
 
     if (error) {
       console.error('❌ [enviarFacturaDGI] Error de función:', error);
-      throw new Error(error.message || 'Error al invocar función de envío a DGI');
+      const rawBody = (error as any)?.context?.body;
+      let detalle = '';
+      if (rawBody) {
+        try {
+          const parsed = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
+          detalle = parsed?.error ? ` - ${parsed.error}` : '';
+        } catch {
+          detalle = ` - ${rawBody}`;
+        }
+      }
+      throw new Error((error.message || 'Error al invocar función de envío a DGI') + detalle);
     }
 
     if (!data) {
@@ -376,22 +540,29 @@ export async function enviarFacturaDGI(facturaId: string) {
 export async function obtenerEstadisticasFacturas(empresaId: string) {
   const { data: facturas } = await supabase
     .from('facturas_venta')
-    .select('estado, total, fecha_emision')
+    .select('estado, total, fecha_emision, metadata, serie, numero_factura')
     .eq('empresa_id', empresaId)
     .eq('ocultar_en_listados', false);
 
   if (!facturas) return null;
 
-  const totalFacturado = facturas.reduce(
+  const facturasSinComision = facturas.filter((f) => {
+    const esComision = f.metadata?.tipo === 'factura_comisiones_partner'
+      || f.serie === 'COM'
+      || (typeof f.numero_factura === 'string' && f.numero_factura.startsWith('COM-'));
+    return !esComision;
+  });
+
+  const totalFacturado = facturasSinComision.reduce(
     (sum, f) => sum + (f.estado !== 'anulada' ? parseFloat(f.total) : 0),
     0
   );
 
-  const totalPagado = facturas
+  const totalPagado = facturasSinComision
     .filter((f) => f.estado === 'pagada')
     .reduce((sum, f) => sum + parseFloat(f.total), 0);
 
-  const totalPendiente = facturas
+  const totalPendiente = facturasSinComision
     .filter((f) => f.estado === 'pendiente')
     .reduce((sum, f) => sum + parseFloat(f.total), 0);
 
@@ -399,11 +570,11 @@ export async function obtenerEstadisticasFacturas(empresaId: string) {
     total_facturado: totalFacturado,
     total_pagado: totalPagado,
     total_pendiente: totalPendiente,
-    cantidad_facturas: facturas.length,
-    facturas_pagadas: facturas.filter((f) => f.estado === 'pagada').length,
-    facturas_pendientes: facturas.filter((f) => f.estado === 'pendiente').length,
-    facturas_vencidas: facturas.filter((f) => f.estado === 'vencida').length,
-    facturas_anuladas: facturas.filter((f) => f.estado === 'anulada').length,
+    cantidad_facturas: facturasSinComision.length,
+    facturas_pagadas: facturasSinComision.filter((f) => f.estado === 'pagada').length,
+    facturas_pendientes: facturasSinComision.filter((f) => f.estado === 'pendiente').length,
+    facturas_vencidas: facturasSinComision.filter((f) => f.estado === 'vencida').length,
+    facturas_anuladas: facturasSinComision.filter((f) => f.estado === 'anulada').length,
   };
 }
 

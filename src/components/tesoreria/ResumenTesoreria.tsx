@@ -8,6 +8,7 @@ interface ResumenTesoreriaProps {
     saldoDisponible: number;
     ingresosDelMes: number;
     egresosDelMes: number;
+    comisionesPasarelaDelMes: number;
     movimientosPendientes: number;
     saldoPorMoneda: {
       moneda: string;
@@ -57,9 +58,9 @@ export const ResumenTesoreria: React.FC<ResumenTesoreriaProps> = ({
       borderColor: 'border-blue-200'
     },
     {
-      title: 'Ingresos del Mes',
+      title: 'Ingresos netos del Mes',
       value: formatearMoneda(resumen.ingresosDelMes),
-      subtitle: `Flujo positivo`,
+      subtitle: `Sin comisiones de pasarela`,
       icon: ArrowUpRight,
       color: 'text-green-600',
       bgColor: 'bg-green-500',
@@ -73,6 +74,15 @@ export const ResumenTesoreria: React.FC<ResumenTesoreriaProps> = ({
       color: 'text-red-600',
       bgColor: 'bg-red-500',
       borderColor: 'border-red-200'
+    },
+    {
+      title: 'Comisiones Pasarela',
+      value: formatearMoneda(resumen.comisionesPasarelaDelMes),
+      subtitle: `Transferencias de MP`,
+      icon: DollarSign,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-500',
+      borderColor: 'border-blue-200'
     },
     {
       title: 'Pendientes',

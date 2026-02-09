@@ -34,6 +34,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
   }, [isOpen, autoClose, finalDelay, onClose]);
 
   if (!isOpen) return null;
+  if (type === 'success') return null;
 
   const getTypeConfig = () => {
     switch (type) {

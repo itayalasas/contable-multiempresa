@@ -39,6 +39,7 @@ export interface MovimientoTesoreria {
   cuentaId: string;
   cuentaDestinoId?: string;
   referencia?: string;
+  categoria?: string;
   estado: 'PENDIENTE' | 'CONCILIADO' | 'ANULADO';
   documentoRelacionado?: {
     tipo: string;
@@ -56,6 +57,7 @@ export interface ResumenTesoreria {
   saldoDisponible: number;
   ingresosDelMes: number;
   egresosDelMes: number;
+  comisionesPasarelaDelMes: number;
   movimientosPendientes: number;
   saldoPorMoneda: {
     moneda: string;
@@ -463,6 +465,10 @@ export const tesoreriaService = {
       const egresosDelMes = movimientosDelMes
         .filter(m => m.tipo === 'EGRESO')
         .reduce((sum, m) => sum + m.monto, 0);
+
+      const comisionesPasarelaDelMes = movimientosDelMes
+        .filter(m => m.categoria === 'COMISION_PASARELA')
+        .reduce((sum, m) => sum + m.monto, 0);
       
       // Contar movimientos pendientes
       const movimientosPendientes = movimientos.filter(m => m.estado === 'PENDIENTE').length;
@@ -487,6 +493,7 @@ export const tesoreriaService = {
         saldoDisponible,
         ingresosDelMes,
         egresosDelMes,
+        comisionesPasarelaDelMes,
         movimientosPendientes,
         saldoPorMoneda: Array.from(saldoPorMoneda.entries()).map(([moneda, saldo]) => ({ moneda, saldo })),
         saldoPorTipoCuenta: Array.from(saldoPorTipoCuenta.entries()).map(([tipo, saldo]) => ({ tipo, saldo }))
@@ -649,6 +656,7 @@ export const tesoreriaService = {
       saldoDisponible: 21500,
       ingresosDelMes: 4130,
       egresosDelMes: 940,
+      comisionesPasarelaDelMes: 0,
       movimientosPendientes: 2,
       saldoPorMoneda: [
         {

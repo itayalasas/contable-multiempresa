@@ -89,15 +89,20 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3. Generar asiento contable (si está configurado)
+    const generarAsientoAutomatico = pago?.generarAsientoAutomatico !== false;
     let asientoId = null;
     let mensajeAsiento = '';
 
-    try {
-      asientoId = await generarAsientoPago(supabase, factura, pago, pagoData.id);
-      mensajeAsiento = 'asiento contable generado';
-    } catch (asientoError) {
-      console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
-      mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+    if (generarAsientoAutomatico) {
+      try {
+        asientoId = await generarAsientoPago(supabase, factura, pago, pagoData.id);
+        mensajeAsiento = 'asiento contable generado';
+      } catch (asientoError) {
+        console.warn('⚠️ No se pudo generar asiento contable:', asientoError.message);
+        mensajeAsiento = 'sin asiento (configurar plan de cuentas)';
+      }
+    } else {
+      mensajeAsiento = 'sin asiento (desactivado)';
     }
 
     // 4. Registrar movimiento en tesorería (actualiza saldo automáticamente)
@@ -139,23 +144,38 @@ async function generarAsientoPago(supabase: any, factura: any, pago: any, pagoId
       throw new Error('Empresa no encontrada');
     }
 
-    // Determinar la cuenta de origen según el tipo de pago
+    // Determinar la cuenta de origen según la cuenta bancaria seleccionada
+    let cuentaOrigenId: string | null = null;
     let cuentaOrigenCodigo = '111101'; // Efectivo/Caja por defecto
     let nombreCuentaOrigen = 'Caja - Efectivo';
 
-    if (pago.tipoPago === 'TRANSFERENCIA') {
-      cuentaOrigenCodigo = '112101'; // Bancos - Transferencias
-      nombreCuentaOrigen = 'Bancos - Transferencias';
-    } else if (pago.tipoPago === 'CHEQUE') {
-      cuentaOrigenCodigo = '112102'; // Bancos - Cheques
-      nombreCuentaOrigen = 'Bancos - Cheques';
-    } else if (pago.tipoPago === 'TARJETA_CREDITO') {
-      cuentaOrigenCodigo = '113101'; // Tarjetas de Crédito
-      nombreCuentaOrigen = 'Tarjetas de Crédito';
+    if (pago.cuentaBancariaId) {
+      const { data: cuentaBancaria } = await supabase
+        .from('cuentas_bancarias')
+        .select('cuenta_contable_id, nombre')
+        .eq('id', pago.cuentaBancariaId)
+        .maybeSingle();
+
+      if (cuentaBancaria?.cuenta_contable_id) {
+        cuentaOrigenId = cuentaBancaria.cuenta_contable_id;
+        nombreCuentaOrigen = cuentaBancaria.nombre || nombreCuentaOrigen;
+      }
     }
 
-    // Obtener IDs de cuentas
-    const cuentaOrigenId = await obtenerCuentaId(supabase, factura.empresa_id, cuentaOrigenCodigo);
+    if (!cuentaOrigenId) {
+      if (pago.tipoPago === 'TRANSFERENCIA') {
+        cuentaOrigenCodigo = '112101'; // Bancos - Transferencias
+        nombreCuentaOrigen = 'Bancos - Transferencias';
+      } else if (pago.tipoPago === 'CHEQUE') {
+        cuentaOrigenCodigo = '112102'; // Bancos - Cheques
+        nombreCuentaOrigen = 'Bancos - Cheques';
+      } else if (pago.tipoPago === 'TARJETA_CREDITO') {
+        cuentaOrigenCodigo = '113101'; // Tarjetas de Crédito
+        nombreCuentaOrigen = 'Tarjetas de Crédito';
+      }
+
+      cuentaOrigenId = await obtenerCuentaId(supabase, factura.empresa_id, cuentaOrigenCodigo);
+    }
 
     // Determinar si el pago es de comisión o gasto normal
     const esComision = factura.referencia?.includes('COMISION') ||
@@ -277,7 +297,7 @@ async function registrarMovimientoTesoreria(
   factura: any,
   pago: any,
   pagoId: string,
-  asientoId: string
+  asientoId: string | null
 ) {
   try {
     console.log('💰 [Tesorería] Registrando movimiento bancario...');
@@ -330,48 +350,6 @@ async function registrarMovimientoTesoreria(
       },
     });
 
-    // 2. Verificar si hay comisiones retenidas (para facturas de partners)
-    const { data: comisionesRetenidas } = await supabase
-      .from('comisiones_partners')
-      .select('id, comision_app, comision_mercadopago_aliado, factura_compra_id')
-      .eq('factura_compra_id', factura.id)
-      .eq('estado', 'facturada');
-
-    if (comisionesRetenidas && comisionesRetenidas.length > 0) {
-      const totalComisionApp = comisionesRetenidas.reduce((sum, c) => sum + parseFloat(c.comision_app || 0), 0);
-      const totalComisionMPAliado = comisionesRetenidas.reduce((sum, c) => sum + parseFloat(c.comision_mercadopago_aliado || 0), 0);
-      const totalComisiones = totalComisionApp + totalComisionMPAliado;
-
-      if (totalComisiones > 0) {
-        console.log(`💰 [Tesorería] Comisiones retenidas: App=$${totalComisionApp.toFixed(2)}, MP Aliado=$${totalComisionMPAliado.toFixed(2)}`);
-
-        // INGRESO: Comisión retenida por la app (la ganancia)
-        // Este dinero YA está en la cuenta, NO sale al pagar al partner
-        movimientos.push({
-          empresa_id: factura.empresa_id,
-          cuenta_bancaria_id: cuentaBancariaId,
-          tipo_movimiento: 'INGRESO',
-          fecha: pago.fechaPago,
-          monto: totalComisiones,
-          descripcion: `Ingreso comisiones retenidas - Factura ${factura.numero}`,
-          referencia: `COM-RETENIDA-${factura.numero}`,
-          beneficiario: 'Comisiones Marketplace',
-          categoria: 'INGRESO_COMISION',
-          asiento_contable_id: asientoId,
-          documento_origen_tipo: 'comision_marketplace',
-          documento_origen_id: factura.id,
-          metadata: {
-            factura_compra_id: factura.id,
-            pago_proveedor_id: pagoId,
-            comision_app: totalComisionApp,
-            comision_mp_aliado: totalComisionMPAliado,
-            tipo: 'comision_retenida',
-          },
-        });
-
-        console.log(`✅ [Tesorería] Registrando ingreso por comisión retenida: $${totalComisiones.toFixed(2)}`);
-      }
-    }
 
     const { error: movError } = await supabase
       .from('movimientos_tesoreria')

@@ -192,9 +192,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) =
       )}
 
       <aside
+        aria-label="Navegación principal"
         className={`
           fixed lg:static h-full z-50
-          w-64 bg-white border-r border-gray-200
+          w-72 max-w-[85vw] lg:w-64 bg-white border-r border-gray-200
           transition-all duration-300 ease-in-out
           flex flex-col
           ${isMobile

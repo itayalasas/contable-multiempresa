@@ -49,7 +49,7 @@ export const balanceGeneralService = {
       const activoNoCorriente = this.filtrarCuentas(cuentas, '12');
       const pasivoCorriente = this.filtrarCuentas(cuentas, '21');
       const pasivoNoCorriente = this.filtrarCuentas(cuentas, '22');
-      const patrimonio = this.filtrarCuentas(cuentas, '3');
+      const patrimonio = this.filtrarCuentas(cuentas, '5');
 
       const totalActivo = this.calcularTotal(activoCorriente) +
                           this.calcularTotal(activoNoCorriente);
@@ -105,14 +105,19 @@ export const balanceGeneralService = {
           fechaCorte
         );
 
+        const naturaleza = cuenta.tipo === 'ACTIVO' ? 'deudora' : 'acreedora';
+        const saldoFinal = naturaleza === 'deudora'
+          ? saldos.deudor - saldos.acreedor
+          : saldos.acreedor - saldos.deudor;
+
         return {
           id: cuenta.id,
           codigo: cuenta.codigo,
           nombre: cuenta.nombre,
-          naturaleza: cuenta.tipo === 'ACTIVO' ? 'deudora' : 'acreedora',
+          naturaleza,
           saldo_deudor: saldos.deudor,
           saldo_acreedor: saldos.acreedor,
-          saldo_final: saldos.final,
+          saldo_final: saldoFinal,
           nivel: cuenta.nivel,
           es_titulo: cuenta.nivel < 4,
           padre_id: cuenta.cuenta_padre
@@ -177,9 +182,7 @@ export const balanceGeneralService = {
       acreedor += parseFloat(mov.credito || 0);
     });
 
-    const final = deudor - acreedor;
-
-    return { deudor, acreedor, final };
+    return { deudor, acreedor, final: 0 };
   },
 
   filtrarCuentas(cuentas: CuentaBalance[], prefijo: string): CuentaBalance[] {
@@ -218,7 +221,7 @@ export const balanceGeneralService = {
       if (cuenta.es_titulo && cuenta.subcuentas) {
         return sum + this.calcularTotal(cuenta.subcuentas);
       }
-      return sum + Math.abs(cuenta.saldo_final);
+      return sum + (Number.isFinite(cuenta.saldo_final) ? cuenta.saldo_final : 0);
     }, 0);
   },
 

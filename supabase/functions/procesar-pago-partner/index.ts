@@ -143,6 +143,7 @@ Deno.serve(async (req: Request) => {
         referencia: referencia || null,
         observaciones: observaciones || null,
         creado_por: usuarioId || 'system',
+        cuenta_bancaria_id: cuentaBancariaFinal || null,
       })
       .select()
       .single();
@@ -198,16 +199,19 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 7. Generar asiento contable del pago
-    await generarAsientoPago(
-      supabase,
-      cuentaPorPagar,
-      facturaCompra,
-      pago,
-      montoFloat,
-      cuentaBancariaFinal,
-      periodo?.id
-    );
+    // 7. Generar asiento contable del pago (si está configurado)
+    const generarAsientoAutomatico = body?.generarAsientoAutomatico !== false;
+    if (generarAsientoAutomatico) {
+      await generarAsientoPago(
+        supabase,
+        cuentaPorPagar,
+        facturaCompra,
+        pago,
+        montoFloat,
+        cuentaBancariaFinal,
+        periodo?.id
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -284,19 +288,19 @@ async function generarAsientoPago(
     .from('asientos_contables')
     .insert({
       empresa_id: cuentaPorPagar.empresa_id,
-      numero_asiento: numeroAsiento,
+      numero: numeroAsiento,
       fecha: pago.fecha_pago,
-      tipo_asiento: 'PAGO',
       descripcion: `Pago ${cuentaPorPagar.numero} - ${proveedorNombre}`,
       referencia: `PAGO-${cuentaPorPagar.numero}`,
-      estado: 'APROBADO',
-      periodo_contable_id: periodoId,
-      metadata: {
+      estado: 'confirmado',
+      creado_por: pago.creado_por || 'system',
+      documento_soporte: {
         tipo: 'pago_proveedor',
         pago_id: pago.id,
         cuenta_por_pagar_id: cuentaPorPagar.id,
         factura_compra_id: facturaCompra.id,
         tipo_pago: pago.tipo_pago,
+        periodo_contable_id: periodoId,
       },
     })
     .select()
@@ -304,31 +308,29 @@ async function generarAsientoPago(
 
   if (asientoError) throw asientoError;
 
-  // Crear detalle del asiento
-  // DEBE: Cuentas por Pagar (disminuye el pasivo)
-  // HABER: Banco/Caja (sale dinero)
-  const detalles = [
+  // Crear movimientos contables
+  const movimientos = [
     {
       asiento_id: asiento.id,
       cuenta_id: cuentaPagarId,
-      tipo_movimiento: 'DEBE',
-      monto: monto,
+      debito: monto,
+      credito: 0,
       descripcion: `Pago a ${proveedorNombre}`,
     },
     {
       asiento_id: asiento.id,
       cuenta_id: cuentaBancoId,
-      tipo_movimiento: 'HABER',
-      monto: monto,
+      debito: 0,
+      credito: monto,
       descripcion: `Transferencia a ${proveedorNombre}`,
     },
   ];
 
-  const { error: detalleError } = await supabase
-    .from('asientos_contables_detalle')
-    .insert(detalles);
+  const { error: movimientosError } = await supabase
+    .from('movimientos_contables')
+    .insert(movimientos);
 
-  if (detalleError) throw detalleError;
+  if (movimientosError) throw movimientosError;
 
   console.log(`✅ Asiento contable ${numeroAsiento} generado para pago`);
 
@@ -346,6 +348,10 @@ async function generarAsientoPago(
     if (cuentaError || !cuentaBancaria) {
       console.warn('⚠️ No se encontró cuenta bancaria, saltando movimiento de tesorería');
     } else {
+      const esPagoPartner = facturaCompra?.tipo_factura_compra === 'partner_pago'
+        || facturaCompra?.metadata?.tipo === 'factura_comisiones_partner'
+        || (typeof facturaCompra?.numero_factura === 'string' && facturaCompra.numero_factura.startsWith('PART-'));
+
       // Crear movimiento de EGRESO (sale dinero)
       const { error: movTesoreriaError } = await supabase
         .from('movimientos_tesoreria')
@@ -358,7 +364,7 @@ async function generarAsientoPago(
           descripcion: `Pago ${cuentaPorPagar.numero} - ${proveedorNombre}`,
           referencia: pago.referencia || cuentaPorPagar.numero,
           beneficiario: proveedorNombre,
-          categoria: 'PAGO_PROVEEDOR',
+          categoria: esPagoPartner ? 'PAGO_PARTNER' : 'PAGO_PROVEEDOR',
           asiento_contable_id: asiento.id,
           documento_origen_tipo: 'pago_proveedor',
           documento_origen_id: pago.id,
@@ -382,25 +388,27 @@ async function generarAsientoPago(
 }
 
 async function generarNumeroAsiento(supabase: any, empresaId: string): Promise<string> {
-  const anio = new Date().getFullYear();
-  const mes = String(new Date().getMonth() + 1).padStart(2, '0');
-
   const { data, error } = await supabase
     .from('asientos_contables')
-    .select('numero_asiento')
+    .select('numero')
     .eq('empresa_id', empresaId)
-    .order('numero_asiento', { ascending: false })
-    .limit(1);
+    .order('numero', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) throw error;
 
-  let siguienteNumero = 1;
-  if (data && data.length > 0) {
-    const ultimoNumero = parseInt(data[0].numero_asiento.split('-').pop() || '0');
-    siguienteNumero = ultimoNumero + 1;
+  if (!data?.numero) {
+    return 'ASI-00001';
   }
 
-  return `${anio}-${mes}-${String(siguienteNumero).padStart(4, '0')}`;
+  const match = data.numero.match(/ASI-(\d+)/);
+  if (match) {
+    const nextNumero = parseInt(match[1], 10) + 1;
+    return `ASI-${String(nextNumero).padStart(5, '0')}`;
+  }
+
+  return `ASI-${Date.now().toString().slice(-5)}`;
 }
 
 async function obtenerCuentaId(supabase: any, empresaId: string, codigo: string): Promise<string | null> {

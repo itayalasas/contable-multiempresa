@@ -445,6 +445,7 @@ export const cuentasPorPagarSupabaseService = {
           numeroCuenta: pago.numeroCuenta,
           numeroOperacion: pago.numeroOperacion,
           cuentaBancariaId: pago.cuentaBancariaId,
+          generarAsientoAutomatico: pago.generarAsientoAutomatico,
         },
       }),
     });

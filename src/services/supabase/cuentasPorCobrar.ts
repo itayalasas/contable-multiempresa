@@ -106,7 +106,7 @@ export const cuentasPorCobrarSupabaseService = {
 
         return {
           id: factura.id,
-          numero: factura.numero || 'SIN-NUMERO',
+          numero: factura.numero_documento || factura.numero || 'SIN-NUMERO',
           tipoDocumento: factura.tipo_documento as any,
           clienteId: factura.cliente_id,
           cliente: {
@@ -254,6 +254,8 @@ export const cuentasPorCobrarSupabaseService = {
           tipoPago: pago.tipoPago,
           referencia: pago.referencia,
           observaciones: pago.observaciones,
+          cuentaBancariaId: pago.cuentaBancariaId,
+          generarAsientoAutomatico: pago.generarAsientoAutomatico,
           creadoPor: pago.creadoPor,
         },
       }),

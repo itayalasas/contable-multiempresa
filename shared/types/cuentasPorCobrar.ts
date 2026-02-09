@@ -68,6 +68,8 @@ export interface PagoFactura {
   tipoPago: TipoPago;
   referencia?: string;
   observaciones?: string;
+  cuentaBancariaId?: string;
+  generarAsientoAutomatico?: boolean;
   creadoPor: string;
   fechaCreacion: string;
 }

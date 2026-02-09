@@ -429,8 +429,16 @@ export const periodosContablesService = {
       );
     }
 
-    // Reutilizar los totales ya calculados en la validación de cuadratura
-    const cantidadAsientos = asientosConfirmados ? asientosConfirmados.length : 0;
+    // Generar asiento automático de cierre de resultado del ejercicio
+    console.log('Generando asiento de cierre de resultado del ejercicio...');
+    await this.registrarCierreResultadoPeriodo(periodo, usuarioId);
+
+    // Recalcular totales con el asiento de cierre generado
+    const { totalDebitosFinal, totalCreditosFinal, cantidadAsientos } = await this.recalcularTotalesPeriodo(
+      periodo.empresa_id,
+      periodo.fecha_inicio,
+      periodo.fecha_fin
+    );
 
     // Generar snapshots de saldos bancarios
     console.log('Generando snapshots de saldos bancarios...');
@@ -458,8 +466,8 @@ export const periodosContablesService = {
         permite_asientos: false,
         fecha_cierre: new Date().toISOString(),
         cerrado_por: usuarioId,
-        total_debitos: totalDebitos,
-        total_creditos: totalCreditos,
+        total_debitos: totalDebitosFinal,
+        total_creditos: totalCreditosFinal,
         cantidad_asientos: cantidadAsientos,
         tesoreria_cerrada: true,
         fecha_cierre_tesoreria: new Date().toISOString(),
@@ -519,12 +527,310 @@ export const periodosContablesService = {
         observaciones: observaciones,
         estado_anterior: periodo.estado,
         estado_nuevo: 'cerrado',
-        total_debitos: totalDebitos,
-        total_creditos: totalCreditos,
+        total_debitos: totalDebitosFinal,
+        total_creditos: totalCreditosFinal,
         cantidad_asientos: cantidadAsientos
       });
 
     if (cierreError) throw cierreError;
+  },
+
+  async registrarCierreResultadoPeriodo(
+    periodo: PeriodoContable,
+    usuarioId: string
+  ): Promise<void> {
+    const resultado = await this.calcularResultadoPeriodo(
+      periodo.empresa_id,
+      periodo.fecha_inicio,
+      periodo.fecha_fin
+    );
+
+    await this.eliminarAsientosCierreResultado(periodo.empresa_id, periodo.id);
+
+    if (Math.abs(resultado) < 0.01) {
+      console.log('ℹ️ Resultado del ejercicio ~0, no se genera asiento de cierre');
+      return;
+    }
+
+    const paisId = await this.obtenerPaisIdEmpresa(periodo.empresa_id);
+
+    const cuentaResultado = await this.ensureCuenta({
+      empresaId: periodo.empresa_id,
+      paisId,
+      codigo: '593001',
+      nombre: 'Resultado del Ejercicio',
+      tipo: 'PATRIMONIO',
+      nivel: 4,
+      codigoPadre: '59'
+    });
+
+    const cuentaCierre = await this.ensureCuenta({
+      empresaId: periodo.empresa_id,
+      paisId,
+      codigo: '799999',
+      nombre: 'Resultado del Ejercicio (Cierre)',
+      tipo: 'INGRESO',
+      nivel: 4,
+      codigoPadre: '7'
+    });
+
+    const numeroAsiento = await generarNumeroAsiento(periodo.empresa_id);
+    const monto = Math.abs(resultado);
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert({
+        empresa_id: periodo.empresa_id,
+        pais_id: paisId,
+        numero: numeroAsiento,
+        fecha: periodo.fecha_fin,
+        descripcion: `Cierre resultado del ejercicio - ${periodo.nombre}`,
+        referencia: `CIERRE-RESULT-${periodo.id}`,
+        estado: 'confirmado',
+        creado_por: usuarioId,
+        documento_soporte: {
+          tipo: 'cierre_resultado',
+          periodo_id: periodo.id,
+          fecha_inicio: periodo.fecha_inicio,
+          fecha_fin: periodo.fecha_fin,
+          resultado
+        }
+      })
+      .select()
+      .single();
+
+    if (asientoError || !asiento) {
+      throw new Error(`Error creando asiento de cierre: ${asientoError?.message || 'Desconocido'}`);
+    }
+
+    const movimientos = resultado >= 0
+      ? [
+          {
+            asiento_id: asiento.id,
+            cuenta_id: cuentaCierre.id,
+            cuenta: `${cuentaCierre.codigo} - ${cuentaCierre.nombre}`,
+            debito: monto,
+            credito: 0,
+            descripcion: 'Cierre de resultado (utilidad)'
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_id: cuentaResultado.id,
+            cuenta: `${cuentaResultado.codigo} - ${cuentaResultado.nombre}`,
+            debito: 0,
+            credito: monto,
+            descripcion: 'Resultado del ejercicio (utilidad)'
+          }
+        ]
+      : [
+          {
+            asiento_id: asiento.id,
+            cuenta_id: cuentaResultado.id,
+            cuenta: `${cuentaResultado.codigo} - ${cuentaResultado.nombre}`,
+            debito: monto,
+            credito: 0,
+            descripcion: 'Resultado del ejercicio (pérdida)'
+          },
+          {
+            asiento_id: asiento.id,
+            cuenta_id: cuentaCierre.id,
+            cuenta: `${cuentaCierre.codigo} - ${cuentaCierre.nombre}`,
+            debito: 0,
+            credito: monto,
+            descripcion: 'Cierre de resultado (pérdida)'
+          }
+        ];
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientos);
+
+    if (movimientosError) {
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw new Error(`Error insertando movimientos de cierre: ${movimientosError.message}`);
+    }
+
+    console.log('✅ Asiento de cierre de resultado generado:', numeroAsiento);
+  },
+
+  async recalcularTotalesPeriodo(
+    empresaId: string,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<{ totalDebitosFinal: number; totalCreditosFinal: number; cantidadAsientos: number }>
+  {
+    const { data: asientosConfirmados } = await supabase
+      .from('asientos_contables')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .gte('fecha', fechaInicio)
+      .lte('fecha', fechaFin)
+      .eq('estado', 'confirmado');
+
+    const ids = asientosConfirmados?.map(a => a.id) || [];
+
+    const { data: movimientos } = await supabase
+      .from('movimientos_contables')
+      .select('debito, credito')
+      .in('asiento_id', ids);
+
+    const totalDebitosFinal = movimientos?.reduce((sum, m) => sum + parseFloat(m.debito || '0'), 0) || 0;
+    const totalCreditosFinal = movimientos?.reduce((sum, m) => sum + parseFloat(m.credito || '0'), 0) || 0;
+
+    return {
+      totalDebitosFinal,
+      totalCreditosFinal,
+      cantidadAsientos: ids.length
+    };
+  },
+
+  async calcularResultadoPeriodo(
+    empresaId: string,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<number> {
+    const ingresos = await this.sumarMovimientosPorTipo(
+      empresaId,
+      fechaInicio,
+      fechaFin,
+      'INGRESO'
+    );
+
+    const gastos = await this.sumarMovimientosPorTipo(
+      empresaId,
+      fechaInicio,
+      fechaFin,
+      'GASTO'
+    );
+
+    return ingresos - gastos;
+  },
+
+  async sumarMovimientosPorTipo(
+    empresaId: string,
+    fechaInicio: string,
+    fechaFin: string,
+    tipo: 'INGRESO' | 'GASTO'
+  ): Promise<number> {
+    const { data, error } = await supabase
+      .from('movimientos_contables')
+      .select(`
+        debito,
+        credito,
+        asientos_contables!inner(
+          fecha,
+          estado,
+          eliminado
+        ),
+        plan_cuentas!inner(
+          tipo
+        )
+      `)
+      .eq('asientos_contables.eliminado', false)
+      .eq('asientos_contables.estado', 'confirmado')
+      .gte('asientos_contables.fecha', fechaInicio)
+      .lte('asientos_contables.fecha', fechaFin)
+      .eq('plan_cuentas.tipo', tipo)
+      .eq('plan_cuentas.empresa_id', empresaId);
+
+    if (error) throw error;
+
+    const total = (data || []).reduce((sum: number, mov: any) => {
+      const debito = parseFloat(mov.debito || 0);
+      const credito = parseFloat(mov.credito || 0);
+      return sum + (tipo === 'INGRESO' ? (credito - debito) : (debito - credito));
+    }, 0);
+
+    return total;
+  },
+
+  async eliminarAsientosCierreResultado(empresaId: string, periodoId: string): Promise<void> {
+    const { data: asientos } = await supabase
+      .from('asientos_contables')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('documento_soporte->>tipo', 'cierre_resultado')
+      .eq('documento_soporte->>periodo_id', periodoId);
+
+    const ids = asientos?.map(a => a.id) || [];
+    if (ids.length === 0) return;
+
+    await supabase
+      .from('movimientos_contables')
+      .delete()
+      .in('asiento_id', ids);
+
+    await supabase
+      .from('asientos_contables')
+      .delete()
+      .in('id', ids);
+  },
+
+  async obtenerPaisIdEmpresa(empresaId: string): Promise<string> {
+    const { data, error } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', empresaId)
+      .maybeSingle();
+
+    if (error || !data?.pais_id) {
+      throw new Error('No se pudo obtener pais_id de la empresa');
+    }
+
+    return data.pais_id;
+  },
+
+  async ensureCuenta(params: {
+    empresaId: string;
+    paisId: string;
+    codigo: string;
+    nombre: string;
+    tipo: string;
+    nivel: number;
+    codigoPadre: string;
+  }): Promise<{ id: string; codigo: string; nombre: string }> {
+    const { empresaId, paisId, codigo, nombre, tipo, nivel, codigoPadre } = params;
+
+    const { data: cuenta } = await supabase
+      .from('plan_cuentas')
+      .select('id, codigo, nombre')
+      .eq('empresa_id', empresaId)
+      .eq('codigo', codigo)
+      .maybeSingle();
+
+    if (cuenta) return cuenta;
+
+    const { data: cuentaPadre } = await supabase
+      .from('plan_cuentas')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('codigo', codigoPadre)
+      .maybeSingle();
+
+    if (!cuentaPadre?.id) {
+      throw new Error(`No se encontró cuenta padre ${codigoPadre} para crear ${codigo}`);
+    }
+
+    const { data: creada, error } = await supabase
+      .from('plan_cuentas')
+      .insert({
+        empresa_id: empresaId,
+        pais_id: paisId,
+        codigo,
+        nombre,
+        tipo,
+        nivel,
+        cuenta_padre: cuentaPadre.id,
+        activa: true
+      })
+      .select('id, codigo, nombre')
+      .single();
+
+    if (error || !creada) {
+      throw new Error(`Error creando cuenta ${codigo}: ${error?.message || 'Desconocido'}`);
+    }
+
+    return creada;
   },
 
   async reabrirPeriodo(
@@ -875,3 +1181,31 @@ export const periodosContablesService = {
     };
   }
 };
+
+async function generarNumeroAsiento(empresaId: string): Promise<string> {
+  try {
+    const { data: ultimoAsiento } = await supabase
+      .from('asientos_contables')
+      .select('numero')
+      .eq('empresa_id', empresaId)
+      .order('numero', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!ultimoAsiento) {
+      return 'ASI-00001';
+    }
+
+    const match = ultimoAsiento.numero.match(/ASI-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      const nextNumero = num + 1;
+      return `ASI-${String(nextNumero).padStart(5, '0')}`;
+    }
+
+    return `ASI-${Date.now().toString().slice(-5)}`;
+  } catch (error) {
+    console.error('Error generando número de asiento:', error);
+    return `ASI-${Date.now().toString().slice(-5)}`;
+  }
+}

@@ -71,6 +71,8 @@ export interface PagoFactura {
   banco?: string;
   numeroCuenta?: string;
   numeroOperacion?: string;
+  cuentaBancariaId?: string;
+  generarAsientoAutomatico?: boolean;
   creadoPor: string;
   fechaCreacion: string;
 }

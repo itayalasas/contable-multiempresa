@@ -15,19 +15,77 @@ export const usePermissions = () => {
     return usuario.metadata.permissions as ModulePermissions;
   }, [usuario]);
 
+  const moduleToParent: Partial<Record<ModuleSlug, ModuleSlug>> = {
+    'plan-cuentas': 'contabilidad',
+    'asientos': 'contabilidad',
+    'mayor': 'contabilidad',
+    'balance-comprobacion': 'contabilidad',
+    'periodos': 'contabilidad',
+    'clientes': 'ventas',
+    'facturas': 'ventas',
+    'notas-credito': 'ventas',
+    'notas-debito': 'ventas',
+    'recibos': 'ventas',
+    'proveedores': 'compras',
+    'partners': 'compras',
+    'comisiones': 'compras',
+    'cuentas-cobrar': 'finanzas',
+    'cuentas-pagar': 'finanzas',
+    'tesoreria': 'finanzas',
+    'conciliacion': 'finanzas',
+    'centros-costo': 'analisis',
+    'balance-general': 'reportes',
+    'empresas': 'administracion',
+    'usuarios': 'administracion',
+    'autorizaciones': 'administracion',
+    'configuracion': 'administracion',
+    'configuracion-mapeo': 'administracion',
+    'configuracion-aprobaciones': 'administracion',
+    'impuestos': 'administracion',
+    'integraciones': 'administracion',
+    'auditoria': 'administracion',
+    'multimoneda': 'administracion'
+  };
+
+  const getParentModule = (module: ModuleSlug) => moduleToParent[module];
+
   const hasPermission = (module: ModuleSlug, permission: Permission): boolean => {
     const modulePermissions = permissions[module] || [];
-    return modulePermissions.includes(permission);
+    if (modulePermissions.includes(permission)) return true;
+
+    const parentModule = getParentModule(module);
+    if (parentModule) {
+      const parentPermissions = permissions[parentModule] || [];
+      return parentPermissions.includes(permission);
+    }
+
+    return false;
   };
 
   const hasAnyPermission = (module: ModuleSlug, requiredPermissions: Permission[]): boolean => {
     const modulePermissions = permissions[module] || [];
-    return requiredPermissions.some(permission => modulePermissions.includes(permission));
+    if (requiredPermissions.some(permission => modulePermissions.includes(permission))) return true;
+
+    const parentModule = getParentModule(module);
+    if (parentModule) {
+      const parentPermissions = permissions[parentModule] || [];
+      return requiredPermissions.some(permission => parentPermissions.includes(permission));
+    }
+
+    return false;
   };
 
   const hasAllPermissions = (module: ModuleSlug, requiredPermissions: Permission[]): boolean => {
     const modulePermissions = permissions[module] || [];
-    return requiredPermissions.every(permission => modulePermissions.includes(permission));
+    if (requiredPermissions.every(permission => modulePermissions.includes(permission))) return true;
+
+    const parentModule = getParentModule(module);
+    if (parentModule) {
+      const parentPermissions = permissions[parentModule] || [];
+      return requiredPermissions.every(permission => parentPermissions.includes(permission));
+    }
+
+    return false;
   };
 
   const canCreate = (module: ModuleSlug): boolean => {
@@ -56,39 +114,7 @@ export const usePermissions = () => {
       return true;
     }
 
-    const moduleToParent: Partial<Record<ModuleSlug, ModuleSlug>> = {
-      'plan-cuentas': 'contabilidad',
-      'asientos': 'contabilidad',
-      'mayor': 'contabilidad',
-      'balance-comprobacion': 'contabilidad',
-      'periodos': 'contabilidad',
-      'clientes': 'ventas',
-      'facturas': 'ventas',
-      'notas-credito': 'ventas',
-      'notas-debito': 'ventas',
-      'recibos': 'ventas',
-      'proveedores': 'compras',
-      'partners': 'compras',
-      'comisiones': 'compras',
-      'cuentas-cobrar': 'finanzas',
-      'cuentas-pagar': 'finanzas',
-      'tesoreria': 'finanzas',
-      'conciliacion': 'finanzas',
-      'centros-costo': 'analisis',
-      'balance-general': 'reportes',
-      'empresas': 'administracion',
-      'usuarios': 'administracion',
-      'autorizaciones': 'administracion',
-      'configuracion': 'administracion',
-      'configuracion-mapeo': 'administracion',
-      'configuracion-aprobaciones': 'administracion',
-      'impuestos': 'administracion',
-      'integraciones': 'administracion',
-      'auditoria': 'administracion',
-      'multimoneda': 'administracion'
-    };
-
-    const parentModule = moduleToParent[module];
+    const parentModule = getParentModule(module);
     if (parentModule) {
       const parentPermissions = permissions[parentModule] || [];
       return parentPermissions.length > 0;

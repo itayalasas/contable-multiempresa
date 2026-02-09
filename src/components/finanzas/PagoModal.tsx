@@ -81,6 +81,8 @@ export const PagoModal: React.FC<PagoModalProps> = ({
         tipoPago: 'TRANSFERENCIA', // Siempre será transferencia a cuenta bancaria
         referencia: `Pago confirmado en cuenta ${cuentas.find(c => c.id === formData.cuentaBancariaId)?.numero || ''}`,
         observaciones: formData.observaciones,
+        cuentaBancariaId: formData.cuentaBancariaId,
+        generarAsientoAutomatico: formData.generarAsiento,
         banco: '',
         numeroCuenta: '',
         numeroOperacion: '',

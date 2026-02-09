@@ -19,6 +19,8 @@ interface Comision {
   fecha_pagada?: string;
   partner_id: string | null;
   factura_venta_id: string;
+  factura_venta_comision_id?: string | null;
+  factura_compra_id?: string | null;
   tipo_comision: string;
   beneficiario: string | null;
   partners_aliados: {
@@ -28,6 +30,10 @@ interface Comision {
   facturas_venta: {
     numero_factura: string;
   };
+  facturas_venta_comision?: {
+    numero_factura: string;
+    serie: string;
+  } | null;
 }
 
 interface FacturaCompra {
@@ -93,7 +99,8 @@ export default function ComisionesPartners() {
       .select(`
         *,
         partners_aliados(razon_social, partner_id_externo),
-        facturas_venta!comisiones_partners_factura_venta_id_fkey(numero_factura)
+        facturas_venta!comisiones_partners_factura_venta_id_fkey(numero_factura),
+        facturas_venta_comision:facturas_venta!comisiones_partners_factura_venta_comision_id_fkey(numero_factura, serie)
       `)
       .eq('empresa_id', empresaActual.id)
       .eq('ocultar_en_listados', false)
@@ -133,8 +140,8 @@ export default function ComisionesPartners() {
 
   // Calcular cantidad de comisiones por estado
   const cantidadPorEstado = {
-    pendientes: comisiones.filter(c => c.estado_comision === 'pendiente').length,
-    facturadas: comisiones.filter(c => c.estado_comision === 'facturada').length,
+    pendientes: comisiones.filter(c => c.estado_comision === 'pendiente' && !c.factura_venta_comision_id).length,
+    facturadas: comisiones.filter(c => c.estado_comision === 'facturada' && !c.factura_compra_id && c.estado_pago !== 'pagada').length,
     pagadas: comisiones.filter(c => c.estado_comision === 'pagada').length,
   };
 
@@ -147,7 +154,7 @@ export default function ComisionesPartners() {
         show: true,
         type: 'warning',
         title: 'Sin Comisiones Pendientes',
-        message: 'No hay comisiones pendientes para facturar a clientes. Las comisiones deben estar en estado "pendiente" para poder generar facturas.',
+        message: 'No hay comisiones pendientes sin factura asociada. Si ya generaste facturas, no se volverán a duplicar.',
       });
       return;
     }
@@ -209,7 +216,7 @@ export default function ComisionesPartners() {
         show: true,
         type: 'warning',
         title: 'Sin Comisiones Facturadas',
-        message: 'No hay comisiones facturadas para generar facturas de compra. Primero debes generar las facturas a clientes (Paso 1) para que las comisiones pasen a estado "facturada".',
+        message: 'No hay comisiones facturadas sin factura de compra asociada. Si ya se generaron, no se duplicarán.',
       });
       return;
     }

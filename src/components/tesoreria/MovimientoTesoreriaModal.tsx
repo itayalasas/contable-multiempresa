@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, ArrowUpRight, ArrowDownRight, ArrowLeftRight, FileText, Calendar, DollarSign, Search, Loader2, Check } from 'lucide-react';
 import { useSesion } from '../../context/SesionContext';
 import { NotificationModal } from '../common/NotificationModal';
@@ -31,6 +31,7 @@ interface MovimientoTesoreria {
   cuentaId: string;
   cuentaDestinoId?: string;
   referencia?: string;
+  categoria?: string;
   documentoRelacionado?: {
     tipo: string;
     id: string;
@@ -61,6 +62,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
   const { empresaActual, paisActual, formatearMoneda } = useSesion();
   const { notificationModal, showError, closeNotification } = useModals();
   const { tiposMovimientoTesoreria, loading: loadingNomencladores } = useNomencladores(paisActual?.id);
+  const formRef = useRef<HTMLFormElement>(null);
   
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split('T')[0],
@@ -69,8 +71,24 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
     monto: 0,
     cuentaId: '',
     cuentaDestinoId: '',
-    referencia: ''
+    referencia: '',
+    categoria: ''
   });
+
+  const categoriasTesoreria = [
+    { value: '', label: 'Sin categoría', tipo: '' },
+    { value: 'COBRO_CLIENTE', label: 'Cobro de cliente', tipo: 'INGRESO' },
+    { value: 'GANANCIA_MARKETPLACE', label: 'Ganancia marketplace', tipo: 'INGRESO' },
+    { value: 'INGRESO_OTRO', label: 'Otro ingreso', tipo: 'INGRESO' },
+    { value: 'PAGO_PROVEEDOR', label: 'Pago a proveedor', tipo: 'EGRESO' },
+    { value: 'PAGO_PARTNER', label: 'Pago a partner', tipo: 'EGRESO' },
+    { value: 'PAGO_IVA', label: 'Pago IVA', tipo: 'EGRESO' },
+    { value: 'PAGO_DGI', label: 'Pago DGI', tipo: 'EGRESO' },
+    { value: 'PAGO_IMPUESTO', label: 'Pago impuestos', tipo: 'EGRESO' },
+    { value: 'COMISION_PASARELA', label: 'Comisión pasarela', tipo: 'EGRESO' },
+    { value: 'COMISION_MARKETPLACE', label: 'Comisión marketplace', tipo: 'EGRESO' },
+    { value: 'GASTO_OTRO', label: 'Otro gasto', tipo: 'EGRESO' }
+  ];
 
   // Estados para búsqueda de cuentas
   const [cuentaSearchTerm, setCuentaSearchTerm] = useState('');
@@ -91,7 +109,8 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
         monto: movimiento.monto,
         cuentaId: movimiento.cuentaId,
         cuentaDestinoId: movimiento.cuentaDestinoId || '',
-        referencia: movimiento.referencia || ''
+        referencia: movimiento.referencia || '',
+        categoria: movimiento.categoria || ''
       });
       
       // Establecer los nombres de las cuentas para mostrar
@@ -118,7 +137,8 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
         monto: 0,
         cuentaId: defaultCuentaId,
         cuentaDestinoId: '',
-        referencia: ''
+        referencia: '',
+        categoria: ''
       });
       
       // Establecer el nombre de la cuenta origen por defecto
@@ -194,6 +214,52 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
     }
   };
 
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (mode === 'view' || saving) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (e.key !== 'Enter' || e.defaultPrevented) return;
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const tagName = target.tagName.toLowerCase();
+    if (tagName === 'textarea') return;
+
+    const isButton = tagName === 'button';
+    const inputType = (target as HTMLInputElement).type;
+
+    if (isButton || inputType === 'submit') return;
+
+    e.preventDefault();
+
+    const form = formRef.current;
+    if (!form) return;
+
+    const focusable = Array.from(
+      form.querySelectorAll<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      )
+    ).filter(el => el.tabIndex !== -1 && !el.hasAttribute('readonly'));
+
+    const currentIndex = focusable.indexOf(target);
+    const nextElement = focusable[currentIndex + 1];
+
+    if (nextElement) {
+      nextElement.focus();
+      return;
+    }
+
+    if (form.requestSubmit) {
+      form.requestSubmit();
+    }
+  };
+
   // Filtrar cuentas según término de búsqueda
   const filteredCuentas = cuentas.filter(cuenta => 
     cuenta.nombre.toLowerCase().includes(cuentaSearchTerm.toLowerCase()) ||
@@ -259,7 +325,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="p-8 space-y-6">
           {/* Información básica */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -316,6 +382,32 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
                   No hay tipos de movimiento disponibles. Cargue los datos en Firebase primero.
                 </p>
               )}
+            </div>
+
+            <div>
+              <SearchableSelect
+                label="Categoría"
+                options={categoriasTesoreria.map(categoria => ({
+                  value: categoria.value,
+                  label: categoria.label
+                }))}
+                value={formData.categoria}
+                onChange={(categoria) => {
+                  const config = categoriasTesoreria.find(c => c.value === categoria);
+                  setFormData({
+                    ...formData,
+                    categoria,
+                    tipo: config?.tipo || formData.tipo
+                  });
+                }}
+                placeholder="Buscar categoría..."
+                allowCustom
+                disabled={mode === 'view' || saving}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Algunas categorías generan asiento automático.
+              </p>
             </div>
           </div>
 
