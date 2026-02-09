@@ -154,28 +154,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMobile }) =
         if (!item.slug) return true;
 
         if (item.submenu) {
-          const accessibleSubmenuItems = item.submenu.filter(subItem => {
-            const hasAccess = hasModuleAccess(subItem.slug);
-            console.log(`  📋 ${item.title} → ${subItem.title} (${subItem.slug}):`, hasAccess);
-            return hasAccess;
-          });
-          const shouldShow = accessibleSubmenuItems.length > 0;
-          console.log(`📁 ${item.title}: ${shouldShow ? '✅ MOSTRAR' : '❌ OCULTAR'} (${accessibleSubmenuItems.length} submenús accesibles)`);
-          return shouldShow;
+          const hasAccess = hasModuleAccess(item.slug);
+          console.log(`📁 ${item.title}: ${hasAccess ? '✅ MOSTRAR' : '❌ OCULTAR'}`);
+          return hasAccess;
         }
 
         const hasAccess = hasModuleAccess(item.slug);
         console.log(`📄 ${item.title} (${item.slug}):`, hasAccess ? '✅ MOSTRAR' : '❌ OCULTAR');
         return hasAccess;
-      })
-      .map(item => {
-        if (item.submenu) {
-          return {
-            ...item,
-            submenu: item.submenu.filter(subItem => hasModuleAccess(subItem.slug))
-          };
-        }
-        return item;
       });
 
     console.log('🎯 Menús filtrados:', filtered.map(i => i.title));

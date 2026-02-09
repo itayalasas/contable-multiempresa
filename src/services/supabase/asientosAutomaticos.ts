@@ -161,6 +161,131 @@ export async function generarAsientoFacturaVenta(
   }
 }
 
+export async function generarAsientoNotaCredito(
+  notaCreditoId: string,
+  empresaId: string,
+  paisId: string,
+  clienteNombre: string,
+  numeroNota: string,
+  numeroFactura: string,
+  subtotal: number,
+  totalIva: number,
+  total: number,
+  fechaEmision: string,
+  usuarioId?: string
+) {
+  try {
+    console.log('🔄 [AsientosAutomaticos] Generando asiento para nota de crédito:', numeroNota);
+
+    const { data: notaExistente, error: notaExistenteError } = await supabase
+      .from('notas_credito')
+      .select('id, asiento_contable_id')
+      .eq('id', notaCreditoId)
+      .maybeSingle();
+
+    if (notaExistenteError) {
+      console.warn('⚠️ [AsientosAutomaticos] No se pudo validar asiento existente en nota de crédito:', notaExistenteError);
+    }
+
+    if (notaExistente?.asiento_contable_id) {
+      console.log('ℹ️ [AsientosAutomaticos] La nota de crédito ya tiene asiento, se omite generación:', notaExistente.asiento_contable_id);
+      return notaExistente.asiento_contable_id;
+    }
+
+    const numeroAsiento = await generarNumeroAsiento(empresaId);
+
+    const montoSubtotal = Math.abs(subtotal);
+    const montoIva = Math.abs(totalIva);
+    const montoTotal = Math.abs(total);
+
+    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '7011'),
+        cuenta_codigo: '7011',
+        cuenta_nombre: 'Ventas',
+        debe: montoSubtotal,
+        haber: 0,
+        descripcion: `Nota de Crédito ${numeroNota} - ${clienteNombre}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '2113'),
+        cuenta_codigo: '2113',
+        cuenta_nombre: 'IVA por Pagar',
+        debe: montoIva,
+        haber: 0,
+        descripcion: `IVA Nota de Crédito ${numeroNota}`,
+      },
+      {
+        cuenta_id: await obtenerCuentaId(empresaId, '1212'),
+        cuenta_codigo: '1212',
+        cuenta_nombre: 'Cuentas por Cobrar - Comerciales',
+        debe: 0,
+        haber: montoTotal,
+        descripcion: `Nota de Crédito ${numeroNota} - ${clienteNombre}`,
+      },
+    ];
+
+    const asientoData = {
+      empresa_id: empresaId,
+      pais_id: paisId,
+      numero: numeroAsiento,
+      fecha: fechaEmision,
+      descripcion: `Nota de Crédito ${numeroNota} - ${clienteNombre}`,
+      referencia: `NC-${numeroNota}`,
+      estado: 'confirmado',
+      creado_por: usuarioId || SISTEMA_USER_ID,
+      documento_soporte: {
+        tipo: 'nota_credito',
+        id: notaCreditoId,
+        numero: numeroNota,
+        factura_referencia: numeroFactura,
+      },
+    };
+
+    const { data: asiento, error: asientoError } = await supabase
+      .from('asientos_contables')
+      .insert(asientoData)
+      .select()
+      .single();
+
+    if (asientoError) {
+      console.error('❌ [AsientosAutomaticos] Error creando asiento de nota de crédito:', asientoError);
+      throw asientoError;
+    }
+
+    const movimientosConLinea = movimientos.map((mov, index) => ({
+      ...mov,
+      asiento_id: asiento.id,
+      numero_linea: index + 1,
+    }));
+
+    const { error: movimientosError } = await supabase
+      .from('movimientos_contables')
+      .insert(movimientosConLinea);
+
+    if (movimientosError) {
+      console.error('❌ [AsientosAutomaticos] Error insertando movimientos de nota de crédito:', movimientosError);
+      await supabase.from('asientos_contables').delete().eq('id', asiento.id);
+      throw movimientosError;
+    }
+
+    const { error: notaUpdateError } = await supabase
+      .from('notas_credito')
+      .update({ asiento_contable_id: asiento.id })
+      .eq('id', notaCreditoId);
+
+    if (notaUpdateError) {
+      console.warn('⚠️ [AsientosAutomaticos] No se pudo actualizar la nota con el asiento:', notaUpdateError);
+    }
+
+    console.log('✅ [AsientosAutomaticos] Asiento de nota de crédito generado:', numeroAsiento);
+    return asiento.id;
+  } catch (error: any) {
+    console.error('❌ [AsientosAutomaticos] Error generando asiento de nota de crédito:', error);
+    throw new Error('Error generando asiento contable de nota de crédito: ' + error.message);
+  }
+}
+
 async function generarNumeroAsiento(empresaId: string): Promise<string> {
   try {
     const { data: ultimoAsiento } = await supabase

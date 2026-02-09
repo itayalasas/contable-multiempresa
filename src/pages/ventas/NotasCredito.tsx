@@ -3,14 +3,17 @@ import { useSesion } from '../../context/SesionContext';
 import {
   obtenerNotasCredito,
   enviarNotaCreditoDGI,
+  eliminarNotaCredito,
   type NotaCredito,
 } from '../../services/supabase/notasCredito';
+import { usePermissions } from '../../hooks/usePermissions';
 import { obtenerFacturas, type FacturaVenta } from '../../services/supabase/facturas';
 import NotaCreditoModal from '../../components/ventas/NotaCreditoModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 
 export default function NotasCredito() {
+  const { hasPermission } = usePermissions();
   const { empresaActual } = useSesion();
   const [notas, setNotas] = useState<NotaCredito[]>([]);
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
@@ -45,7 +48,7 @@ export default function NotasCredito() {
         obtenerFacturas(empresaActual.id),
       ]);
       setNotas(notasData);
-      setFacturas(facturasData.filter((f) => f.estado === 'pagada' && !f.nota_credito_id));
+      setFacturas(facturasData.filter((f) => f.estado !== 'anulada' && !f.nota_credito_id));
     } catch (error: any) {
       mostrarNotificacion('error', 'Error', error.message);
     } finally {
@@ -54,6 +57,10 @@ export default function NotasCredito() {
   };
 
   const handleNuevaNota = () => {
+    if (facturas.length === 0) {
+      mostrarNotificacion('warning', 'Sin facturas disponibles', 'No hay facturas elegibles para anular.');
+      return;
+    }
     setShowModal(true);
   };
 
@@ -79,15 +86,18 @@ export default function NotasCredito() {
     title: string,
     message: string
   ) => {
-    // Notificaciones deshabilitadas - solo consola
-    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
-    console.log(icon, title, message);
+    setNotification({
+      show: true,
+      type,
+      title,
+      message,
+    });
   };
 
   const notasFiltradas = notas.filter((nota) => {
     const cumpleBusqueda =
       nota.numero_nota.toLowerCase().includes(busqueda.toLowerCase()) ||
-      nota.cliente?.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      nota.cliente?.razon_social.toLowerCase().includes(busqueda.toLowerCase()) ||
       nota.factura_referencia?.numero_factura.toLowerCase().includes(busqueda.toLowerCase());
     return cumpleBusqueda;
   });
@@ -111,8 +121,7 @@ export default function NotasCredito() {
         </div>
         <button
           onClick={handleNuevaNota}
-          disabled={facturas.length === 0}
-          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
         >
           Nueva Nota de Crédito
         </button>
@@ -218,7 +227,7 @@ export default function NotasCredito() {
                       {nota.factura_referencia?.serie}-{nota.factura_referencia?.numero_factura}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{nota.cliente?.nombre}</div>
+                      <div className="text-sm text-gray-900">{nota.cliente?.razon_social}</div>
                       <div className="text-xs text-gray-500">
                         {nota.cliente?.numero_documento}
                       </div>
@@ -256,8 +265,9 @@ export default function NotasCredito() {
                         <span className="text-xs text-gray-400">Pendiente</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {!nota.dgi_enviada && (
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex gap-2">
+                      {/* Enviar a DGI */}
+                      {!nota.dgi_enviada && hasPermission('notas_credito', 'update') && (
                         <button
                           onClick={() => handleEnviarDGI(nota)}
                           className="text-purple-600 hover:text-purple-900"
@@ -278,7 +288,74 @@ export default function NotasCredito() {
                           </svg>
                         </button>
                       )}
+                      {/* Modificar nota */}
+                      {hasPermission('notas_credito', 'update') && (
+                        <button
+                          onClick={() => handleEditarNota(nota)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="Modificar nota de crédito"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536M9 11l6.293-6.293a1 1 0 011.414 0l3.586 3.586a1 1 0 010 1.414L11 17l-4 1 1-4z"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                      {/* Eliminar nota */}
+                      {hasPermission('notas_credito', 'delete') && (
+                        <button
+                          onClick={() => handleEliminarNota(nota)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Eliminar nota de crédito"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      )}
                     </td>
+                    // Editar nota: abre modal editable (puedes implementar el modal si lo deseas)
+                    const handleEditarNota = (nota: NotaCredito) => {
+                      mostrarNotificacion('info', 'Editar nota', 'Funcionalidad de edición pendiente.');
+                      // Aquí puedes abrir un modal editable similar al de creación
+                    };
+
+                    // Eliminar nota: pide confirmación y elimina si tiene permiso
+                    const handleEliminarNota = (nota: NotaCredito) => {
+                      setConfirmModal({
+                        show: true,
+                        title: 'Eliminar nota de crédito',
+                        message: `¿Desea eliminar la nota de crédito ${nota.numero_nota}? Esta acción no se puede deshacer.`
+                        onConfirm: async () => {
+                          try {
+                            await eliminarNotaCredito(nota.id);
+                            mostrarNotificacion('success', 'Nota eliminada', 'La nota de crédito fue eliminada correctamente.');
+                            cargarDatos();
+                          } catch (error: any) {
+                            mostrarNotificacion('error', 'Error', error.message);
+                          }
+                        },
+                      });
+                    };
                   </tr>
                 ))}
               </tbody>
@@ -312,6 +389,7 @@ export default function NotasCredito() {
 
       {notification.show && (
         <NotificationModal
+          isOpen={notification.show}
           type={notification.type}
           title={notification.title}
           message={notification.message}

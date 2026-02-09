@@ -148,12 +148,6 @@ const AppRoutes: React.FC = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Cargando aplicación...</p>
-          <p className="mt-2 text-xs text-green-600 font-medium">
-            🔓 Modo desarrollo - Autenticación deshabilitada
-          </p>
-          <p className="mt-1 text-xs text-blue-600">
-            🗄️ Conectando con Supabase...
-          </p>
         </div>
       </div>
     );

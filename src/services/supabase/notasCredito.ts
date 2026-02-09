@@ -28,7 +28,7 @@ export interface NotaCredito {
   created_by?: string;
   updated_by?: string;
   cliente?: {
-    nombre: string;
+    razon_social: string;
     numero_documento: string;
   };
   factura_referencia?: {
@@ -61,6 +61,7 @@ export interface CrearNotaCreditoInput {
   motivo: string;
   tipo_anulacion: 'total' | 'parcial';
   observaciones?: string;
+  simulacion?: boolean;
   items?: {
     factura_item_id: string;
     cantidad_anular: number;
@@ -72,7 +73,7 @@ export async function obtenerNotasCredito(empresaId: string) {
     .from('notas_credito')
     .select(`
       *,
-      cliente:clientes(nombre, numero_documento),
+      cliente:clientes(razon_social, numero_documento),
       factura_referencia:facturas_venta(numero_factura, serie)
     `)
     .eq('empresa_id', empresaId)
@@ -87,7 +88,7 @@ export async function obtenerNotaCreditoPorId(notaId: string) {
     .from('notas_credito')
     .select(`
       *,
-      cliente:clientes(nombre, numero_documento, email),
+      cliente:clientes(razon_social, numero_documento, email),
       factura_referencia:facturas_venta(numero_factura, serie, total)
     `)
     .eq('id', notaId)
@@ -241,15 +242,59 @@ export async function crearNotaCredito(input: CrearNotaCreditoInput) {
     throw itemsError;
   }
 
-  await supabase
-    .from('facturas_venta')
-    .update({
-      estado: 'anulada',
-      nota_credito_id: notaCredito.id,
-      fecha_anulacion: new Date().toISOString(),
-      motivo_anulacion: input.motivo,
-    })
-    .eq('id', input.factura_referencia_id);
+  if (input.tipo_anulacion === 'total' && !input.simulacion) {
+    await supabase
+      .from('facturas_venta')
+      .update({
+        estado: 'anulada',
+        nota_credito_id: notaCredito.id,
+        fecha_anulacion: new Date().toISOString(),
+        motivo_anulacion: input.motivo,
+      })
+      .eq('id', input.factura_referencia_id);
+  }
+
+  if (input.simulacion) {
+    return notaCredito;
+  }
+
+  try {
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', input.empresa_id)
+      .single();
+
+    if (!empresa?.pais_id) {
+      console.warn('⚠️ [crearNotaCredito] No se encontró pais_id de la empresa, no se puede crear asiento');
+      return notaCredito;
+    }
+
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('razon_social')
+      .eq('id', facturaOriginal.cliente_id)
+      .maybeSingle();
+
+    const { generarAsientoNotaCredito } = await import('./asientosAutomaticos');
+
+    await generarAsientoNotaCredito(
+      notaCredito.id,
+      input.empresa_id,
+      empresa.pais_id,
+      cliente?.razon_social || 'Cliente',
+      notaCredito.numero_nota,
+      facturaOriginal.numero_factura,
+      subtotal,
+      totalIva,
+      total,
+      notaCredito.fecha_emision,
+      notaCredito.created_by || undefined
+    );
+  } catch (asientoError: any) {
+    console.error('⚠️ [crearNotaCredito] Error al generar asiento contable:', asientoError);
+    console.error('⚠️ [crearNotaCredito] Detalle del error:', asientoError.message);
+  }
 
   return notaCredito;
 }

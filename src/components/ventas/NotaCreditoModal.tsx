@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { NotificationModal } from '../common/NotificationModal';
+import { AutocompleteInput } from '../common/AutocompleteInput';
+import { SearchableSelect } from '../common/SearchableSelect';
 import { useSesion } from '../../context/SesionContext';
 import { crearNotaCredito, type CrearNotaCreditoInput } from '../../services/supabase/notasCredito';
-import { type FacturaVenta } from '../../services/supabase/facturas';
+import { obtenerFacturaPorId, type FacturaVenta } from '../../services/supabase/facturas';
 
 interface NotaCreditoModalProps {
   facturas: FacturaVenta[];
@@ -12,19 +15,58 @@ interface NotaCreditoModalProps {
 export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaCreditoModalProps) {
   const { empresaActual } = useSesion();
   const [loading, setLoading] = useState(false);
+  const [errorModal, setErrorModal] = useState<{ open: boolean; message: string }>(
+    { open: false, message: '' }
+  );
   const [facturaId, setFacturaId] = useState('');
   const [motivo, setMotivo] = useState('');
   const [tipoAnulacion, setTipoAnulacion] = useState<'total' | 'parcial'>('total');
   const [observaciones, setObservaciones] = useState('');
+  const [simulacion, setSimulacion] = useState(true);
+  const [facturaDetalle, setFacturaDetalle] = useState<FacturaVenta | null>(null);
+  const [cantidadAnularPorItem, setCantidadAnularPorItem] = useState<Record<string, number>>({});
 
   const facturaSeleccionada = facturas.find((f) => f.id === facturaId);
+
+  useEffect(() => {
+    const cargarDetalle = async () => {
+      if (!facturaId) {
+        setFacturaDetalle(null);
+        setCantidadAnularPorItem({});
+        return;
+      }
+
+      try {
+        const detalle = await obtenerFacturaPorId(facturaId);
+        setFacturaDetalle(detalle);
+        const cantidadesIniciales: Record<string, number> = {};
+        (detalle.items || []).forEach((item) => {
+          cantidadesIniciales[item.id] = 0;
+        });
+        setCantidadAnularPorItem(cantidadesIniciales);
+      } catch (error) {
+        console.error('Error cargando detalle de factura:', error);
+        setFacturaDetalle(null);
+      }
+    };
+
+    cargarDetalle();
+  }, [facturaId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!empresaActual || !facturaId || !motivo) {
-      alert('Complete todos los campos requeridos');
+      setErrorModal({ open: true, message: 'Complete todos los campos requeridos' });
       return;
+    }
+
+    if (tipoAnulacion === 'parcial') {
+      const itemsSeleccionados = Object.values(cantidadAnularPorItem).some((cantidad) => cantidad > 0);
+      if (!itemsSeleccionados) {
+        setErrorModal({ open: true, message: 'Seleccione al menos un item y una cantidad a anular' });
+        return;
+      }
     }
 
     setLoading(true);
@@ -35,12 +77,22 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
         motivo,
         tipo_anulacion: tipoAnulacion,
         observaciones,
+        simulacion,
       };
+
+      if (tipoAnulacion === 'parcial' && facturaDetalle?.items) {
+        input.items = facturaDetalle.items
+          .map((item) => ({
+            factura_item_id: item.id,
+            cantidad_anular: cantidadAnularPorItem[item.id] || 0,
+          }))
+          .filter((item) => item.cantidad_anular > 0);
+      }
 
       await crearNotaCredito(input);
       onSuccess();
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      setErrorModal({ open: true, message: error?.message || 'Error desconocido' });
     } finally {
       setLoading(false);
     }
@@ -48,6 +100,14 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <NotificationModal
+        isOpen={errorModal.open}
+        onClose={() => setErrorModal({ open: false, message: '' })}
+        title="Error al crear nota de crédito"
+        message={errorModal.message}
+        type="error"
+        autoClose={false}
+      />
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -93,23 +153,19 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Factura a Anular *
-            </label>
-            <select
+            <SearchableSelect
+              label="Factura a Anular *"
               value={facturaId}
-              onChange={(e) => setFacturaId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={setFacturaId}
               required
-            >
-              <option value="">Seleccione una factura</option>
-              {facturas.map((factura) => (
-                <option key={factura.id} value={factura.id}>
-                  {factura.serie}-{factura.numero_factura} - {factura.cliente?.nombre} - $
-                  {parseFloat(factura.total).toLocaleString()}
-                </option>
-              ))}
-            </select>
+              options={facturas.map(factura => ({
+                value: factura.id,
+                label: `${factura.serie}-${factura.numero_factura} - ${factura.cliente?.razon_social || ''} - $${parseFloat(factura.total).toLocaleString()}`
+              }))}
+              placeholder="Buscar factura por número, cliente..."
+              className="mb-2"
+              loading={false}
+            />
           </div>
 
           {facturaSeleccionada && (
@@ -118,7 +174,7 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-600">Cliente:</span>
-                  <p className="font-medium">{facturaSeleccionada.cliente?.nombre}</p>
+                  <p className="font-medium">{facturaSeleccionada.cliente?.razon_social}</p>
                 </div>
                 <div>
                   <span className="text-gray-600">Documento:</span>
@@ -157,32 +213,94 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
                   <strong>Anulación Total</strong> - Anula completamente la factura
                 </span>
               </label>
-              <label className="flex items-center opacity-50 cursor-not-allowed">
-                <input type="radio" value="parcial" disabled className="mr-2" />
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="parcial"
+                  checked={tipoAnulacion === 'parcial'}
+                  onChange={(e) => setTipoAnulacion(e.target.value as 'total' | 'parcial')}
+                  className="mr-2"
+                />
                 <span className="text-sm">
-                  <strong>Anulación Parcial</strong> - Anula solo algunos items (próximamente)
+                  <strong>Anulación Parcial</strong> - Anula solo algunos items
                 </span>
               </label>
             </div>
           </div>
 
+          {tipoAnulacion === 'parcial' && (
+            <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-900">Items a Anular</h3>
+              {!facturaDetalle?.items?.length ? (
+                <p className="text-sm text-gray-500">No hay items disponibles para anular.</p>
+              ) : (
+                <div className="space-y-3">
+                  {facturaDetalle.items.map((item) => (
+                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center text-sm">
+                      <div className="col-span-6">
+                        <div className="font-medium text-gray-900">{item.descripcion}</div>
+                        <div className="text-xs text-gray-500">
+                          Cantidad facturada: {item.cantidad}
+                        </div>
+                      </div>
+                      <div className="col-span-3 text-right text-gray-700">
+                        ${parseFloat(item.total).toLocaleString()}
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={item.cantidad}
+                          step="0.01"
+                          value={cantidadAnularPorItem[item.id] ?? 0}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            const boundedValue = Math.max(0, Math.min(value, Number(item.cantidad)));
+                            setCantidadAnularPorItem((prev) => ({
+                              ...prev,
+                              [item.id]: Number.isNaN(boundedValue) ? 0 : boundedValue,
+                            }));
+                          }}
+                          className="w-full border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
-            <select
+            <AutocompleteInput
+              label="Motivo *"
               value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={setMotivo}
+              suggestions={[
+                'Cliente solicita reembolso',
+                'Servicio no prestado',
+                'Error en el cobro',
+                'Producto defectuoso',
+                'Cancelación del pedido',
+                'Error en facturación',
+                'Otro',
+              ]}
+              placeholder="Escriba o seleccione un motivo"
               required
-            >
-              <option value="">Seleccione un motivo</option>
-              <option value="cliente_solicita_reembolso">Cliente solicita reembolso</option>
-              <option value="servicio_no_prestado">Servicio no prestado</option>
-              <option value="error_en_cobro">Error en el cobro</option>
-              <option value="producto_defectuoso">Producto defectuoso</option>
-              <option value="cancelacion_pedido">Cancelación del pedido</option>
-              <option value="error_facturacion">Error en facturación</option>
-              <option value="otro">Otro motivo</option>
-            </select>
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="simulacion-nota-credito"
+              type="checkbox"
+              checked={simulacion}
+              onChange={(e) => setSimulacion(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <label htmlFor="simulacion-nota-credito" className="text-sm text-gray-700">
+              Simulación (no afecta la factura ni genera asientos)
+            </label>
           </div>
 
           <div>
