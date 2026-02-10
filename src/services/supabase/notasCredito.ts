@@ -68,6 +68,230 @@ export interface CrearNotaCreditoInput {
   }[];
 }
 
+export async function actualizarNotaCreditoCompleta(notaId: string, input: CrearNotaCreditoInput) {
+  const notaActual = await obtenerNotaCreditoPorId(notaId);
+
+  if (notaActual.dgi_enviada) {
+    throw new Error('No se puede modificar una nota de crédito enviada a DGI');
+  }
+
+  if (notaActual.factura_referencia_id !== input.factura_referencia_id) {
+    throw new Error('No se puede cambiar la factura de referencia en edición');
+  }
+
+  const { data: facturaOriginal, error: facturaError } = await supabase
+    .from('facturas_venta')
+    .select('*')
+    .eq('id', input.factura_referencia_id)
+    .single();
+
+  if (facturaError) throw facturaError;
+
+  let subtotal = 0;
+  let totalIva = 0;
+  let total = 0;
+  let itemsToInsert: any[] = [];
+
+  if (input.tipo_anulacion === 'total') {
+    subtotal = -parseFloat(facturaOriginal.subtotal);
+    totalIva = -parseFloat(facturaOriginal.total_iva);
+    total = -parseFloat(facturaOriginal.total);
+
+    const { data: itemsFactura } = await supabase
+      .from('facturas_venta_items')
+      .select('*')
+      .eq('factura_id', input.factura_referencia_id);
+
+    itemsToInsert = (itemsFactura || []).map((item, index) => ({
+      numero_linea: index + 1,
+      factura_item_id: item.id,
+      descripcion: item.descripcion,
+      cantidad: -parseFloat(item.cantidad),
+      precio_unitario: parseFloat(item.precio_unitario),
+      tasa_iva: parseFloat(item.tasa_iva),
+      monto_iva: -parseFloat(item.monto_iva),
+      subtotal: -parseFloat(item.subtotal),
+      total: -parseFloat(item.total),
+      cuenta_contable_id: item.cuenta_contable_id,
+    }));
+  } else {
+    const { data: itemsFactura } = await supabase
+      .from('facturas_venta_items')
+      .select('*')
+      .eq('factura_id', input.factura_referencia_id);
+
+    const itemsMap = new Map(itemsFactura?.map((i) => [i.id, i]));
+
+    itemsToInsert = (input.items || []).map((inputItem, index) => {
+      const facturaItem = itemsMap.get(inputItem.factura_item_id);
+      if (!facturaItem) throw new Error('Item de factura no encontrado');
+
+      const cantidadAnular = inputItem.cantidad_anular;
+      const precioUnitario = parseFloat(facturaItem.precio_unitario);
+      const tasaIva = parseFloat(facturaItem.tasa_iva);
+
+      const itemSubtotal = cantidadAnular * precioUnitario;
+      const itemIva = itemSubtotal * tasaIva;
+      const itemTotal = itemSubtotal + itemIva;
+
+      subtotal -= itemSubtotal;
+      totalIva -= itemIva;
+      total -= itemTotal;
+
+      return {
+        numero_linea: index + 1,
+        factura_item_id: facturaItem.id,
+        descripcion: facturaItem.descripcion,
+        cantidad: -cantidadAnular,
+        precio_unitario: precioUnitario,
+        tasa_iva: tasaIva,
+        monto_iva: -itemIva,
+        subtotal: -itemSubtotal,
+        total: -itemTotal,
+        cuenta_contable_id: facturaItem.cuenta_contable_id,
+      };
+    });
+  }
+
+  // Si antes anulaba total y ahora no, revertir la factura.
+  if (notaActual.tipo_anulacion === 'total' && input.tipo_anulacion !== 'total') {
+    const { error: facturaRevertError } = await supabase
+      .from('facturas_venta')
+      .update({
+        estado: 'pendiente',
+        nota_credito_id: null,
+        fecha_anulacion: null,
+        motivo_anulacion: null,
+      })
+      .eq('id', input.factura_referencia_id)
+      .eq('nota_credito_id', notaId);
+
+    if (facturaRevertError) throw facturaRevertError;
+  }
+
+  // Actualizar cabecera de la nota
+  const { data: notaActualizada, error: notaUpdateError } = await supabase
+    .from('notas_credito')
+    .update({
+      motivo: input.motivo,
+      tipo_anulacion: input.tipo_anulacion,
+      observaciones: input.observaciones,
+      subtotal: subtotal.toFixed(2),
+      total_iva: totalIva.toFixed(2),
+      total: total.toFixed(2),
+      updated_at: new Date().toISOString(),
+      metadata: {
+        ...(notaActual.metadata || {}),
+        factura_anulada_id: input.factura_referencia_id,
+      },
+    })
+    .eq('id', notaId)
+    .select()
+    .single();
+
+  if (notaUpdateError) throw notaUpdateError;
+
+  // Reemplazar items
+  const { error: deleteItemsError } = await supabase
+    .from('notas_credito_items')
+    .delete()
+    .eq('nota_credito_id', notaId);
+
+  if (deleteItemsError) throw deleteItemsError;
+
+  const itemsWithNotaId = itemsToInsert.map((item) => ({
+    ...item,
+    nota_credito_id: notaId,
+  }));
+
+  const { error: insertItemsError } = await supabase
+    .from('notas_credito_items')
+    .insert(itemsWithNotaId);
+
+  if (insertItemsError) throw insertItemsError;
+
+  // Si es total y no es simulación, actualizar la factura como anulada
+  if (input.tipo_anulacion === 'total' && !input.simulacion) {
+    const { error: facturaUpdateError } = await supabase
+      .from('facturas_venta')
+      .update({
+        estado: 'anulada',
+        nota_credito_id: notaId,
+        fecha_anulacion: new Date().toISOString(),
+        motivo_anulacion: input.motivo,
+      })
+      .eq('id', input.factura_referencia_id);
+
+    if (facturaUpdateError) throw facturaUpdateError;
+  }
+
+  // Asiento: si existe, marcar eliminado y permitir regenerar.
+  if (notaActual.asiento_contable_id) {
+    const { error: asientoDeleteError } = await supabase
+      .from('asientos_contables')
+      .update({
+        eliminado: true,
+        fecha_eliminacion: new Date().toISOString(),
+        motivo_eliminacion: `Asiento reemplazado por edición de nota de crédito: ${notaId}`,
+      })
+      .eq('id', notaActual.asiento_contable_id);
+
+    if (asientoDeleteError) throw asientoDeleteError;
+
+    const { error: clearAsientoIdError } = await supabase
+      .from('notas_credito')
+      .update({ asiento_contable_id: null })
+      .eq('id', notaId);
+
+    if (clearAsientoIdError) throw clearAsientoIdError;
+  }
+
+  if (input.simulacion) {
+    return notaActualizada as NotaCredito;
+  }
+
+  // Generar asiento contable con los nuevos montos
+  try {
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('pais_id')
+      .eq('id', input.empresa_id)
+      .single();
+
+    if (!empresa?.pais_id) {
+      console.warn('⚠️ [actualizarNotaCreditoCompleta] No se encontró pais_id de la empresa, no se puede crear asiento');
+      return notaActualizada as NotaCredito;
+    }
+
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('razon_social')
+      .eq('id', notaActual.cliente_id)
+      .maybeSingle();
+
+    const { generarAsientoNotaCredito } = await import('./asientosAutomaticos');
+
+    await generarAsientoNotaCredito(
+      notaId,
+      input.empresa_id,
+      empresa.pais_id,
+      cliente?.razon_social || 'Cliente',
+      notaActual.numero_nota,
+      facturaOriginal.numero_factura,
+      subtotal,
+      totalIva,
+      total,
+      notaActual.fecha_emision,
+      notaActual.updated_by || undefined
+    );
+  } catch (asientoError: any) {
+    console.error('⚠️ [actualizarNotaCreditoCompleta] Error al generar asiento contable:', asientoError);
+    console.error('⚠️ [actualizarNotaCreditoCompleta] Detalle del error:', asientoError.message);
+  }
+
+  return notaActualizada as NotaCredito;
+}
+
 export async function obtenerNotasCredito(empresaId: string) {
   const { data, error } = await supabase
     .from('notas_credito')
@@ -325,6 +549,80 @@ export async function enviarNotaCreditoDGI(notaId: string) {
 
   if (error) throw error;
   return data;
+}
+
+export async function actualizarNotaCredito(
+  notaId: string,
+  updates: {
+    motivo?: string;
+    observaciones?: string;
+  }
+) {
+  const { data, error } = await supabase
+    .from('notas_credito')
+    .update({
+      ...(updates.motivo !== undefined ? { motivo: updates.motivo } : {}),
+      ...(updates.observaciones !== undefined ? { observaciones: updates.observaciones } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', notaId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as NotaCredito;
+}
+
+export async function eliminarNotaCredito(notaId: string): Promise<void> {
+  const { data: nota, error: notaError } = await supabase
+    .from('notas_credito')
+    .select('id, factura_referencia_id, tipo_anulacion, asiento_contable_id')
+    .eq('id', notaId)
+    .single();
+
+  if (notaError) throw notaError;
+
+  if (nota.tipo_anulacion === 'total') {
+    const { error: facturaUpdateError } = await supabase
+      .from('facturas_venta')
+      .update({
+        estado: 'pendiente',
+        nota_credito_id: null,
+        fecha_anulacion: null,
+        motivo_anulacion: null,
+      })
+      .eq('id', nota.factura_referencia_id)
+      .eq('nota_credito_id', notaId);
+
+    if (facturaUpdateError) throw facturaUpdateError;
+  }
+
+  const { error: eventosError } = await supabase
+    .from('eventos_externos')
+    .delete()
+    .eq('nota_credito_id', notaId);
+
+  if (eventosError) throw eventosError;
+
+  if (nota.asiento_contable_id) {
+    const { error: asientoError } = await supabase
+      .from('asientos_contables')
+      .update({
+        eliminado: true,
+        fecha_eliminacion: new Date().toISOString(),
+        motivo_eliminacion: `Asiento asociado a nota de crédito eliminada: ${notaId}`,
+      })
+      .eq('id', nota.asiento_contable_id);
+
+    if (asientoError) throw asientoError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from('notas_credito')
+    .delete()
+    .eq('id', notaId);
+
+  if (deleteError) throw deleteError;
 }
 
 export async function obtenerNotasCreditoPorFactura(facturaId: string) {

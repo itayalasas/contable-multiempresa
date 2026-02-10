@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
     <header className="bg-white border-b border-gray-200 px-4 py-3">
       <div className="flex items-center justify-between">
         {/* Left side - MANTENER tamaños originales */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4 min-w-0">
           <button
             onClick={onToggleSidebar}
             className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
@@ -62,11 +62,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             <Menu className="h-5 w-5 text-gray-600" />
           </button>
           
-          <div className="flex items-center space-x-3">
-            <Building2 className="h-8 w-8 text-blue-600" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">ContaEmpresa</h1>
-              <p className="text-xs text-gray-500">Sistema Multi-País</p>
+          <div className="flex items-center space-x-3 min-w-0">
+            <Building2 className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">ContaEmpresa</h1>
+              <p className="hidden sm:block text-xs text-gray-500 truncate">Sistema Multi-País</p>
             </div>
           </div>
         </div>

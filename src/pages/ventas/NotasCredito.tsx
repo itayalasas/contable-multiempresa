@@ -9,6 +9,7 @@ import {
 import { usePermissions } from '../../hooks/usePermissions';
 import { obtenerFacturas, type FacturaVenta } from '../../services/supabase/facturas';
 import NotaCreditoModal from '../../components/ventas/NotaCreditoModal';
+import NotaCreditoDetalleModal from '../../components/ventas/NotaCreditoDetalleModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
 
@@ -19,12 +20,15 @@ export default function NotasCredito() {
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [detalleNotaId, setDetalleNotaId] = useState<string | null>(null);
+  const [editarNotaId, setEditarNotaId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
   }>({ show: false, title: '', message: '', onConfirm: () => {} });
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [notification, setNotification] = useState<{
     show: boolean;
     type: 'success' | 'error' | 'warning' | 'info';
@@ -48,7 +52,7 @@ export default function NotasCredito() {
         obtenerFacturas(empresaActual.id),
       ]);
       setNotas(notasData);
-      setFacturas(facturasData.filter((f) => f.estado !== 'anulada' && !f.nota_credito_id));
+      setFacturas(facturasData);
     } catch (error: any) {
       mostrarNotificacion('error', 'Error', error.message);
     } finally {
@@ -56,8 +60,10 @@ export default function NotasCredito() {
     }
   };
 
+  const facturasElegibles = facturas.filter((f) => f.estado !== 'anulada' && !f.nota_credito_id);
+
   const handleNuevaNota = () => {
-    if (facturas.length === 0) {
+    if (facturasElegibles.length === 0) {
       mostrarNotificacion('warning', 'Sin facturas disponibles', 'No hay facturas elegibles para anular.');
       return;
     }
@@ -73,6 +79,31 @@ export default function NotasCredito() {
         try {
           await enviarNotaCreditoDGI(nota.id);
           mostrarNotificacion('success', 'Éxito', 'Nota de crédito enviada a DGI');
+          cargarDatos();
+        } catch (error: any) {
+          mostrarNotificacion('error', 'Error', error.message);
+        }
+      },
+    });
+  };
+
+  const handleVerNota = (nota: NotaCredito) => {
+    setDetalleNotaId(nota.id);
+  };
+
+  const handleEditarNota = (nota: NotaCredito) => {
+    setEditarNotaId(nota.id);
+  };
+
+  const handleEliminarNota = (nota: NotaCredito) => {
+    setConfirmModal({
+      show: true,
+      title: 'Eliminar nota de crédito',
+      message: `¿Desea eliminar la nota de crédito ${nota.numero_nota}? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        try {
+          await eliminarNotaCredito(nota.id);
+          mostrarNotificacion('success', 'Nota eliminada', 'La nota de crédito fue eliminada correctamente.');
           cargarDatos();
         } catch (error: any) {
           mostrarNotificacion('error', 'Error', error.message);
@@ -265,12 +296,41 @@ export default function NotasCredito() {
                         <span className="text-xs text-gray-400">Pendiente</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex gap-2">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                      {/* Ver */}
+                      {hasPermission('notas-credito', 'read') && (
+                        <button
+                          onClick={() => handleVerNota(nota)}
+                          className="p-1.5 rounded hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+                          title="Ver nota de crédito"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                        </button>
+                      )}
                       {/* Enviar a DGI */}
-                      {!nota.dgi_enviada && hasPermission('notas_credito', 'update') && (
+                      {!nota.dgi_enviada && hasPermission('notas-credito', 'update') && (
                         <button
                           onClick={() => handleEnviarDGI(nota)}
-                          className="text-purple-600 hover:text-purple-900"
+                          className="p-1.5 rounded hover:bg-gray-100 text-purple-600 hover:text-purple-900 transition-colors"
                           title="Enviar a DGI"
                         >
                           <svg
@@ -289,10 +349,10 @@ export default function NotasCredito() {
                         </button>
                       )}
                       {/* Modificar nota */}
-                      {hasPermission('notas_credito', 'update') && (
+                      {hasPermission('notas-credito', 'update') && (
                         <button
                           onClick={() => handleEditarNota(nota)}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="p-1.5 rounded hover:bg-gray-100 text-blue-600 hover:text-blue-900 transition-colors"
                           title="Modificar nota de crédito"
                         >
                           <svg
@@ -311,10 +371,10 @@ export default function NotasCredito() {
                         </button>
                       )}
                       {/* Eliminar nota */}
-                      {hasPermission('notas_credito', 'delete') && (
+                      {hasPermission('notas-credito', 'delete') && (
                         <button
                           onClick={() => handleEliminarNota(nota)}
-                          className="text-red-600 hover:text-red-900"
+                          className="p-1.5 rounded hover:bg-gray-100 text-red-600 hover:text-red-900 transition-colors"
                           title="Eliminar nota de crédito"
                         >
                           <svg
@@ -332,30 +392,8 @@ export default function NotasCredito() {
                           </svg>
                         </button>
                       )}
+                      </div>
                     </td>
-                    // Editar nota: abre modal editable (puedes implementar el modal si lo deseas)
-                    const handleEditarNota = (nota: NotaCredito) => {
-                      mostrarNotificacion('info', 'Editar nota', 'Funcionalidad de edición pendiente.');
-                      // Aquí puedes abrir un modal editable similar al de creación
-                    };
-
-                    // Eliminar nota: pide confirmación y elimina si tiene permiso
-                    const handleEliminarNota = (nota: NotaCredito) => {
-                      setConfirmModal({
-                        show: true,
-                        title: 'Eliminar nota de crédito',
-                        message: `¿Desea eliminar la nota de crédito ${nota.numero_nota}? Esta acción no se puede deshacer.`
-                        onConfirm: async () => {
-                          try {
-                            await eliminarNotaCredito(nota.id);
-                            mostrarNotificacion('success', 'Nota eliminada', 'La nota de crédito fue eliminada correctamente.');
-                            cargarDatos();
-                          } catch (error: any) {
-                            mostrarNotificacion('error', 'Error', error.message);
-                          }
-                        },
-                      });
-                    };
                   </tr>
                 ))}
               </tbody>
@@ -366,7 +404,7 @@ export default function NotasCredito() {
 
       {showModal && (
         <NotaCreditoModal
-          facturas={facturas}
+          facturas={facturasElegibles}
           onClose={() => setShowModal(false)}
           onSuccess={() => {
             setShowModal(false);
@@ -375,17 +413,40 @@ export default function NotasCredito() {
         />
       )}
 
-      {confirmModal.show && (
-        <ConfirmModal
-          title={confirmModal.title}
-          message={confirmModal.message}
-          onConfirm={() => {
-            confirmModal.onConfirm();
-            setConfirmModal({ ...confirmModal, show: false });
+      {!!editarNotaId && (
+        <NotaCreditoModal
+          facturas={facturas}
+          notaId={editarNotaId}
+          onClose={() => setEditarNotaId(null)}
+          onSuccess={() => {
+            setEditarNotaId(null);
+            cargarDatos();
           }}
-          onCancel={() => setConfirmModal({ ...confirmModal, show: false })}
         />
       )}
+
+      <ConfirmModal
+        isOpen={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        loading={confirmLoading}
+        onConfirm={async () => {
+          setConfirmLoading(true);
+          try {
+            await confirmModal.onConfirm();
+          } finally {
+            setConfirmLoading(false);
+            setConfirmModal((prev) => ({ ...prev, show: false }));
+          }
+        }}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, show: false }))}
+      />
+
+      <NotaCreditoDetalleModal
+        isOpen={!!detalleNotaId}
+        notaId={detalleNotaId}
+        onClose={() => setDetalleNotaId(null)}
+      />
 
       {notification.show && (
         <NotificationModal

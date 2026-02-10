@@ -3,21 +3,31 @@ import { NotificationModal } from '../common/NotificationModal';
 import { AutocompleteInput } from '../common/AutocompleteInput';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { useSesion } from '../../context/SesionContext';
-import { crearNotaCredito, type CrearNotaCreditoInput } from '../../services/supabase/notasCredito';
+import {
+  actualizarNotaCreditoCompleta,
+  crearNotaCredito,
+  obtenerNotaCreditoPorId,
+  type CrearNotaCreditoInput,
+  type NotaCredito,
+} from '../../services/supabase/notasCredito';
 import { obtenerFacturaPorId, type FacturaVenta } from '../../services/supabase/facturas';
 
 interface NotaCreditoModalProps {
   facturas: FacturaVenta[];
+  notaId?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaCreditoModalProps) {
+export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess }: NotaCreditoModalProps) {
   const { empresaActual } = useSesion();
+  const isEdit = !!notaId;
   const [loading, setLoading] = useState(false);
+  const [loadingNota, setLoadingNota] = useState(false);
   const [errorModal, setErrorModal] = useState<{ open: boolean; message: string }>(
     { open: false, message: '' }
   );
+  const [notaEdit, setNotaEdit] = useState<NotaCredito | null>(null);
   const [facturaId, setFacturaId] = useState('');
   const [motivo, setMotivo] = useState('');
   const [tipoAnulacion, setTipoAnulacion] = useState<'total' | 'parcial'>('total');
@@ -27,6 +37,32 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
   const [cantidadAnularPorItem, setCantidadAnularPorItem] = useState<Record<string, number>>({});
 
   const facturaSeleccionada = facturas.find((f) => f.id === facturaId);
+
+  useEffect(() => {
+    const cargarNota = async () => {
+      if (!isEdit || !notaId) return;
+      setLoadingNota(true);
+      try {
+        const nota = await obtenerNotaCreditoPorId(notaId);
+        setNotaEdit(nota);
+        setFacturaId(nota.factura_referencia_id);
+        setMotivo(nota.motivo || '');
+        setTipoAnulacion(nota.tipo_anulacion);
+        setObservaciones(nota.observaciones || '');
+        // En edición, por seguridad, no permitimos simulación.
+        setSimulacion(false);
+      } catch (error: any) {
+        setErrorModal({
+          open: true,
+          message: error?.message || 'Error cargando nota de crédito para edición',
+        });
+      } finally {
+        setLoadingNota(false);
+      }
+    };
+
+    cargarNota();
+  }, [isEdit, notaId]);
 
   useEffect(() => {
     const cargarDetalle = async () => {
@@ -39,10 +75,19 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
       try {
         const detalle = await obtenerFacturaPorId(facturaId);
         setFacturaDetalle(detalle);
+
         const cantidadesIniciales: Record<string, number> = {};
+        const itemsNotaMap = new Map(
+          (notaEdit?.items || [])
+            .filter((it) => it.factura_item_id)
+            .map((it) => [it.factura_item_id as string, Math.abs(Number(it.cantidad))])
+        );
+
         (detalle.items || []).forEach((item) => {
-          cantidadesIniciales[item.id] = 0;
+          const precargada = isEdit && notaEdit?.tipo_anulacion === 'parcial' ? itemsNotaMap.get(item.id) : undefined;
+          cantidadesIniciales[item.id] = precargada ?? 0;
         });
+
         setCantidadAnularPorItem(cantidadesIniciales);
       } catch (error) {
         console.error('Error cargando detalle de factura:', error);
@@ -51,13 +96,18 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
     };
 
     cargarDetalle();
-  }, [facturaId]);
+  }, [facturaId, isEdit, notaEdit?.id, notaEdit?.tipo_anulacion]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!empresaActual || !facturaId || !motivo) {
       setErrorModal({ open: true, message: 'Complete todos los campos requeridos' });
+      return;
+    }
+
+    if (isEdit && notaEdit?.dgi_enviada) {
+      setErrorModal({ open: true, message: 'No se puede modificar una nota enviada a DGI' });
       return;
     }
 
@@ -77,7 +127,7 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
         motivo,
         tipo_anulacion: tipoAnulacion,
         observaciones,
-        simulacion,
+        simulacion: isEdit ? false : simulacion,
       };
 
       if (tipoAnulacion === 'parcial' && facturaDetalle?.items) {
@@ -89,7 +139,11 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
           .filter((item) => item.cantidad_anular > 0);
       }
 
-      await crearNotaCredito(input);
+      if (isEdit && notaId) {
+        await actualizarNotaCreditoCompleta(notaId, input);
+      } else {
+        await crearNotaCredito(input);
+      }
       onSuccess();
     } catch (error: any) {
       setErrorModal({ open: true, message: error?.message || 'Error desconocido' });
@@ -111,7 +165,9 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Nueva Nota de Crédito</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {isEdit ? 'Editar Nota de Crédito' : 'Nueva Nota de Crédito'}
+            </h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -158,6 +214,7 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
               value={facturaId}
               onChange={setFacturaId}
               required
+              disabled={isEdit || loadingNota}
               options={facturas.map(factura => ({
                 value: factura.id,
                 label: `${factura.serie}-${factura.numero_factura} - ${factura.cliente?.razon_social || ''} - $${parseFloat(factura.total).toLocaleString()}`
@@ -297,6 +354,7 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
               checked={simulacion}
               onChange={(e) => setSimulacion(e.target.checked)}
               className="h-4 w-4"
+              disabled={isEdit}
             />
             <label htmlFor="simulacion-nota-credito" className="text-sm text-gray-700">
               Simulación (no afecta la factura ni genera asientos)
@@ -326,10 +384,16 @@ export default function NotaCreditoModal({ facturas, onClose, onSuccess }: NotaC
             </button>
             <button
               type="submit"
-              disabled={loading || !facturaId}
+              disabled={loading || loadingNota || !facturaId}
               className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creando...' : 'Crear Nota de Crédito'}
+              {loading
+                ? isEdit
+                  ? 'Guardando...'
+                  : 'Creando...'
+                : isEdit
+                  ? 'Guardar cambios'
+                  : 'Crear Nota de Crédito'}
             </button>
           </div>
         </form>
