@@ -3,27 +3,31 @@ import { supabase } from '../../config/supabase';
 export interface Cliente {
   id: string;
   empresa_id: string;
-  pais_id: string;
-  tipo_documento_id?: string;
+  nombre: string;
+  razon_social?: string;
+  tipo_documento: string;
   numero_documento: string;
-  razon_social: string;
-  nombre_comercial?: string;
   email?: string;
   telefono?: string;
   direccion?: string;
-  ciudad?: string;
-  departamento?: string;
-  codigo_postal?: string;
-  tipo_cliente?: string;
-  condicion_iva?: string;
-  limite_credito?: number;
-  dias_credito?: number;
-  descuento_predeterminado?: number;
-  observaciones?: string;
+  contacto?: string;
   activo: boolean;
   fecha_creacion?: string;
-  fecha_modificacion?: string;
-  creado_por?: string;
+  limite_credito?: number;
+  dias_credito?: number;
+  observaciones?: string;
+  metadata?: {
+    tipo_persona?: 'fisica' | 'juridica';
+    nombre_completo?: string;
+    nombre_comercial?: string;
+    external_id?: string;
+    pais_codigo?: string;
+    ciudad?: string;
+    departamento?: string;
+    codigo_postal?: string;
+    condicion_pago?: string;
+    descuento_default?: number;
+  };
 }
 
 export async function obtenerClientes(empresaId: string): Promise<Cliente[]> {

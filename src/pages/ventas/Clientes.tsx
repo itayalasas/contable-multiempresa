@@ -49,6 +49,7 @@ export default function Clientes() {
     const term = searchTerm.toLowerCase();
     const filtered = clientes.filter(cliente => {
       return (
+        cliente.nombre?.toLowerCase().includes(term) ||
         cliente.razon_social?.toLowerCase().includes(term) ||
         cliente.numero_documento?.toLowerCase().includes(term) ||
         cliente.email?.toLowerCase().includes(term)
@@ -96,7 +97,20 @@ export default function Clientes() {
   };
 
   const getNombreCliente = (cliente: Cliente) => {
-    return cliente.razon_social || 'Sin nombre';
+    // Para personas jurídicas, mostrar razón social
+    if (cliente.razon_social) {
+      return cliente.razon_social;
+    }
+    // Para personas físicas, mostrar nombre
+    if (cliente.nombre) {
+      return cliente.nombre;
+    }
+    return 'Sin nombre';
+  };
+
+  const getTipoClienteIcon = (cliente: Cliente) => {
+    const tipoPersona = cliente.metadata?.tipo_persona;
+    return tipoPersona === 'juridica' ? Building2 : User;
   };
 
   if (loading) {
@@ -190,7 +204,7 @@ export default function Clientes() {
                   <tr key={cliente.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <Building2 className="h-5 w-5 text-gray-400" />
+                        {React.createElement(getTipoClienteIcon(cliente), { className: "h-5 w-5 text-gray-400" })}
                       </div>
                     </td>
                     <td className="px-6 py-4">

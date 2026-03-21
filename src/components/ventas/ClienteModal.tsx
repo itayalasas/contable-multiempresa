@@ -40,27 +40,29 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
 
   useEffect(() => {
     if (cliente) {
+      const metadata = cliente.metadata || {};
+
       setFormData({
-        tipo_persona: cliente.tipo_persona,
-        nombre_completo: cliente.nombre_completo || '',
+        tipo_persona: metadata.tipo_persona || 'fisica',
+        nombre_completo: metadata.nombre_completo || cliente.nombre || '',
         razon_social: cliente.razon_social || '',
-        nombre_comercial: cliente.nombre_comercial || '',
-        documento_tipo: cliente.documento_tipo,
-        documento_numero: cliente.documento_numero,
+        nombre_comercial: metadata.nombre_comercial || cliente.contacto || '',
+        documento_tipo: cliente.tipo_documento || '',
+        documento_numero: cliente.numero_documento || '',
         email: cliente.email || '',
         telefono: cliente.telefono || '',
         direccion: cliente.direccion || '',
-        ciudad: cliente.ciudad || '',
-        departamento: cliente.departamento || '',
-        codigo_postal: cliente.codigo_postal || '',
-        pais_codigo: cliente.pais_codigo,
-        condicion_pago: cliente.condicion_pago,
-        dias_credito: cliente.dias_credito,
+        ciudad: metadata.ciudad || '',
+        departamento: metadata.departamento || '',
+        codigo_postal: metadata.codigo_postal || '',
+        pais_codigo: metadata.pais_codigo || 'UY',
+        condicion_pago: cliente.condicion_pago || 'contado',
+        dias_credito: cliente.dias_credito || 0,
         limite_credito: cliente.limite_credito || 0,
         descuento_default: cliente.descuento_default || 0,
-        notas: cliente.notas || '',
-        activo: cliente.activo,
-        external_id: cliente.external_id || '',
+        notas: cliente.observaciones || '',
+        activo: cliente.activo !== false,
+        external_id: metadata.external_id || '',
       });
     }
   }, [cliente]);
@@ -90,26 +92,28 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
 
       const clienteData = {
         empresa_id: empresaActual.id,
-        tipo_persona: formData.tipo_persona,
-        nombre_completo: formData.tipo_persona === 'fisica' ? formData.nombre_completo : null,
+        nombre: formData.tipo_persona === 'fisica' ? formData.nombre_completo : formData.razon_social,
         razon_social: formData.tipo_persona === 'juridica' ? formData.razon_social : null,
-        nombre_comercial: formData.nombre_comercial || null,
-        documento_tipo: formData.documento_tipo,
-        documento_numero: formData.documento_numero,
+        tipo_documento: formData.documento_tipo,
+        numero_documento: formData.documento_numero,
         email: formData.email || null,
         telefono: formData.telefono || null,
         direccion: formData.direccion || null,
-        ciudad: formData.ciudad || null,
-        departamento: formData.departamento || null,
-        codigo_postal: formData.codigo_postal || null,
-        pais_codigo: formData.pais_codigo,
-        condicion_pago: formData.condicion_pago,
-        dias_credito: formData.dias_credito,
+        contacto: formData.nombre_comercial || null,
         limite_credito: formData.limite_credito > 0 ? formData.limite_credito : null,
-        descuento_default: formData.descuento_default > 0 ? formData.descuento_default : null,
-        notas: formData.notas || null,
+        dias_credito: formData.dias_credito || null,
+        observaciones: formData.notas || null,
         activo: formData.activo,
-        external_id: formData.external_id || null,
+        metadata: {
+          tipo_persona: formData.tipo_persona,
+          nombre_completo: formData.nombre_completo,
+          nombre_comercial: formData.nombre_comercial,
+          external_id: formData.external_id,
+          pais_codigo: formData.pais_codigo,
+          ciudad: formData.ciudad,
+          departamento: formData.departamento,
+          codigo_postal: formData.codigo_postal
+        }
       };
 
       if (cliente) {
