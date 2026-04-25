@@ -2,7 +2,7 @@ import React from 'react';
 import { formatDistance } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { FileText, TrendingUp, TrendingDown, AlertCircle, User, Calendar } from 'lucide-react';
-import { MovimientoReciente } from '../../services/firebase/dashboard';
+import { MovimientoReciente } from '../../services/supabase/dashboard';
 
 interface ActivityFeedProps {
   movimientos: MovimientoReciente[];

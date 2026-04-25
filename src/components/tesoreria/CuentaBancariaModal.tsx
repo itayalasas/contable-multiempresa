@@ -108,7 +108,7 @@ export const CuentaBancariaModal: React.FC<CuentaBancariaModalProps> = ({
     if (mode === 'edit' && cuenta && (cuenta.id === '1' || cuenta.id === '2' || cuenta.id === '3' || cuenta.id === '4')) {
       showError(
         'Error al guardar cuenta',
-        'No se puede editar una cuenta de datos de prueba. Por favor, cargue los datos en Firebase primero usando el botón "Cargar Datos en Firebase".'
+        'No se puede editar una cuenta de datos de prueba. Complete primero la carga inicial legacy y vuelva a intentarlo.'
       );
       return;
     }

@@ -34,6 +34,80 @@ export interface MovimientoTesoreria {
   creadoPor: string;
 }
 
+interface CuentaBancariaTemplate {
+  nombre: string;
+  banco: string;
+  tipoCuenta: 'CORRIENTE' | 'AHORRO' | 'EFECTIVO' | 'CAJA';
+  moneda: string;
+}
+
+function normalizarTipoCuenta(valor: string | null | undefined): CuentaBancariaTemplate['tipoCuenta'] {
+  const tipo = (valor || '').toUpperCase();
+  if (tipo === 'CORRIENTE' || tipo === 'AHORRO' || tipo === 'EFECTIVO' || tipo === 'CAJA') {
+    return tipo;
+  }
+  if (tipo === 'TARJETA') {
+    // En esquemas antiguos se usaba TARJETA; en Supabase usamos un tipo soportado para bootstrap.
+    return 'CORRIENTE';
+  }
+  return 'CORRIENTE';
+}
+
+function buildLegacyTemplates(cuentasExistentes: Array<any>): CuentaBancariaTemplate[] {
+  const templates = new Map<string, CuentaBancariaTemplate>();
+
+  for (const cuenta of cuentasExistentes) {
+    const tipoCuenta = normalizarTipoCuenta(cuenta?.tipo_cuenta);
+    const nombre = (cuenta?.nombre || '').trim();
+    const banco = (cuenta?.banco || '').trim() || 'Banco';
+    const moneda = (cuenta?.moneda || 'UYU').trim() || 'UYU';
+
+    if (!nombre) continue;
+
+    const key = `${nombre.toLowerCase()}|${banco.toLowerCase()}|${tipoCuenta}|${moneda.toUpperCase()}`;
+    if (!templates.has(key)) {
+      templates.set(key, {
+        nombre,
+        banco,
+        tipoCuenta,
+        moneda: moneda.toUpperCase(),
+      });
+    }
+
+    if (templates.size >= 4) break;
+  }
+
+  if (templates.size > 0) {
+    return Array.from(templates.values());
+  }
+
+  return [
+    {
+      nombre: 'Cuenta Corriente Principal',
+      banco: 'BROU',
+      tipoCuenta: 'CORRIENTE',
+      moneda: 'UYU',
+    },
+    {
+      nombre: 'Caja Chica',
+      banco: 'Caja',
+      tipoCuenta: 'EFECTIVO',
+      moneda: 'UYU',
+    },
+    {
+      nombre: 'Cuenta Ahorros',
+      banco: 'ITAU',
+      tipoCuenta: 'AHORRO',
+      moneda: 'UYU',
+    },
+  ];
+}
+
+function generarNumeroCuentaLegacy(empresaId: string, index: number): string {
+  const seed = empresaId.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `LEG-${seed}-${String(index + 1).padStart(2, '0')}`;
+}
+
 export const tesoreriaSupabaseService = {
   async getCuentasBancarias(empresaId: string): Promise<CuentaBancaria[]> {
     const { data, error } = await supabase
@@ -102,6 +176,73 @@ export const tesoreriaSupabaseService = {
       cuentaContableId: data.cuenta_contable_id,
       observaciones: data.observaciones,
     };
+  },
+
+  async inicializarCuentasBancariasLegacy(empresaId: string): Promise<CuentaBancaria[]> {
+    const { data: cuentasActuales, error: cuentasActualesError } = await supabase
+      .from('cuentas_bancarias')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('activa', true)
+      .limit(1);
+
+    if (cuentasActualesError) throw cuentasActualesError;
+
+    if ((cuentasActuales || []).length > 0) {
+      throw new Error('La empresa ya tiene cuentas bancarias activas.');
+    }
+
+    const { data: cuentasExistentes, error: cuentasExistentesError } = await supabase
+      .from('cuentas_bancarias')
+      .select('nombre, banco, tipo_cuenta, moneda')
+      .neq('empresa_id', empresaId)
+      .eq('activa', true)
+      .order('created_at', { ascending: false })
+      .limit(25);
+
+    if (cuentasExistentesError) throw cuentasExistentesError;
+
+    const templates = buildLegacyTemplates(cuentasExistentes || []);
+
+    const payload = templates.map((template, index) => ({
+      empresa_id: empresaId,
+      nombre: template.nombre,
+      numero_cuenta: generarNumeroCuentaLegacy(empresaId, index),
+      banco_id: null,
+      banco: template.banco,
+      tipo_cuenta: template.tipoCuenta,
+      moneda: template.moneda,
+      saldo_inicial: 0,
+      saldo_actual: 0,
+      fecha_apertura: new Date().toISOString().split('T')[0],
+      activa: true,
+      cuenta_contable_id: null,
+      observaciones: 'Creada por carga inicial legacy de tesoreria',
+    }));
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('cuentas_bancarias')
+      .insert(payload)
+      .select('*');
+
+    if (insertError) throw insertError;
+
+    return (inserted || []).map((cuenta) => ({
+      id: cuenta.id,
+      nombre: cuenta.nombre,
+      numeroCuenta: cuenta.numero_cuenta,
+      bancoId: cuenta.banco_id,
+      banco: cuenta.banco,
+      tipoCuenta: cuenta.tipo_cuenta,
+      moneda: cuenta.moneda,
+      saldoActual: cuenta.saldo_actual,
+      saldoInicial: cuenta.saldo_inicial,
+      fechaApertura: cuenta.fecha_apertura,
+      activa: cuenta.activa,
+      empresaId: cuenta.empresa_id,
+      cuentaContableId: cuenta.cuenta_contable_id,
+      observaciones: cuenta.observaciones,
+    }));
   },
 
   async updateCuentaBancaria(cuentaId: string, updates: Partial<CuentaBancaria>): Promise<void> {

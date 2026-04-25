@@ -46,7 +46,7 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
         tipo_persona: metadata.tipo_persona || 'fisica',
         nombre_completo: metadata.nombre_completo || cliente.nombre || '',
         razon_social: cliente.razon_social || '',
-        nombre_comercial: metadata.nombre_comercial || cliente.contacto || '',
+        nombre_comercial: metadata.nombre_comercial || cliente.nombre_comercial || cliente.contacto || '',
         documento_tipo: cliente.tipo_documento || '',
         documento_numero: cliente.numero_documento || '',
         email: cliente.email || '',
@@ -71,6 +71,10 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
     e.preventDefault();
 
     if (!empresaActual) return;
+    if (!paisActual?.id) {
+      alert('No se pudo determinar el país de la empresa actual');
+      return;
+    }
 
     if (!formData.documento_numero) {
       alert('El número de documento es obligatorio');
@@ -90,16 +94,21 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
     try {
       setSaving(true);
 
+      const tipoDocumentoSeleccionado = tiposDocumentoIdentidad.find(
+        (tipo) => tipo.codigo === formData.documento_tipo || tipo.id === formData.documento_tipo
+      );
+
       const clienteData = {
         empresa_id: empresaActual.id,
-        nombre: formData.tipo_persona === 'fisica' ? formData.nombre_completo : formData.razon_social,
-        razon_social: formData.tipo_persona === 'juridica' ? formData.razon_social : null,
+        pais_id: paisActual.id,
+        razon_social: formData.tipo_persona === 'juridica' ? formData.razon_social : formData.nombre_completo,
         tipo_documento: formData.documento_tipo,
+        tipo_documento_id: tipoDocumentoSeleccionado?.id || null,
         numero_documento: formData.documento_numero,
         email: formData.email || null,
         telefono: formData.telefono || null,
         direccion: formData.direccion || null,
-        contacto: formData.nombre_comercial || null,
+        nombre_comercial: formData.nombre_comercial || null,
         limite_credito: formData.limite_credito > 0 ? formData.limite_credito : null,
         dias_credito: formData.dias_credito || null,
         observaciones: formData.notas || null,

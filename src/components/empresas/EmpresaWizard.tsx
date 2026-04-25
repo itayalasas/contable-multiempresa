@@ -33,11 +33,20 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   mode = 'create',
   empresaId
 }) => {
+  const isUuid = (value: string): boolean => {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  };
+
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [canProceed, setCanProceed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    type: 'error' | 'warning' | 'info' | 'success';
+    title: string;
+    message: string;
+  } | null>(null);
 
   const steps: WizardStep[] = [
     {
@@ -80,9 +89,14 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
   const handleNext = () => {
     if (currentStep === 0 && !validateStepDatosBasicos(formData)) {
-      alert('Por favor complete todos los campos obligatorios marcados con *');
+      setFeedback({
+        type: 'warning',
+        title: 'Datos incompletos',
+        message: 'Por favor complete todos los campos obligatorios marcados con * para continuar.'
+      });
       return;
     }
+    setFeedback(null);
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
@@ -97,6 +111,7 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   }, [currentStep, formData]);
 
   const handlePrevious = () => {
+    setFeedback(null);
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     }
@@ -131,6 +146,12 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
           if (empresa) {
             console.log('✅ Empresa cargada:', empresa);
 
+            const { data: cfeConfig } = await supabase
+              .from('empresas_config_cfe')
+              .select('*')
+              .eq('empresa_id', empresaId)
+              .maybeSingle();
+
             // Convertir fecha ISO a dd/mm/aaaa
             let fechaFormateada = '';
             if (empresa.fecha_inicio_actividades) {
@@ -154,12 +175,24 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
               telefono: empresa.telefono || '',
               ciudad: empresa.direccion || '',
               domicilio_fiscal: empresa.direccion || '',
-              domicilio_comercial: empresa.direccion || ''
+              domicilio_comercial: empresa.direccion || '',
+              cfe_habilitado: cfeConfig?.activa || false,
+              cfe_ruc_emisor: cfeConfig?.rut_emisor || empresa.numero_identificacion || '',
+              cfe_codigo_sucursal: cfeConfig?.codigo_sucursal || '1',
+              cfe_punto_venta: cfeConfig?.codigo_casa_principal || '1',
+              cfe_certificado_path: cfeConfig?.certificado_path || '',
+              cfe_certificado_password: cfeConfig?.certificado_password || '',
+              cfe_ambiente: cfeConfig?.ambiente === 'produccion' ? 'produccion' : 'desarrollo',
+              cfe_ws_url: cfeConfig?.url_webservice || ''
             });
           }
         } catch (error) {
           console.error('Error cargando empresa:', error);
-          alert('Error al cargar los datos de la empresa');
+          setFeedback({
+            type: 'error',
+            title: 'Error al cargar empresa',
+            message: 'No se pudieron cargar los datos de la empresa. Intente nuevamente.'
+          });
         } finally {
           setIsLoading(false);
         }
@@ -175,6 +208,7 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
+      setFeedback(null);
       console.log('Guardando empresa:', formData);
       console.log('Modo:', mode);
 
@@ -212,7 +246,11 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
       }
 
       if (!resolvedPaisId) {
-        alert('No se pudo determinar el país. Verifique el país seleccionado.');
+        setFeedback({
+          type: 'error',
+          title: 'País no válido',
+          message: 'No se pudo determinar el país. Verifique el país seleccionado.'
+        });
         return;
       }
 
@@ -231,13 +269,82 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
         nombre_fantasia: formData.nombre_fantasia || null,
         numero_identificacion: formData.numero_identificacion,
         pais_id: resolvedPaisId,
-        tipo_contribuyente_id: formData.tipo_contribuyente_id || null,
+        tipo_contribuyente_id: isUuid(formData.tipo_contribuyente_id || '')
+          ? formData.tipo_contribuyente_id
+          : null,
         fecha_inicio_actividades: fechaInicioISO,
-        estado_tributario: formData.estado_tributario || 'activa',
+        estado_tributario: formData.estado_tributario || null,
         email: formData.email,
         telefono: formData.telefono || null,
         direccion: formData.ciudad || null,
         moneda_principal: 'UYU'
+      };
+
+      const guardarConfigCFE = async (targetEmpresaId: string) => {
+        const rutEmisor = (formData.cfe_ruc_emisor || formData.numero_identificacion || '').trim();
+        const cfeHabilitado = !!formData.cfe_habilitado;
+        const tieneDatosCFE = cfeHabilitado
+          || !!formData.cfe_ruc_emisor
+          || !!formData.cfe_codigo_sucursal
+          || !!formData.cfe_punto_venta
+          || !!formData.cfe_certificado_path
+          || !!formData.cfe_ws_url;
+
+        if (!tieneDatosCFE) {
+          return;
+        }
+
+        if (cfeHabilitado && !rutEmisor) {
+          throw new Error('Debe completar el RUC del emisor para habilitar CFE.');
+        }
+
+        const ambiente = formData.cfe_ambiente === 'produccion' ? 'produccion' : 'testing';
+
+        const payload = {
+          empresa_id: targetEmpresaId,
+          rut_emisor: rutEmisor || formData.numero_identificacion,
+          codigo_sucursal: formData.cfe_codigo_sucursal || '1',
+          codigo_casa_principal: formData.cfe_punto_venta || '1',
+          ambiente,
+          certificado_path: formData.cfe_certificado_path || null,
+          certificado_password: formData.cfe_certificado_password || null,
+          url_webservice: formData.cfe_ws_url || null,
+          activa: cfeHabilitado,
+          habilitar_envio_automatico: cfeHabilitado,
+          fecha_actualizacion: new Date().toISOString(),
+        };
+
+        const { data: existingConfig, error: existingError } = await supabase
+          .from('empresas_config_cfe')
+          .select('id')
+          .eq('empresa_id', targetEmpresaId)
+          .maybeSingle();
+
+        if (existingError) {
+          throw existingError;
+        }
+
+        if (existingConfig?.id) {
+          const { error: cfeUpdateError } = await supabase
+            .from('empresas_config_cfe')
+            .update(payload)
+            .eq('id', existingConfig.id);
+
+          if (cfeUpdateError) {
+            throw cfeUpdateError;
+          }
+        } else {
+          const { error: cfeInsertError } = await supabase
+            .from('empresas_config_cfe')
+            .insert({
+              ...payload,
+              fecha_creacion: new Date().toISOString(),
+            });
+
+          if (cfeInsertError) {
+            throw cfeInsertError;
+          }
+        }
       };
 
       if (mode === 'edit' && empresaId) {
@@ -249,9 +356,15 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
         if (error) {
           console.error('Error al actualizar empresa:', error);
-          alert('Error al actualizar la empresa: ' + error.message);
+          setFeedback({
+            type: 'error',
+            title: 'No se pudo actualizar la empresa',
+            message: error.message
+          });
           return;
         }
+
+        await guardarConfigCFE(empresaId);
 
         console.log('Empresa actualizada exitosamente');
         onComplete(empresaId);
@@ -286,16 +399,26 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
         if (error) {
           console.error('Error al crear empresa:', error);
-          alert('Error al crear la empresa: ' + error.message);
+          setFeedback({
+            type: 'error',
+            title: 'No se pudo crear la empresa',
+            message: error.message
+          });
           return;
         }
+
+        await guardarConfigCFE(nuevaEmpresa.id);
 
         console.log('Empresa creada exitosamente:', nuevaEmpresa);
         onComplete(nuevaEmpresa.id);
       }
     } catch (error: any) {
       console.error('Error guardando empresa:', error);
-      alert('Error al guardar: ' + error.message);
+      setFeedback({
+        type: 'error',
+        title: 'Error al guardar',
+        message: error.message || 'Ocurrió un error inesperado al guardar la empresa.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -306,14 +429,6 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-      tabIndex={-1}
     >
       <div
         className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col"
@@ -382,6 +497,22 @@ export const EmpresaWizard: React.FC<EmpresaWizardProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {feedback && (
+            <div
+              className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+                feedback.type === 'error'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : feedback.type === 'warning'
+                  ? 'bg-amber-50 border-amber-200 text-amber-700'
+                  : feedback.type === 'success'
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-blue-50 border-blue-200 text-blue-700'
+              }`}
+            >
+              <p className="font-semibold mb-1">{feedback.title}</p>
+              <p>{feedback.message}</p>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">

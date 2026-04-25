@@ -86,7 +86,7 @@ export interface CrearFacturaInput {
   }[];
 }
 
-const calcularTotalesFactura = (items: CrearFacturaInput['items']) => {
+export const calcularTotalesFactura = (items: CrearFacturaInput['items']) => {
   const subtotal = items.reduce((sum, item) => {
     const itemSubtotal = item.cantidad * item.precio_unitario;
     const descuento = item.descuento_porcentaje
@@ -112,6 +112,20 @@ const calcularTotalesFactura = (items: CrearFacturaInput['items']) => {
   };
 };
 
+const esFacturaNoVenta = (factura: { metadata?: any; serie?: string; numero_factura?: string }): boolean => {
+  const tipo = factura.metadata?.tipo;
+  const serie = factura.serie;
+  const numero = factura.numero_factura;
+
+  return (
+    tipo === 'factura_comisiones_partner'
+    || tipo === 'factura_promocion_partner'
+    || serie === 'COM'
+    || serie === 'PROM'
+    || (typeof numero === 'string' && (numero.startsWith('COM-') || numero.startsWith('PROM-')))
+  );
+};
+
 export async function obtenerFacturas(empresaId: string) {
   const { data, error } = await supabase
     .from('facturas_venta')
@@ -124,7 +138,9 @@ export async function obtenerFacturas(empresaId: string) {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data as FacturaVenta[];
+
+  const facturasSoloVentas = (data || []).filter((f) => !esFacturaNoVenta(f));
+  return facturasSoloVentas as FacturaVenta[];
 }
 
 export async function obtenerFacturaPorId(facturaId: string) {
@@ -482,58 +498,84 @@ export async function marcarFacturaComoPagada(
 }
 
 export async function enviarFacturaDGI(facturaId: string) {
-  console.log('🚀 [enviarFacturaDGI] Iniciando envío de factura:', facturaId);
-
   const factura = await obtenerFacturaPorId(facturaId);
-  console.log('✅ [enviarFacturaDGI] Factura obtenida:', factura.numero_factura);
 
   if (factura.dgi_enviada && factura.dgi_cae) {
     throw new Error('Esta factura ya fue enviada exitosamente a DGI');
   }
 
-  if (factura.dgi_response?.error) {
-    console.log('⚠️ [enviarFacturaDGI] Reintentando envío después de error previo');
+  // Prevalidacion para dar feedback claro y evitar un 400 evitable en la Edge Function.
+  const { data: configCfe, error: configCfeError } = await supabase
+    .from('empresas_config_cfe')
+    .select('activa')
+    .eq('empresa_id', factura.empresa_id)
+    .maybeSingle();
+
+  if (!configCfeError && (!configCfe || !configCfe.activa)) {
+    throw new Error('La empresa no tiene configuración CFE activa. Configure CFE en Administración antes de enviar a DGI.');
   }
 
-  console.log('📤 [enviarFacturaDGI] Invocando Edge Function auto-send-dgi...');
+  const getFunctionsErrorMessage = async (error: any): Promise<string> => {
+    const fallback = error?.message || 'Error al invocar función de envío a DGI';
+
+    const extractJsonError = (value: any): string | null => {
+      if (!value) return null;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return parsed?.error || parsed?.message || null;
+        } catch {
+          return null;
+        }
+      }
+      return value?.error || value?.message || null;
+    };
+
+    const fromContextBody = extractJsonError(error?.context?.body);
+    if (fromContextBody) return fromContextBody;
+
+    const context = error?.context;
+    if (context && typeof context === 'object' && typeof context.text === 'function') {
+      try {
+        const text = await context.clone().text();
+        const fromResponse = extractJsonError(text);
+        if (fromResponse) return fromResponse;
+      } catch {
+        // Ignorar parse errors y usar fallback
+      }
+    }
+
+    return fallback;
+  };
 
   try {
     const { data, error } = await supabase.functions.invoke('auto-send-dgi', {
       body: { facturaId }
     });
 
-    console.log('📥 [enviarFacturaDGI] Respuesta recibida:', { data, error });
-
     if (error) {
-      console.error('❌ [enviarFacturaDGI] Error de función:', error);
-      const rawBody = (error as any)?.context?.body;
-      let detalle = '';
-      if (rawBody) {
-        try {
-          const parsed = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
-          detalle = parsed?.error ? ` - ${parsed.error}` : '';
-        } catch {
-          detalle = ` - ${rawBody}`;
-        }
+      const detalle = await getFunctionsErrorMessage(error);
+      if (detalle.includes('Empresa sin configuración CFE')) {
+        throw new Error('La empresa no tiene configuración CFE activa. Configure CFE en Administración antes de enviar a DGI.');
       }
-      throw new Error((error.message || 'Error al invocar función de envío a DGI') + detalle);
+      throw new Error(detalle);
     }
 
     if (!data) {
-      console.error('❌ [enviarFacturaDGI] Sin datos en respuesta');
       throw new Error('No se recibió respuesta de la función de envío');
     }
 
     if (!data.success) {
-      console.error('❌ [enviarFacturaDGI] Respuesta fallida:', data);
-      throw new Error(data.error || 'Error desconocido al enviar factura a DGI');
+      const detalle = data.error || data.message || 'Error desconocido al enviar factura a DGI';
+      if (detalle.includes('Empresa sin configuración CFE')) {
+        throw new Error('La empresa no tiene configuración CFE activa. Configure CFE en Administración antes de enviar a DGI.');
+      }
+      throw new Error(detalle);
     }
 
-    console.log('✅ [enviarFacturaDGI] Factura enviada exitosamente:', data);
     return obtenerFacturaPorId(facturaId);
-  } catch (err: any) {
-    console.error('❌ [enviarFacturaDGI] Error capturado:', err);
-    throw err;
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -546,12 +588,7 @@ export async function obtenerEstadisticasFacturas(empresaId: string) {
 
   if (!facturas) return null;
 
-  const facturasSinComision = facturas.filter((f) => {
-    const esComision = f.metadata?.tipo === 'factura_comisiones_partner'
-      || f.serie === 'COM'
-      || (typeof f.numero_factura === 'string' && f.numero_factura.startsWith('COM-'));
-    return !esComision;
-  });
+  const facturasSinComision = facturas.filter((f) => !esFacturaNoVenta(f));
 
   const totalFacturado = facturasSinComision.reduce(
     (sum, f) => sum + (f.estado !== 'anulada' ? parseFloat(f.total) : 0),

@@ -36,8 +36,11 @@ Deno.serve(async (req: Request) => {
       }
 
       const esFacturaComision = factura?.metadata?.tipo === 'factura_comisiones_partner'
+        || factura?.metadata?.tipo === 'factura_promocion_partner'
         || factura?.serie === 'COM'
-        || (typeof factura?.numero_factura === 'string' && factura.numero_factura.startsWith('COM-'));
+        || factura?.serie === 'PROM'
+        || (typeof factura?.numero_factura === 'string'
+          && (factura.numero_factura.startsWith('COM-') || factura.numero_factura.startsWith('PROM-')));
 
       if (esFacturaComision) {
         await supabase
@@ -50,7 +53,7 @@ Deno.serve(async (req: Request) => {
           .eq('id', factura.id);
 
         return new Response(
-          JSON.stringify({ success: true, message: 'Factura de comisión omitida en contabilidad' }),
+          JSON.stringify({ success: true, message: 'Factura automática (comisión/promoción) omitida en contabilidad' }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -77,8 +80,11 @@ Deno.serve(async (req: Request) => {
 
       if (type === 'INSERT' && record.table === 'facturas_venta') {
         const esFacturaComision = record?.metadata?.tipo === 'factura_comisiones_partner'
+          || record?.metadata?.tipo === 'factura_promocion_partner'
           || record?.serie === 'COM'
-          || (typeof record?.numero_factura === 'string' && record.numero_factura.startsWith('COM-'));
+          || record?.serie === 'PROM'
+          || (typeof record?.numero_factura === 'string'
+            && (record.numero_factura.startsWith('COM-') || record.numero_factura.startsWith('PROM-')));
 
         if (esFacturaComision) {
           await supabase

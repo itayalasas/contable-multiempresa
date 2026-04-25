@@ -209,7 +209,7 @@ function LibroMayor() {
             {cuentasLoading && (
               <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Cargando cuentas desde Firebase...
+                Cargando cuentas desde Supabase...
               </p>
             )}
           </div>

@@ -1064,7 +1064,7 @@ function AsientosContables() {
                     {cuentas.length > 0 && (
                       <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-sm text-blue-800">
-                          📊 <strong>{cuentas.length} cuentas disponibles</strong> cargadas desde Firebase. 
+                          📊 <strong>{cuentas.length} cuentas disponibles</strong> cargadas desde Supabase. 
                           Puede buscar por código o nombre en cada selector.
                         </p>
                       </div>

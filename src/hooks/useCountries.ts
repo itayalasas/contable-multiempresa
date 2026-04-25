@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { countriesApi, Country } from '../services/api/countriesApi';
+import { paisesSupabaseService } from '../services/supabase/paises';
 
 interface CountryOption {
   value: string;
@@ -34,8 +35,25 @@ export const useCountries = (): UseCountriesReturn => {
       setCountries(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      console.error('❌ Error cargando países:', errorMessage);
-      setError(errorMessage);
+      console.warn('⚠️ API de países no disponible, usando catálogo local:', errorMessage);
+
+      try {
+        const paises = await paisesSupabaseService.getPaisesActivos();
+        const fallbackCountries: Country[] = paises.map((pais) => ({
+          iso2: pais.codigo,
+          iso3: pais.codigoISO,
+          country: pais.nombre,
+          cities: [],
+        }));
+
+        setCountries(fallbackCountries);
+        setError(null);
+        console.log('✅ Países cargados desde Supabase:', fallbackCountries.length);
+      } catch (fallbackErr) {
+        const fallbackMessage = fallbackErr instanceof Error ? fallbackErr.message : 'Error desconocido';
+        console.error('❌ Error cargando países desde fallback Supabase:', fallbackMessage);
+        setError(`No se pudieron cargar los países (${fallbackMessage})`);
+      }
     } finally {
       setLoading(false);
     }

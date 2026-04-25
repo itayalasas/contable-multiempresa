@@ -4,7 +4,6 @@ import {
   Search, 
   Filter, 
   Edit, 
-  Trash2, 
   Building2,
   Globe,
   Users,
@@ -35,6 +34,11 @@ import { GestionarUsuariosModal } from '../../components/empresas/GestionarUsuar
 
 export const GestionEmpresas: React.FC = () => {
   const { usuario, tienePermiso, formatearMoneda } = useSesion();
+
+  const esAdminEmpresas = usuario?.rol === 'super_admin' || usuario?.rol === 'admin_empresa' || usuario?.rol === 'admin';
+  const puedeCrearEmpresa = esAdminEmpresas || tienePermiso('empresas:create') || tienePermiso('admin:all');
+  const puedeEditarEmpresa = esAdminEmpresas || tienePermiso('empresas:edit') || tienePermiso('admin:all');
+  const puedeCambiarEstadoEmpresa = esAdminEmpresas || tienePermiso('empresas:delete') || tienePermiso('empresas:edit') || tienePermiso('admin:all');
   
   // Estados principales
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -257,18 +261,22 @@ export const GestionEmpresas: React.FC = () => {
     }
   };
 
-  const handleDeleteEmpresa = (empresa: Empresa) => {
+  const handleToggleActivaEmpresa = (empresa: Empresa) => {
+    const accion = empresa.activa ? 'desactivar' : 'activar';
+
     confirmDelete(
-      'Confirmar Eliminación',
-      `¿Está seguro de que desea eliminar "${empresa.nombre}"? Esta acción no se puede deshacer.`,
+      `Confirmar ${empresa.activa ? 'Desactivación' : 'Activación'}`,
+      `¿Está seguro de que desea ${accion} "${empresa.nombre}"?`,
       async () => {
         try {
-          // Aquí iría la lógica de eliminación real
-          console.log('Eliminando empresa:', empresa.id);
-          showSuccess('Empresa eliminada', `La empresa "${empresa.nombre}" ha sido eliminada exitosamente.`);
+          await EmpresasService.actualizarEmpresa(empresa.id, { activa: !empresa.activa });
+          showSuccess(
+            `Empresa ${empresa.activa ? 'desactivada' : 'activada'}`,
+            `La empresa "${empresa.nombre}" ha sido ${empresa.activa ? 'desactivada' : 'activada'} exitosamente.`
+          );
           await cargarDatos();
         } catch (error) {
-          showError('Error al eliminar', 'No se pudo eliminar la empresa');
+          showError('Error al actualizar estado', 'No se pudo cambiar el estado de la empresa');
         }
     });
   };
@@ -344,7 +352,7 @@ export const GestionEmpresas: React.FC = () => {
             Administra empresas y su configuración por país
           </p>
         </div>
-        {tienePermiso('empresas:create') && (
+        {puedeCrearEmpresa && (
           <button
             onClick={() => openModal('create')}
             className="mt-4 sm:mt-0 flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -453,7 +461,7 @@ export const GestionEmpresas: React.FC = () => {
                 : 'Comienza creando tu primera empresa'
               }
             </p>
-            {!searchTerm && !selectedPais && tienePermiso('empresas:create') && (
+            {!searchTerm && !selectedPais && puedeCrearEmpresa && (
               <button
                 onClick={() => openModal('create')}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -541,7 +549,7 @@ export const GestionEmpresas: React.FC = () => {
                         >
                           <Users className="h-4 w-4" />
                         </button>
-                        {tienePermiso('empresas:edit') && (
+                        {puedeEditarEmpresa && (
                           <button 
                             onClick={() => openModal('edit', empresa)}
                             className="text-indigo-600 hover:text-indigo-900"
@@ -550,13 +558,13 @@ export const GestionEmpresas: React.FC = () => {
                             <Edit className="h-4 w-4" />
                           </button>
                         )}
-                        {tienePermiso('empresas:delete') && (
+                        {puedeCambiarEstadoEmpresa && (
                           <button 
-                            onClick={() => handleDeleteEmpresa(empresa)}
-                            className="text-red-600 hover:text-red-900" 
-                            title="Eliminar"
+                            onClick={() => handleToggleActivaEmpresa(empresa)}
+                            className={empresa.activa ? 'text-amber-600 hover:text-amber-900' : 'text-green-600 hover:text-green-900'}
+                            title={empresa.activa ? 'Desactivar' : 'Activar'}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {empresa.activa ? <UserMinus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                           </button>
                         )}
                       </div>

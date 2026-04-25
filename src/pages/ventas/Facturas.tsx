@@ -228,15 +228,20 @@ export default function Facturas() {
   };
 
   const esFacturaComision = (factura: FacturaVenta): boolean => {
-    return factura.metadata?.tipo === 'factura_comisiones_partner' || factura.serie === 'COM';
+    return (
+      factura.metadata?.tipo === 'factura_comisiones_partner'
+      || factura.metadata?.tipo === 'factura_promocion_partner'
+      || factura.serie === 'COM'
+      || factura.serie === 'PROM'
+    );
   };
 
   const handleMarcarComoPagada = (factura: FacturaVenta) => {
     if (esFacturaComision(factura)) {
       mostrarNotificacion(
         'warning',
-        'Factura de Comisión',
-        'Las facturas de comisión se marcan automáticamente como pagadas cuando el cliente paga en el marketplace. No es necesario marcarlas manualmente.'
+        'Factura Automática',
+        'Esta factura se gestiona automáticamente por integración (comisión/promoción). No es necesario marcarla manualmente como pagada.'
       );
       return;
     }
@@ -259,32 +264,22 @@ export default function Facturas() {
   };
 
   const handleEnviarDGI = async (factura: FacturaVenta) => {
-    console.log('📤 [handleEnviarDGI] Iniciando proceso para factura:', factura.numero_factura, factura.id);
-
     setConfirmModal({
       show: true,
       title: 'Enviar a DGI',
       message: `¿Desea enviar la factura ${factura.numero_factura} al sistema de facturación electrónica de DGI?`,
       onConfirm: async () => {
-        console.log('✅ [handleEnviarDGI] Usuario confirmó, cerrando modal...');
         setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
         setEnviandoDGI(factura.id);
 
         try {
-          console.log('🚀 [handleEnviarDGI] Llamando a enviarFacturaDGI...');
-          const resultado = await enviarFacturaDGI(factura.id);
-          console.log('✅ [handleEnviarDGI] Factura enviada exitosamente:', resultado);
+          await enviarFacturaDGI(factura.id);
 
           mostrarNotificacion('success', 'Éxito', 'Factura enviada a DGI correctamente');
 
-          console.log('🔄 [handleEnviarDGI] Recargando facturas...');
           await cargarFacturas();
           await cargarEstadisticas();
-          console.log('✅ [handleEnviarDGI] Proceso completado');
         } catch (error: any) {
-          console.error('❌ [handleEnviarDGI] Error completo:', error);
-          console.error('❌ [handleEnviarDGI] Error message:', error.message);
-          console.error('❌ [handleEnviarDGI] Error stack:', error.stack);
           mostrarNotificacion('error', 'Error al Enviar', error.message || 'Error desconocido al enviar a DGI');
         } finally {
           setEnviandoDGI(null);
@@ -636,9 +631,12 @@ export default function Facturas() {
     title: string,
     message: string
   ) => {
-    // Notificaciones deshabilitadas - solo consola
-    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
-    console.log(icon, title, message);
+    setNotification({
+      show: true,
+      type,
+      title,
+      message,
+    });
   };
 
   const mostrarConfirmacion = (title: string, message: string, onConfirm: () => void) => {
@@ -880,9 +878,9 @@ export default function Facturas() {
                         {esFacturaComision(factura) && (
                           <span
                             className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800"
-                            title="Factura de comisión generada automáticamente"
+                            title="Factura automática de integración"
                           >
-                            Comisión
+                            Automática
                           </span>
                         )}
                       </div>
@@ -1070,7 +1068,7 @@ export default function Facturas() {
                             }`}
                             title={
                               esFacturaComision(factura)
-                                ? 'Las facturas de comisión se cobran automáticamente'
+                                ? 'Las facturas automáticas se cobran/compensan automáticamente'
                                 : 'Marcar como pagada'
                             }
                           >
@@ -1089,7 +1087,7 @@ export default function Facturas() {
                             </svg>
                             {esFacturaComision(factura) && (
                               <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg z-10 whitespace-normal">
-                                Factura de comisión: El cobro se registra automáticamente cuando el cliente paga en el marketplace. No marcar manualmente.
+                                Factura automática: el cobro/compensación se registra por integración. No marcar manualmente.
                               </div>
                             )}
                           </button>
@@ -1261,7 +1259,6 @@ export default function Facturas() {
           title={confirmModal.title}
           message={confirmModal.message}
           onConfirm={() => {
-            console.log('🔘 [ConfirmModal] Botón confirmar presionado');
             confirmModal.onConfirm();
           }}
           onClose={() => setConfirmModal({ ...confirmModal, show: false })}

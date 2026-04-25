@@ -185,7 +185,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
          movimiento.id === '4' || movimiento.id === '5')) {
       showError(
         'Error al guardar movimiento',
-        'No se puede editar un movimiento de datos de prueba. Por favor, cargue los datos en Firebase primero usando el botón "Cargar Datos en Firebase".'
+        'No se puede editar un movimiento de datos de prueba. Complete primero la carga inicial legacy y vuelva a intentarlo.'
       );
       return;
     }
@@ -379,7 +379,7 @@ export const MovimientoTesoreriaModal: React.FC<MovimientoTesoreriaModalProps> =
               )}
               {tiposMovimientoTesoreria.length === 0 && !loadingNomencladores && (
                 <p className="text-xs text-yellow-600 mt-1">
-                  No hay tipos de movimiento disponibles. Cargue los datos en Firebase primero.
+                  No hay tipos de movimiento disponibles. Revise la parametrización de nomencladores en Supabase.
                 </p>
               )}
             </div>

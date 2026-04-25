@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, Edit2, Trash2, DollarSign, Calendar, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Plus, Search, Edit2, Trash2, DollarSign, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import { useSesion } from '../../context/SesionContext';
 import { supabase } from '../../config/supabase';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
@@ -34,11 +34,38 @@ interface ComisionResumen {
   total_pagado: number;
 }
 
+interface WalletSaldoPartner {
+  partner_id: string;
+  saldo_actual: number;
+  total_creditos: number;
+  total_debitos: number;
+  cantidad_movimientos: number;
+  moneda: string;
+}
+
+interface WalletSaldoRow {
+  partner_id: string;
+  saldo_actual: number | string;
+  total_creditos: number | string;
+  total_debitos: number | string;
+  cantidad_movimientos: number | string;
+  moneda: string;
+}
+
+interface ComisionResumenRow {
+  partner_id: string;
+  comision_monto: number | string;
+  estado_comision: string;
+  estado_pago: string;
+  partners_aliados: { razon_social: string }[] | { razon_social: string };
+}
+
 export default function Partners() {
   const { empresaActual } = useSesion();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [filteredPartners, setFilteredPartners] = useState<Partner[]>([]);
   const [comisionesResumen, setComisionesResumen] = useState<Record<string, ComisionResumen>>({});
+  const [walletSaldos, setWalletSaldos] = useState<Record<string, WalletSaldoPartner>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +73,8 @@ export default function Partners() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [partnerSeleccionado, setPartnerSeleccionado] = useState<Partner | null>(null);
   const [partnerAEliminar, setPartnerAEliminar] = useState<Partner | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     if (empresaActual) {
@@ -57,6 +86,10 @@ export default function Partners() {
     filtrarPartners();
   }, [searchTerm, partners]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const cargarDatos = async () => {
     if (!empresaActual) return;
 
@@ -65,6 +98,7 @@ export default function Partners() {
       await Promise.all([
         cargarPartners(),
         cargarComisionesResumen(),
+        cargarWalletSaldos(),
       ]);
     } catch (error) {
       console.error('Error al cargar datos:', error);
@@ -132,12 +166,16 @@ export default function Partners() {
 
     const resumen: Record<string, ComisionResumen> = {};
 
-    data?.forEach((comision: any) => {
+    (data as ComisionResumenRow[] | null)?.forEach((comision) => {
       const partnerId = comision.partner_id;
+      const partnerNombre = Array.isArray(comision.partners_aliados)
+        ? (comision.partners_aliados[0]?.razon_social || 'Partner')
+        : comision.partners_aliados?.razon_social || 'Partner';
+
       if (!resumen[partnerId]) {
         resumen[partnerId] = {
           partner_id: partnerId,
-          partner_nombre: comision.partners_aliados.razon_social,
+          partner_nombre: partnerNombre,
           cantidad_pendientes: 0,
           total_pendiente: 0,
           cantidad_facturadas: 0,
@@ -147,7 +185,7 @@ export default function Partners() {
         };
       }
 
-      const monto = parseFloat(comision.comision_monto);
+      const monto = Number(comision.comision_monto || 0);
 
       if (comision.estado_pago === 'pagada') {
         resumen[partnerId].cantidad_pagadas++;
@@ -164,6 +202,35 @@ export default function Partners() {
     setComisionesResumen(resumen);
   };
 
+  const cargarWalletSaldos = async () => {
+    if (!empresaActual) return;
+
+    const { data, error } = await supabase
+      .from('v_partner_wallet_saldos')
+      .select('partner_id, saldo_actual, total_creditos, total_debitos, cantidad_movimientos, moneda')
+      .eq('empresa_id', empresaActual.id);
+
+    if (error) {
+      console.warn('No se pudo cargar saldos wallet de partners:', error);
+      setWalletSaldos({});
+      return;
+    }
+
+    const saldosMap: Record<string, WalletSaldoPartner> = {};
+    (data || []).forEach((saldo: WalletSaldoRow) => {
+      saldosMap[saldo.partner_id] = {
+        partner_id: saldo.partner_id,
+        saldo_actual: Number(saldo.saldo_actual || 0),
+        total_creditos: Number(saldo.total_creditos || 0),
+        total_debitos: Number(saldo.total_debitos || 0),
+        cantidad_movimientos: Number(saldo.cantidad_movimientos || 0),
+        moneda: saldo.moneda || 'UYU',
+      };
+    });
+
+    setWalletSaldos(saldosMap);
+  };
+
   const filtrarPartners = () => {
     if (!searchTerm.trim()) {
       setFilteredPartners(partners);
@@ -178,6 +245,12 @@ export default function Partners() {
     );
     setFilteredPartners(filtered);
   };
+
+  const totalPages = Math.max(1, Math.ceil(filteredPartners.length / pageSize));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const startIndex = (currentPageSafe - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedPartners = filteredPartners.slice(startIndex, endIndex);
 
   const handleEliminar = (partner: Partner) => {
     setPartnerAEliminar(partner);
@@ -390,6 +463,20 @@ export default function Partners() {
             </div>
           </div>
         </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Saldo Wallet Aliados</p>
+              <p className="text-2xl font-bold text-indigo-600 mt-1">
+                ${Object.values(walletSaldos).reduce((sum, r) => sum + r.saldo_actual, 0).toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-indigo-100 p-3 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-indigo-600" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -425,14 +512,16 @@ export default function Partners() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Documento</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contacto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comisiones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wallet</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Facturación</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPartners.map((partner) => {
+                {paginatedPartners.map((partner) => {
                   const resumen = comisionesResumen[partner.id];
+                  const saldoWallet = walletSaldos[partner.id];
                   return (
                     <tr key={partner.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
@@ -476,6 +565,19 @@ export default function Partners() {
                           </div>
                         ) : (
                           <span className="text-xs text-gray-400">Sin comisiones</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {saldoWallet ? (
+                          <div className="space-y-1 text-xs">
+                            <div className={`font-semibold ${saldoWallet.saldo_actual >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                              Saldo: ${saldoWallet.saldo_actual.toFixed(2)}
+                            </div>
+                            <div className="text-gray-500">Créditos: ${saldoWallet.total_creditos.toFixed(2)}</div>
+                            <div className="text-gray-500">Débitos: ${saldoWallet.total_debitos.toFixed(2)}</div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">Sin movimientos</span>
                         )}
                       </td>
                       <td className="px-6 py-4">
@@ -527,6 +629,33 @@ export default function Partners() {
                 })}
               </tbody>
             </table>
+
+            {filteredPartners.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div className="text-sm text-gray-600">
+                  Mostrando {startIndex + 1} - {Math.min(endIndex, filteredPartners.length)} de {filteredPartners.length}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPageSafe === 1}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm text-gray-700 px-2">
+                    Página {currentPageSafe} de {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPageSafe === totalPages}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

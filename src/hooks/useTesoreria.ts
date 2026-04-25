@@ -221,6 +221,21 @@ export function useTesoreria(empresaId: string | undefined) {
     }
   };
 
+  const inicializarCuentasBancariasLegacy = async () => {
+    if (!empresaId) {
+      throw new Error('No hay empresa seleccionada para inicializar cuentas.');
+    }
+
+    try {
+      const cuentasCreadas = await tesoreriaSupabaseService.inicializarCuentasBancariasLegacy(empresaId);
+      await cargarDatos();
+      return cuentasCreadas;
+    } catch (err: any) {
+      console.error('Error inicializando cuentas bancarias legacy:', err);
+      throw err;
+    }
+  };
+
   const actualizarMovimiento = async (movimientoId: string, updates: any) => {
     try {
       // Mapear propiedades del componente a las del servicio
@@ -266,6 +281,7 @@ export function useTesoreria(empresaId: string | undefined) {
     loading,
     error,
     crearCuentaBancaria,
+    inicializarCuentasBancariasLegacy,
     actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,

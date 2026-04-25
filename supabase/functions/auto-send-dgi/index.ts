@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { determinarIndicadorFacturacion, formatearFechaDGI, redondearDecimales } from './helpers.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -329,9 +330,9 @@ function generarETicket(factura: any, items: any[], cliente: any, config: any, t
 
   const itemsDGI = items.map((item) => {
     const itemDGI: any = {
-      cantidad: parseFloat(item.cantidad),
+      cantidad: redondearDecimales(item.cantidad),
       concepto: item.descripcion,
-      precio: parseFloat(item.precio_unitario),
+      precio: redondearDecimales(item.precio_unitario),
       indicador_facturacion: determinarIndicadorFacturacion(item.tasa_iva),
     };
     if (item.codigo) { itemDGI.codigo = item.codigo; }
@@ -339,10 +340,10 @@ function generarETicket(factura: any, items: any[], cliente: any, config: any, t
     // Priorizar porcentaje de descuento sobre monto (normalmente se usa %)
     if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
       itemDGI.descuento_tipo = '%';
-      itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
+      itemDGI.descuento_cantidad = redondearDecimales(item.descuento_porcentaje);
     } else if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
       itemDGI.descuento_tipo = '$';
-      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
+      itemDGI.descuento_cantidad = redondearDecimales(item.descuento_monto);
     } else {
       itemDGI.descuento_tipo = '';
       itemDGI.descuento_cantidad = 0;
@@ -390,9 +391,9 @@ function generarEFactura(factura: any, items: any[], cliente: any, config: any, 
 
   const itemsDGI = items.map((item) => {
     const itemDGI: any = {
-      cantidad: parseFloat(item.cantidad),
+      cantidad: redondearDecimales(item.cantidad),
       concepto: item.descripcion,
-      precio: parseFloat(item.precio_unitario),
+      precio: redondearDecimales(item.precio_unitario),
       indicador_facturacion: determinarIndicadorFacturacion(item.tasa_iva),
     };
     if (item.codigo) { itemDGI.codigo = item.codigo; }
@@ -400,10 +401,10 @@ function generarEFactura(factura: any, items: any[], cliente: any, config: any, 
     // Priorizar porcentaje de descuento sobre monto
     if (item.descuento_porcentaje && parseFloat(item.descuento_porcentaje) > 0) {
       itemDGI.descuento_tipo = '%';
-      itemDGI.descuento_cantidad = parseFloat(item.descuento_porcentaje);
+      itemDGI.descuento_cantidad = redondearDecimales(item.descuento_porcentaje);
     } else if (item.descuento_monto && parseFloat(item.descuento_monto) > 0) {
       itemDGI.descuento_tipo = '$';
-      itemDGI.descuento_cantidad = parseFloat(item.descuento_monto);
+      itemDGI.descuento_cantidad = redondearDecimales(item.descuento_monto);
     } else {
       itemDGI.descuento_tipo = '';
       itemDGI.descuento_cantidad = 0;
@@ -455,22 +456,6 @@ function generarEFactura(factura: any, items: any[], cliente: any, config: any, 
   return comprobante;
 }
 
-function formatearFechaDGI(fechaISO: string): string {
-  const fecha = new Date(fechaISO);
-  const dia = String(fecha.getDate()).padStart(2, '0');
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-  const anio = fecha.getFullYear();
-  return `${dia}/${mes}/${anio}`;
-}
-
-function determinarIndicadorFacturacion(tasaIva: string | number | null): number {
-  if (!tasaIva || parseFloat(tasaIva.toString()) === 0) { return 1; }
-  const tasa = parseFloat(tasaIva.toString());
-  if (tasa === 0.10) { return 2; }
-  else if (tasa === 0.22) { return 3; }
-  else { return 4; }
-}
-
 async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, config: any, resultadoDGI: any, empresa: any): Promise<void> {
   console.log('📧 [EmailPDF] Preparando envío de PDF por email...');
 
@@ -479,8 +464,8 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
 
   // Construir items para el PDF
   const itemsPDF = items.map((item, index) => {
-    const cantidad = parseFloat(item.cantidad || 0);
-    const precioUnitario = parseFloat(item.precio_unitario || 0);
+    const cantidad = redondearDecimales(item.cantidad || 0);
+    const precioUnitario = redondearDecimales(item.precio_unitario || 0);
     const tasaIva = parseFloat(item.tasa_iva || 0);
 
     console.log(`📦 [EmailPDF] Item ${index + 1}: cantidad=${cantidad}, precio_unitario=${precioUnitario}, tasa_iva=${tasaIva}`);
@@ -493,18 +478,18 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
       descuentoMonto = parseFloat(item.descuento_monto);
     }
 
-    const lineSubtotal = (precioUnitario * cantidad) - descuentoMonto;
-    const iva = lineSubtotal * tasaIva;
-    const total = lineSubtotal + iva;
+    const lineSubtotal = redondearDecimales((precioUnitario * cantidad) - descuentoMonto);
+    const iva = redondearDecimales(lineSubtotal * tasaIva);
+    const total = redondearDecimales(lineSubtotal + iva);
 
     const itemPDF = {
       numero: index + 1,
       descripcion: item.descripcion || '',
       cantidad: cantidad,
       precio_unitario: precioUnitario,
-      descuento: descuentoMonto,
+      descuento: redondearDecimales(descuentoMonto),
       line_subtotal: lineSubtotal,
-      iva_porcentaje: tasaIva * 100,
+      iva_porcentaje: redondearDecimales(tasaIva * 100),
       iva: iva,
       total: total
     };
@@ -524,9 +509,9 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
     serie: serieReal, // Usar la serie que devolvió DGI
     fecha_emision: factura.fecha_emision ? formatearFechaDGI(factura.fecha_emision) : formatearFechaDGI(new Date().toISOString()),
     moneda: factura.moneda || 'UYU',
-    subtotal: parseFloat(factura.subtotal || 0),
-    iva: parseFloat(factura.total_iva || 0),
-    total: parseFloat(factura.total || 0),
+    subtotal: redondearDecimales(factura.subtotal || 0),
+    iva: redondearDecimales(factura.total_iva || 0),
+    total: redondearDecimales(factura.total || 0),
     numero_cfe: factura.numero_factura || '',
     direccion: empresa?.direccion || '',
     ciudad: empresa?.ciudad || 'Montevideo',
@@ -536,10 +521,10 @@ async function enviarPDFPorEmail(factura: any, items: any[], cliente: any, confi
 
   // Construir totales
   const totals = {
-    subtotal: parseFloat(factura.subtotal || 0),
+    subtotal: redondearDecimales(factura.subtotal || 0),
     tax_label: 'IVA (22%)',
-    tax_amount: parseFloat(factura.total_iva || 0),
-    grand_total: parseFloat(factura.total || 0)
+    tax_amount: redondearDecimales(factura.total_iva || 0),
+    grand_total: redondearDecimales(factura.total || 0)
   };
 
   // Construir response_payload con los datos de DGI

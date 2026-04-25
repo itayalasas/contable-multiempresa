@@ -106,9 +106,15 @@ function PlanCuentas() {
       setShowModal(false);
     } catch (error) {
       console.error('Error al guardar cuenta:', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : (typeof error === 'object' && error !== null && 'message' in error
+              ? String((error as { message?: unknown }).message)
+              : 'Error desconocido al guardar la cuenta');
       showError(
         'Error al guardar cuenta',
-        error instanceof Error ? error.message : 'Error desconocido al guardar la cuenta'
+        errorMessage
       );
     } finally {
       setSavingForm(false);

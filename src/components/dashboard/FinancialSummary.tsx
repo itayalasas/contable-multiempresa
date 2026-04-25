@@ -1,6 +1,6 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, DollarSign, CreditCard, Receipt, Wallet } from 'lucide-react';
-import { ResumenFinanciero } from '../../services/firebase/dashboard';
+import { ResumenFinanciero } from '../../services/supabase/dashboard';
 
 interface FinancialSummaryProps {
   resumen: ResumenFinanciero;

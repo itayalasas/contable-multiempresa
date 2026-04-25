@@ -76,6 +76,103 @@ interface SimpleWebhookPayload {
   metadata?: Record<string, any>;
 }
 
+const ORDER_EVENTS: Array<SimpleWebhookPayload['event']> = [
+  'order.created',
+  'order.paid',
+  'order.cancelled',
+  'order.updated',
+];
+
+const ORDER_EVENT_SET = new Set(ORDER_EVENTS);
+
+interface PromotionInvoiceItem {
+  sku?: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal?: number;
+  discount?: number;
+  tax_rate?: number;
+  tax_amount?: number;
+  total?: number;
+}
+
+interface PromotionInvoicePayload {
+  event: 'promotion.invoice.created';
+  empresa_id: string;
+  timestamp?: string;
+  source?: string;
+  document: {
+    document_type: string;
+    invoice_type: string;
+    invoice_number: string;
+    issue_date?: string;
+    due_date?: string;
+    currency?: string;
+    subtotal?: number;
+    tax?: number;
+    total?: number;
+    discount?: number;
+    status?: string;
+  };
+  partner: {
+    partner_id: string;
+    name: string;
+    email?: string;
+    document_type?: string;
+    document_number?: string;
+    phone?: string;
+  };
+  promotion?: {
+    promotion_id?: string;
+    title?: string;
+    period?: string;
+    invoice_mode?: string;
+    views?: number;
+    clicks?: number;
+  };
+  items: PromotionInvoiceItem[];
+  accounts_receivable?: AccountsReceivableInstruction;
+  metadata?: Record<string, any>;
+}
+
+interface AccountsReceivableInstruction {
+  create?: boolean;
+  debtor_type?: string;
+  debtor_id?: string;
+  reference_type?: string;
+  reference_id?: string;
+  amount: number;
+  currency?: string;
+  status?: string;
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function isOrderPayload(payload: any): payload is SimpleWebhookPayload {
+  return (
+    payload &&
+    ORDER_EVENT_SET.has(payload.event) &&
+    typeof payload.empresa_id === 'string' &&
+    payload.order &&
+    payload.customer &&
+    Array.isArray(payload.items)
+  );
+}
+
+function isPromotionInvoicePayload(payload: any): payload is PromotionInvoicePayload {
+  return (
+    payload &&
+    payload.event === 'promotion.invoice.created' &&
+    typeof payload.empresa_id === 'string' &&
+    payload.document &&
+    payload.partner &&
+    Array.isArray(payload.items)
+  );
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -96,9 +193,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const payload: SimpleWebhookPayload = await req.json();
+    const payload = await req.json();
 
-    console.log('🔔 [Webhook] Recibido:', payload.event, payload.order.order_id);
+    const referenciaEvento = payload?.order?.order_id
+      || payload?.document?.invoice_number
+      || payload?.promotion?.promotion_id
+      || payload?.metadata?.reference
+      || 'sin-referencia';
+
+    console.log('🔔 [Webhook] Recibido:', payload?.event, referenciaEvento);
 
     const { data: evento, error: eventoError } = await supabase
       .from('eventos_externos')
@@ -120,7 +223,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const result = await handleOrder(supabase, payload, evento.id);
+    let result;
+
+    if (isOrderPayload(payload)) {
+      result = await handleOrder(supabase, payload, evento.id);
+    } else if (isPromotionInvoicePayload(payload)) {
+      result = await handlePromotionInvoice(supabase, payload, evento.id);
+    } else {
+      result = {
+        success: false,
+        error: `Evento ${payload?.event || 'desconocido'} no soportado`,
+      };
+    }
 
     if (result.success) {
       await supabase
@@ -668,49 +782,7 @@ async function handleOrder(
       }
     }
 
-    // 🚀 Envío automático a DGI
-    try {
-      console.log('🚀 [Order] Iniciando envío automático a DGI para factura:', factura.id);
-
-      // Verificar si la empresa tiene auto-send habilitado
-      const { data: autoSendConfig } = await supabase
-        .from('empresas_auto_send_dgi')
-        .select('auto_send_enabled')
-        .eq('empresa_id', payload.empresa_id)
-        .maybeSingle();
-
-      if (autoSendConfig?.auto_send_enabled) {
-        console.log('✅ [Order] Auto-send habilitado, enviando a DGI...');
-
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const autoSendUrl = `${supabaseUrl}/functions/v1/auto-send-dgi`;
-
-        // Llamada asíncrona para no bloquear la respuesta
-        fetch(autoSendUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ facturaId: factura.id }),
-        }).then(async (response) => {
-          if (response.ok) {
-            const result = await response.json();
-            console.log('✅ [Order] Factura enviada a DGI exitosamente:', result);
-          } else {
-            const errorText = await response.text();
-            console.error('⚠️ [Order] Error al enviar a DGI (no crítico):', errorText);
-          }
-        }).catch((error) => {
-          console.error('⚠️ [Order] Error en llamada a auto-send-dgi (no crítico):', error.message);
-        });
-
-        console.log('🔄 [Order] Envío a DGI iniciado en background');
-      } else {
-        console.log('ℹ️ [Order] Auto-send DGI deshabilitado para esta empresa');
-      }
-    } catch (autoSendError) {
-      console.error('⚠️ [Order] Error verificando auto-send (no crítico):', autoSendError);
-    }
+    await triggerAutoSendDGI(supabase, payload.empresa_id, factura.id);
 
     return {
       success: true,
@@ -725,6 +797,219 @@ async function handleOrder(
     };
   } catch (error) {
     console.error('❌ [Order] Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function handlePromotionInvoice(
+  supabase: any,
+  payload: PromotionInvoicePayload,
+  eventoId: string
+) {
+  try {
+    console.log('🧾 [Promotion] Procesando factura:', payload.document?.invoice_number);
+
+    if (!payload.document || !payload.partner) {
+      return { success: false, error: 'Payload de promoción incompleto' };
+    }
+
+    const { data: empresa } = await supabase
+      .from('empresas')
+      .select('id, pais_id')
+      .eq('id', payload.empresa_id)
+      .maybeSingle();
+
+    if (!empresa) {
+      return { success: false, error: 'Empresa no encontrada' };
+    }
+
+    const partnerId = await findOrCreatePartnerDesdePayload(supabase, payload.empresa_id, payload.partner);
+    const clienteId = await findOrCreateClienteDesdePartner(
+      supabase,
+      payload.empresa_id,
+      empresa.pais_id,
+      payload.partner
+    );
+
+    const serie = 'PROM';
+    const siguienteNumero = await obtenerSiguienteNumeroFactura(supabase, payload.empresa_id, serie);
+
+    const subtotal = Number(payload.document.subtotal ?? 0);
+    const impuestos = Number(payload.document.tax ?? 0);
+    const descuento = Number(payload.document.discount ?? 0);
+    const total = Number(payload.document.total ?? (subtotal - descuento + impuestos));
+
+    const fechaEmision = payload.document.issue_date || new Date().toISOString().split('T')[0];
+    const fechaVencimiento = payload.document.due_date || fechaEmision;
+    const estadoFactura = mapPromotionInvoiceStatus(payload.document.status);
+
+    const { data: factura, error: facturaError } = await supabase
+      .from('facturas_venta')
+      .insert({
+        empresa_id: payload.empresa_id,
+        cliente_id: clienteId,
+        numero_factura: siguienteNumero,
+        serie,
+        tipo_documento: 'e-factura',
+        fecha_emision: fechaEmision,
+        fecha_vencimiento: fechaVencimiento,
+        estado: estadoFactura,
+        subtotal: subtotal.toFixed(2),
+        descuento: descuento.toFixed(2),
+        total_iva: impuestos.toFixed(2),
+        total: total.toFixed(2),
+        moneda: payload.document.currency || 'UYU',
+        tipo_cambio: 1,
+        dgi_enviada: false,
+        asiento_generado: true,
+        asiento_contable_id: null,
+        asiento_error: null,
+        observaciones: payload.promotion
+          ? `Cargo por promoción ${payload.promotion.title || ''} (${payload.promotion.period || ''})`
+          : 'Cargo por promoción marketplace',
+        metadata: {
+          tipo: 'factura_promocion_partner',
+          promotion_invoice_number: payload.document.invoice_number,
+          promotion_id: payload.promotion?.promotion_id,
+          promotion_period: payload.promotion?.period,
+          promotion_title: payload.promotion?.title,
+          promotion_invoice_mode: payload.promotion?.invoice_mode,
+          partner_id: partnerId,
+          partner_id_externo: payload.partner.partner_id,
+          partner_documento: payload.partner.document_number,
+          accounts_receivable: payload.accounts_receivable,
+          evento_id: eventoId,
+          source: payload.source || 'promotion_billing',
+        },
+      })
+      .select()
+      .single();
+
+    if (facturaError) {
+      return { success: false, error: `Error creando factura de promoción: ${facturaError.message}` };
+    }
+
+    const saldoDisponibleAntes = await obtenerSaldoWalletPartner(
+      supabase,
+      payload.empresa_id,
+      partnerId,
+      payload.document.currency || 'UYU'
+    );
+
+    await registrarMovimientoWalletPartner(
+      supabase,
+      payload.empresa_id,
+      partnerId,
+      'DEBITO_FACTURA_PROMOCION',
+      -1,
+      total,
+      payload.document.currency || 'UYU',
+      'factura_promocion_partner',
+      factura.id,
+      `Cargo promoción ${factura.serie}-${factura.numero_factura}`,
+      {
+        promotion_invoice_number: payload.document.invoice_number,
+        promotion_id: payload.promotion?.promotion_id,
+      }
+    );
+
+    for (let i = 0; i < payload.items.length; i++) {
+      const item = payload.items[i];
+      const rawSubtotal = Number(item.subtotal ?? item.unit_price * item.quantity);
+      const rawDiscount = Number(item.discount ?? 0);
+      const netSubtotal = rawSubtotal - rawDiscount;
+      let rawTaxRate = typeof item.tax_rate === 'number' ? item.tax_rate : 0;
+      if (rawTaxRate > 1) {
+        rawTaxRate = rawTaxRate / 100;
+      }
+      const taxAmount = Number(item.tax_amount ?? netSubtotal * rawTaxRate);
+      const totalItem = Number(item.total ?? netSubtotal + taxAmount);
+      const precioUnitario = netSubtotal / (item.quantity || 1);
+      const descuentoPorcentaje = rawSubtotal > 0 && rawDiscount > 0
+        ? (rawDiscount / rawSubtotal) * 100
+        : 0;
+
+      const { error: itemError } = await supabase
+        .from('facturas_venta_items')
+        .insert({
+          factura_id: factura.id,
+          numero_linea: i + 1,
+          codigo: item.sku || `PROM-${i + 1}`,
+          descripcion: item.name,
+          cantidad: item.quantity,
+          precio_unitario: precioUnitario.toFixed(2),
+          descuento_porcentaje: descuentoPorcentaje.toFixed(2),
+          descuento_monto: rawDiscount.toFixed(2),
+          tasa_iva: rawTaxRate.toFixed(4),
+          monto_iva: taxAmount.toFixed(2),
+          subtotal: netSubtotal.toFixed(2),
+          total: totalItem.toFixed(2),
+          metadata: {
+            sku: item.sku,
+            promotion_id: payload.promotion?.promotion_id,
+            promotion_invoice_number: payload.document.invoice_number,
+          },
+        });
+
+      if (itemError) {
+        console.error('❌ [Promotion] Error creando item:', itemError);
+        return { success: false, error: `Error creando item de promoción: ${itemError.message}` };
+      }
+    }
+
+    const autoCrearCxc = payload.accounts_receivable?.create !== false;
+    const montoInstruccion = Number(payload.accounts_receivable?.amount || 0);
+    const techoInstruccion = montoInstruccion > 0 ? montoInstruccion : total;
+    const montoCompensado = autoCrearCxc
+      ? round2(Math.min(round2(saldoDisponibleAntes), round2(total), round2(techoInstruccion)))
+      : 0;
+
+    if (montoCompensado > 0) {
+      const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
+      const { error: pagoError } = await supabase
+        .from('pagos_cliente')
+        .insert({
+          factura_id: factura.id,
+          fecha_pago: new Date().toISOString().split('T')[0],
+          monto: montoCompensado.toFixed(2),
+          tipo_pago: 'COMPENSACION_SALDO_ALIADO',
+          referencia: `COMP-${factura.serie}-${factura.numero_factura}`,
+          observaciones: `Compensación automática contra saldo de ventas del aliado`,
+          creado_por: SISTEMA_USER_ID,
+        });
+
+      if (pagoError) {
+        console.warn('⚠️ [Promotion] No se pudo registrar pago por compensación:', pagoError);
+      } else {
+        const saldoFactura = round2(total - montoCompensado);
+        const nuevoEstado = saldoFactura <= 0 ? 'pagada' : 'pendiente';
+
+        const { error: facturaUpdateError } = await supabase
+          .from('facturas_venta')
+          .update({ estado: nuevoEstado })
+          .eq('id', factura.id);
+
+        if (facturaUpdateError) {
+          console.warn('⚠️ [Promotion] No se pudo actualizar estado de factura tras compensación:', facturaUpdateError);
+        }
+      }
+    }
+
+    await triggerAutoSendDGI(supabase, payload.empresa_id, factura.id);
+
+    return {
+      success: true,
+      factura_id: factura.id,
+      numero_factura: factura.numero_factura,
+      serie: factura.serie,
+      partner_id: partnerId,
+      cliente_id: clienteId,
+      monto_compensado: montoCompensado,
+      saldo_wallet_antes: round2(saldoDisponibleAntes),
+      saldo_wallet_despues: round2(saldoDisponibleAntes - total),
+    };
+  } catch (error) {
+    console.error('❌ [Promotion] Error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -832,6 +1117,23 @@ async function procesarComisionPartner(
       return { success: false, error: `Error registrando comisión: ${comisionError.message}` };
     }
 
+    await registrarMovimientoWalletPartner(
+      supabase,
+      empresaId,
+      partnerId,
+      'CREDITO_VENTA_ALIADO',
+      1,
+      comisionMontoConIVA,
+      'UYU',
+      'comision_partner',
+      comision.id,
+      `Crédito wallet por venta ${orderId}`,
+      {
+        order_id: orderId,
+        factura_venta_id: facturaId,
+      }
+    );
+
     console.log('✅ [Comision] Registrada:', comision.id);
 
     // NOTA: Las comisiones de Mercado Pago son funcionalidad interna del sistema contable
@@ -845,6 +1147,321 @@ async function procesarComisionPartner(
   } catch (error) {
     console.error('❌ [Comision] Error:', error);
     return { success: false, error: error.message };
+  }
+}
+
+async function obtenerSaldoWalletPartner(
+  supabase: any,
+  empresaId: string,
+  partnerId: string,
+  moneda: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('partner_wallet_movimientos')
+    .select('signo, monto')
+    .eq('empresa_id', empresaId)
+    .eq('partner_id', partnerId)
+    .eq('moneda', moneda);
+
+  if (error) {
+    console.warn('⚠️ [Wallet] Error obteniendo saldo, se asume 0:', error.message);
+    return 0;
+  }
+
+  const saldo = (data || []).reduce((acc: number, mov: any) => {
+    return acc + (Number(mov.signo || 0) * Number(mov.monto || 0));
+  }, 0);
+
+  return round2(saldo);
+}
+
+async function registrarMovimientoWalletPartner(
+  supabase: any,
+  empresaId: string,
+  partnerId: string,
+  tipoMovimiento: 'CREDITO_VENTA_ALIADO' | 'DEBITO_FACTURA_PROMOCION' | 'AJUSTE_MANUAL',
+  signo: 1 | -1,
+  monto: number,
+  moneda: string,
+  referenciaTipo: string,
+  referenciaId: string,
+  descripcion: string,
+  metadata: Record<string, any> = {}
+): Promise<void> {
+  const montoNormalizado = round2(Math.abs(Number(monto || 0)));
+  if (montoNormalizado <= 0) return;
+
+  const { error } = await supabase
+    .from('partner_wallet_movimientos')
+    .insert({
+      empresa_id: empresaId,
+      partner_id: partnerId,
+      tipo_movimiento: tipoMovimiento,
+      signo,
+      monto: montoNormalizado.toFixed(2),
+      moneda: moneda || 'UYU',
+      referencia_tipo: referenciaTipo,
+      referencia_id: referenciaId,
+      descripcion,
+      metadata,
+    });
+
+  if (error) {
+    console.warn('⚠️ [Wallet] No se pudo registrar movimiento:', error.message);
+  }
+}
+
+async function findOrCreatePartnerDesdePayload(
+  supabase: any,
+  empresaId: string,
+  partner: PromotionInvoicePayload['partner']
+): Promise<string> {
+  const { data: existente } = await supabase
+    .from('partners_aliados')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('partner_id_externo', partner.partner_id)
+    .maybeSingle();
+
+  const partnerData: Record<string, any> = {
+    razon_social: partner.name,
+    documento: partner.document_number || null,
+    tipo_documento: partner.document_type || 'RUT',
+    email: partner.email || null,
+    telefono: partner.phone || null,
+    activo: true,
+    metadata: {
+      origen: 'promotion_invoice',
+      partner_id_externo: partner.partner_id,
+    },
+  };
+
+  if (existente) {
+    const { error: updateError } = await supabase
+      .from('partners_aliados')
+      .update(partnerData)
+      .eq('id', existente.id);
+
+    if (updateError) {
+      console.warn('⚠️ [Promotion] Error actualizando partner:', updateError);
+    }
+
+    return existente.id;
+  }
+
+  const insertData = {
+    ...partnerData,
+    empresa_id: empresaId,
+    partner_id_externo: partner.partner_id,
+    comision_porcentaje_default: 15,
+    facturacion_frecuencia: 'mensual',
+    dia_facturacion: 5,
+  };
+
+  const { data: nuevoPartner, error: partnerError } = await supabase
+    .from('partners_aliados')
+    .insert(insertData)
+    .select()
+    .single();
+
+  if (partnerError) {
+    throw new Error(`Error creando partner desde promoción: ${partnerError.message}`);
+  }
+
+  return nuevoPartner.id;
+}
+
+async function findOrCreateClienteDesdePartner(
+  supabase: any,
+  empresaId: string,
+  paisId: string | null,
+  partner: PromotionInvoicePayload['partner']
+): Promise<string> {
+  let clienteActual: { id: string; metadata?: Record<string, any> | null } | null = null;
+
+  if (partner.document_number) {
+    const { data: clientePorDocumento } = await supabase
+      .from('clientes')
+      .select('id, metadata')
+      .eq('empresa_id', empresaId)
+      .eq('numero_documento', partner.document_number)
+      .maybeSingle();
+
+    if (clientePorDocumento) {
+      clienteActual = clientePorDocumento;
+    }
+  }
+
+  if (!clienteActual) {
+    const { data: clientePorMetadata } = await supabase
+      .from('clientes')
+      .select('id, metadata')
+      .eq('empresa_id', empresaId)
+      .eq('metadata->>partner_id_externo', partner.partner_id)
+      .maybeSingle();
+
+    if (clientePorMetadata) {
+      clienteActual = clientePorMetadata;
+    }
+  }
+
+  const tipoDocumentoId = await obtenerTipoDocumentoId(supabase, paisId, partner.document_type || 'RUT');
+  const metadataActualizada = {
+    ...(clienteActual?.metadata || {}),
+    partner_id_externo: partner.partner_id,
+    origen: 'promotion_invoice',
+  };
+
+  const clienteData: Record<string, any> = {
+    razon_social: partner.name,
+    email: partner.email || null,
+    telefono: partner.phone || null,
+    numero_documento: partner.document_number || null,
+    activo: true,
+    metadata: metadataActualizada,
+  };
+
+  if (tipoDocumentoId) {
+    clienteData.tipo_documento_id = tipoDocumentoId;
+  }
+  if (paisId) {
+    clienteData.pais_id = paisId;
+  }
+
+  if (clienteActual?.id) {
+    const { error: updateError } = await supabase
+      .from('clientes')
+      .update(clienteData)
+      .eq('id', clienteActual.id);
+
+    if (updateError) {
+      console.warn('⚠️ [Promotion] Error actualizando cliente:', updateError);
+    }
+
+    return clienteActual.id;
+  }
+
+  const insertData = {
+    ...clienteData,
+    empresa_id: empresaId,
+  };
+
+  const { data: nuevoCliente, error: clienteError } = await supabase
+    .from('clientes')
+    .insert(insertData)
+    .select()
+    .single();
+
+  if (clienteError) {
+    throw new Error(`Error creando cliente desde partner: ${clienteError.message}`);
+  }
+
+  return nuevoCliente.id;
+}
+
+async function obtenerTipoDocumentoId(
+  supabase: any,
+  paisId: string | null,
+  codigo: string
+): Promise<string | null> {
+  if (!codigo) {
+    return null;
+  }
+
+  let query = supabase
+    .from('tipo_documento_identidad')
+    .select('id');
+
+  if (paisId) {
+    query = query.eq('pais_id', paisId);
+  }
+
+  const { data: tipoDoc } = await query
+    .ilike('codigo', codigo)
+    .maybeSingle();
+
+  return tipoDoc?.id || null;
+}
+
+async function obtenerSiguienteNumeroFactura(
+  supabase: any,
+  empresaId: string,
+  serie: string
+): Promise<string> {
+  const { data: ultimaFactura } = await supabase
+    .from('facturas_venta')
+    .select('numero_factura')
+    .eq('empresa_id', empresaId)
+    .eq('serie', serie)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!ultimaFactura?.numero_factura) {
+    return '00000001';
+  }
+
+  const siguiente = parseInt(ultimaFactura.numero_factura, 10);
+  if (Number.isNaN(siguiente)) {
+    return '00000001';
+  }
+
+  return String(siguiente + 1).padStart(8, '0');
+}
+
+function mapPromotionInvoiceStatus(status?: string | null): 'pendiente' | 'pagada' | 'anulada' {
+  const normalized = (status || '').toLowerCase();
+
+  if (['paid', 'settled', 'completed'].includes(normalized)) {
+    return 'pagada';
+  }
+  if (['cancelled', 'canceled', 'voided', 'rejected'].includes(normalized)) {
+    return 'anulada';
+  }
+  return 'pendiente';
+}
+
+async function triggerAutoSendDGI(supabase: any, empresaId: string, facturaId: string) {
+  try {
+    console.log('🚀 [DGI] Verificando auto-send para factura:', facturaId);
+
+    const { data: autoSendConfig } = await supabase
+      .from('empresas_auto_send_dgi')
+      .select('auto_send_enabled')
+      .eq('empresa_id', empresaId)
+      .maybeSingle();
+
+    if (!autoSendConfig?.auto_send_enabled) {
+      console.log('ℹ️ [DGI] Auto-send deshabilitado para empresa', empresaId);
+      return;
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const autoSendUrl = `${supabaseUrl}/functions/v1/auto-send-dgi`;
+
+    fetch(autoSendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ facturaId }),
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          const result = await response.json();
+          console.log('✅ [DGI] Factura enviada a DGI:', result);
+        } else {
+          const errorText = await response.text();
+          console.error('⚠️ [DGI] Error al enviar a DGI:', errorText);
+        }
+      })
+      .catch((error) => {
+        console.error('⚠️ [DGI] Error invocando auto-send-dgi:', error.message);
+      });
+
+    console.log('🔄 [DGI] Envío a DGI iniciado en background');
+  } catch (error) {
+    console.error('⚠️ [DGI] Error configurando auto-send:', error);
   }
 }
 

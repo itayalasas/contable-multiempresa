@@ -88,6 +88,9 @@ const menuItems: MenuItem[] = [
     slug: 'compras',
     submenu: [
       { title: 'Proveedores', icon: Users, path: '/compras/proveedores', slug: 'proveedores' },
+      { title: 'Facturas Compra', icon: Receipt, path: '/compras/facturas', slug: 'proveedores' },
+      { title: 'Notas Crédito', icon: FileText, path: '/compras/notas-credito', slug: 'proveedores' },
+      { title: 'Órdenes Compra', icon: ShoppingBag, path: '/compras/ordenes', slug: 'proveedores' },
       { title: 'Partners', icon: Users, path: '/compras/partners', slug: 'partners' },
       { title: 'Comisiones', icon: DollarSign, path: '/compras/comisiones', slug: 'comisiones' }
     ]
@@ -108,7 +111,9 @@ const menuItems: MenuItem[] = [
     icon: TrendingUp,
     slug: 'analisis',
     submenu: [
-      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo', slug: 'centros-costo' }
+      { title: 'Centros de Costo', icon: Target, path: '/analisis/centros-costo', slug: 'centros-costo' },
+      { title: 'Segmentos', icon: TrendingUp, path: '/analisis/segmentos', slug: 'centros-costo' },
+      { title: 'Presupuestos', icon: Calendar, path: '/analisis/presupuestos', slug: 'centros-costo' }
     ]
   },
   {
@@ -116,7 +121,10 @@ const menuItems: MenuItem[] = [
     icon: PieChart,
     slug: 'reportes',
     submenu: [
-      { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general', slug: 'balance-general' }
+      { title: 'Balance General', icon: FileBarChart, path: '/reportes/balance-general', slug: 'balance-general' },
+      { title: 'Estado Resultados', icon: BarChart3, path: '/reportes/estado-resultados', slug: 'balance-general' },
+      { title: 'Flujo de Efectivo', icon: Wallet, path: '/reportes/flujo-efectivo', slug: 'balance-general' },
+      { title: 'Por Centro Costo', icon: PieChart, path: '/reportes/centros-costo', slug: 'balance-general' }
     ]
   },
   {

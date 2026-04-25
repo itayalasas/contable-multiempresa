@@ -25,7 +25,6 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom'],
           auth: ['@auth0/auth0-react'],
-          firebase: ['firebase/app', 'firebase/firestore', 'firebase/auth'],
           charts: ['recharts'],
           utils: ['date-fns', 'lucide-react']
         }

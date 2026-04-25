@@ -1,6 +1,12 @@
 import { supabase } from '../../config/supabase';
 import type { PlanCuenta } from '../../types';
 
+const normalizeOptionalUuid = (value?: string | null): string | null => {
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 export const planCuentasSupabaseService = {
   async getCuentasByEmpresa(empresaId: string): Promise<PlanCuenta[]> {
     const { data, error } = await supabase
@@ -58,6 +64,8 @@ export const planCuentasSupabaseService = {
   },
 
   async createCuenta(cuenta: Omit<PlanCuenta, 'id' | 'fechaCreacion' | 'fechaModificacion'>): Promise<PlanCuenta> {
+    const cuentaPadre = normalizeOptionalUuid(cuenta.cuentaPadre);
+
     const { data, error } = await supabase
       .from('plan_cuentas')
       .insert({
@@ -65,7 +73,7 @@ export const planCuentasSupabaseService = {
         nombre: cuenta.nombre,
         tipo: cuenta.tipo,
         nivel: cuenta.nivel,
-        cuenta_padre: cuenta.cuentaPadre,
+        cuenta_padre: cuentaPadre,
         descripcion: cuenta.descripcion,
         saldo: cuenta.saldo || 0,
         activa: cuenta.activa,
@@ -104,6 +112,9 @@ export const planCuentasSupabaseService = {
     if (updates.activa !== undefined) updateData.activa = updates.activa;
     if (updates.saldo !== undefined) updateData.saldo = updates.saldo;
     if (updates.configuracion) updateData.configuracion = updates.configuracion;
+    if (updates.cuentaPadre !== undefined) {
+      updateData.cuenta_padre = normalizeOptionalUuid(updates.cuentaPadre);
+    }
 
     const { error } = await supabase
       .from('plan_cuentas')

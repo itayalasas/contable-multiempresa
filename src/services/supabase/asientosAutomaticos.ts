@@ -4,13 +4,81 @@ import { supabase } from '../../config/supabase';
 const SISTEMA_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 interface MovimientoAsiento {
-  numero_linea: number;
   cuenta_id: string;
-  cuenta_codigo: string;
-  cuenta_nombre: string;
+  cuenta_codigo?: string;
+  cuenta_nombre?: string;
   debe: number;
   haber: number;
   descripcion: string;
+}
+
+function construirEtiquetaCuenta(movimiento: MovimientoAsiento): string {
+  if (movimiento.cuenta_codigo && movimiento.cuenta_nombre) {
+    return `${movimiento.cuenta_codigo} - ${movimiento.cuenta_nombre}`;
+  }
+  if (movimiento.cuenta_nombre) {
+    return movimiento.cuenta_nombre;
+  }
+  if (movimiento.cuenta_codigo) {
+    return movimiento.cuenta_codigo;
+  }
+  return 'Cuenta contable';
+}
+
+function esErrorColumnaFaltante(error: any, columna: string): boolean {
+  return error?.code === 'PGRST204'
+    && typeof error?.message === 'string'
+    && error.message.includes(`'${columna}'`);
+}
+
+async function insertarMovimientosContables(
+  asientoId: string,
+  movimientos: MovimientoAsiento[]
+): Promise<void> {
+  const payloadActual = movimientos.map((movimiento) => ({
+    asiento_id: asientoId,
+    cuenta_id: movimiento.cuenta_id,
+    cuenta: construirEtiquetaCuenta(movimiento),
+    debito: movimiento.debe,
+    credito: movimiento.haber,
+    descripcion: movimiento.descripcion,
+  }));
+
+  const { error } = await supabase
+    .from('movimientos_contables')
+    .insert(payloadActual);
+
+  if (!error) {
+    return;
+  }
+
+  const requiereFallbackLegacy =
+    esErrorColumnaFaltante(error, 'cuenta')
+    || esErrorColumnaFaltante(error, 'debito')
+    || esErrorColumnaFaltante(error, 'credito');
+
+  if (!requiereFallbackLegacy) {
+    throw error;
+  }
+
+  const payloadLegacy = movimientos.map((movimiento, index) => ({
+    asiento_id: asientoId,
+    numero_linea: index + 1,
+    cuenta_id: movimiento.cuenta_id,
+    cuenta_codigo: movimiento.cuenta_codigo || '',
+    cuenta_nombre: movimiento.cuenta_nombre || construirEtiquetaCuenta(movimiento),
+    debe: movimiento.debe,
+    haber: movimiento.haber,
+    descripcion: movimiento.descripcion,
+  }));
+
+  const { error: legacyError } = await supabase
+    .from('movimientos_contables')
+    .insert(payloadLegacy);
+
+  if (legacyError) {
+    throw legacyError;
+  }
 }
 
 export async function generarAsientoFacturaVenta(
@@ -39,8 +107,11 @@ export async function generarAsientoFacturaVenta(
     }
 
     const esFacturaComision = facturaExistente?.metadata?.tipo === 'factura_comisiones_partner'
+      || facturaExistente?.metadata?.tipo === 'factura_promocion_partner'
       || facturaExistente?.serie === 'COM'
-      || (typeof facturaExistente?.numero_factura === 'string' && facturaExistente.numero_factura.startsWith('COM-'));
+      || facturaExistente?.serie === 'PROM'
+      || (typeof facturaExistente?.numero_factura === 'string'
+        && (facturaExistente.numero_factura.startsWith('COM-') || facturaExistente.numero_factura.startsWith('PROM-')));
 
     if (esFacturaComision) {
       await supabase
@@ -63,7 +134,7 @@ export async function generarAsientoFacturaVenta(
 
     const numeroAsiento = await generarNumeroAsiento(empresaId);
 
-    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+    const movimientos: MovimientoAsiento[] = [
       {
         cuenta_id: await obtenerCuentaId(empresaId, '1212'),
         cuenta_codigo: '1212',
@@ -121,21 +192,12 @@ export async function generarAsientoFacturaVenta(
 
     console.log('✅ [AsientosAutomaticos] Asiento creado:', asiento.id);
 
-    const movimientosConLinea = movimientos.map((mov, index) => ({
-      ...mov,
-      asiento_id: asiento.id,
-      numero_linea: index + 1,
-    }));
+    console.log('📝 [AsientosAutomaticos] Insertando movimientos:', movimientos.length);
 
-    console.log('📝 [AsientosAutomaticos] Insertando movimientos:', movimientosConLinea.length);
-
-    const { error: movimientosError } = await supabase
-      .from('movimientos_contables')
-      .insert(movimientosConLinea);
-
-    if (movimientosError) {
+    try {
+      await insertarMovimientosContables(asiento.id, movimientos);
+    } catch (movimientosError) {
       console.error('❌ [AsientosAutomaticos] Error insertando movimientos:', movimientosError);
-
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
     }
@@ -198,7 +260,7 @@ export async function generarAsientoNotaCredito(
     const montoIva = Math.abs(totalIva);
     const montoTotal = Math.abs(total);
 
-    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+    const movimientos: MovimientoAsiento[] = [
       {
         cuenta_id: await obtenerCuentaId(empresaId, '7011'),
         cuenta_codigo: '7011',
@@ -253,17 +315,9 @@ export async function generarAsientoNotaCredito(
       throw asientoError;
     }
 
-    const movimientosConLinea = movimientos.map((mov, index) => ({
-      ...mov,
-      asiento_id: asiento.id,
-      numero_linea: index + 1,
-    }));
-
-    const { error: movimientosError } = await supabase
-      .from('movimientos_contables')
-      .insert(movimientosConLinea);
-
-    if (movimientosError) {
+    try {
+      await insertarMovimientosContables(asiento.id, movimientos);
+    } catch (movimientosError) {
       console.error('❌ [AsientosAutomaticos] Error insertando movimientos de nota de crédito:', movimientosError);
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
@@ -323,15 +377,18 @@ async function obtenerCuentaId(empresaId: string, codigo: string): Promise<strin
       .eq('codigo', codigo)
       .maybeSingle();
 
-    if (error || !cuenta) {
-      console.warn(`⚠️ No se encontró cuenta ${codigo}, usando valor por defecto`);
-      return codigo;
+    if (error) {
+      throw error;
+    }
+
+    if (!cuenta?.id) {
+      throw new Error(`No existe la cuenta contable ${codigo} para esta empresa. Cree o sincronice el plan de cuentas antes de continuar.`);
     }
 
     return cuenta.id;
   } catch (error) {
     console.warn(`⚠️ Error buscando cuenta ${codigo}:`, error);
-    return codigo;
+    throw error;
   }
 }
 
@@ -352,7 +409,7 @@ export async function generarAsientoPagoFacturaVenta(
 
     const cuentaCobro = obtenerCuentaSegunTipoPago(tipoPago);
 
-    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+    const movimientos: MovimientoAsiento[] = [
       {
         cuenta_id: await obtenerCuentaId(empresaId, cuentaCobro),
         cuenta_codigo: cuentaCobro,
@@ -396,17 +453,9 @@ export async function generarAsientoPagoFacturaVenta(
 
     if (asientoError) throw asientoError;
 
-    const movimientosConLinea = movimientos.map((mov, index) => ({
-      ...mov,
-      asiento_id: asiento.id,
-      numero_linea: index + 1,
-    }));
-
-    const { error: movimientosError } = await supabase
-      .from('movimientos_contables')
-      .insert(movimientosConLinea);
-
-    if (movimientosError) {
+    try {
+      await insertarMovimientosContables(asiento.id, movimientos);
+    } catch (movimientosError) {
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
     }
@@ -470,7 +519,7 @@ export async function generarAsientoComision(
 
     const numeroAsiento = await generarNumeroAsiento(empresaId);
 
-    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+    const movimientos: MovimientoAsiento[] = [
       {
         cuenta_id: await obtenerCuentaId(empresaId, '5211'),
         cuenta_codigo: '5211',
@@ -514,17 +563,9 @@ export async function generarAsientoComision(
 
     if (asientoError) throw asientoError;
 
-    const movimientosConLinea = movimientos.map((mov, index) => ({
-      ...mov,
-      asiento_id: asiento.id,
-      numero_linea: index + 1,
-    }));
-
-    const { error: movimientosError } = await supabase
-      .from('movimientos_contables')
-      .insert(movimientosConLinea);
-
-    if (movimientosError) {
+    try {
+      await insertarMovimientosContables(asiento.id, movimientos);
+    } catch (movimientosError) {
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
     }
@@ -552,7 +593,7 @@ export async function generarAsientoFacturaCompraComisiones(
 
     const numeroAsiento = await generarNumeroAsiento(empresaId);
 
-    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+    const movimientos: MovimientoAsiento[] = [
       {
         cuenta_id: await obtenerCuentaId(empresaId, '5211'),
         cuenta_codigo: '5211',
@@ -596,17 +637,9 @@ export async function generarAsientoFacturaCompraComisiones(
 
     if (asientoError) throw asientoError;
 
-    const movimientosConLinea = movimientos.map((mov, index) => ({
-      ...mov,
-      asiento_id: asiento.id,
-      numero_linea: index + 1,
-    }));
-
-    const { error: movimientosError } = await supabase
-      .from('movimientos_contables')
-      .insert(movimientosConLinea);
-
-    if (movimientosError) {
+    try {
+      await insertarMovimientosContables(asiento.id, movimientos);
+    } catch (movimientosError) {
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
     }
@@ -637,7 +670,7 @@ export async function generarAsientoPagoFacturaCompra(
 
     const cuentaPago = obtenerCuentaSegunTipoPago(tipoPago);
 
-    const movimientos: Omit<MovimientoAsiento, 'numero_linea'>[] = [
+    const movimientos: MovimientoAsiento[] = [
       {
         cuenta_id: await obtenerCuentaId(empresaId, '2111'),
         cuenta_codigo: '2111',
@@ -682,17 +715,9 @@ export async function generarAsientoPagoFacturaCompra(
 
     if (asientoError) throw asientoError;
 
-    const movimientosConLinea = movimientos.map((mov, index) => ({
-      ...mov,
-      asiento_id: asiento.id,
-      numero_linea: index + 1,
-    }));
-
-    const { error: movimientosError } = await supabase
-      .from('movimientos_contables')
-      .insert(movimientosConLinea);
-
-    if (movimientosError) {
+    try {
+      await insertarMovimientosContables(asiento.id, movimientos);
+    } catch (movimientosError) {
       await supabase.from('asientos_contables').delete().eq('id', asiento.id);
       throw movimientosError;
     }

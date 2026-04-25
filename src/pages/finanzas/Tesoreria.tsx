@@ -26,6 +26,7 @@ function Tesoreria() {
     loading,
     error,
     crearCuentaBancaria,
+    inicializarCuentasBancariasLegacy,
     actualizarCuentaBancaria,
     crearMovimiento,
     actualizarMovimiento,
@@ -101,6 +102,21 @@ function Tesoreria() {
     setSelectedCuentaBancaria(null);
     setModalType('create');
     setShowCuentaModal(true);
+  };
+
+  const handleCargaLegacyCuentas = async () => {
+    try {
+      const cuentasCreadas = await inicializarCuentasBancariasLegacy();
+      showSuccess(
+        'Carga inicial completada',
+        `Se crearon ${cuentasCreadas.length} cuentas bancarias base para esta empresa.`
+      );
+    } catch (error) {
+      showError(
+        'No se pudo crear la carga inicial',
+        error instanceof Error ? error.message : 'Error desconocido al crear cuentas iniciales'
+      );
+    }
   };
 
   const handleEditarCuenta = (cuenta: any) => {
@@ -369,6 +385,15 @@ function Tesoreria() {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Cuentas Bancarias</h3>
               <div className="flex space-x-2">
+                {cuentas.length === 0 && (
+                  <button
+                    onClick={handleCargaLegacyCuentas}
+                    className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1 text-sm"
+                  >
+                    <Download className="h-4 w-4" />
+                    Carga Legacy
+                  </button>
+                )}
                 <Link
                   to="/manuales/finanzas/tesoreria"
                   className="bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1 text-sm"
@@ -455,6 +480,13 @@ function Tesoreria() {
                     Comience creando su primera cuenta bancaria para gestionar su tesorería.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button
+                      onClick={handleCargaLegacyCuentas}
+                      className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Carga Legacy Inicial
+                    </button>
                     <button
                       onClick={handleNuevaCuenta}
                       className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 flex items-center justify-center gap-2"

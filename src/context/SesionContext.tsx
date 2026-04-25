@@ -56,9 +56,9 @@ export const SesionProvider: React.FC<SesionProviderProps> = ({ children }) => {
 
       console.log('🔄 Inicializando sesión para usuario:', user.id);
 
-      // Cargar empresas disponibles para el usuario desde Firebase
+      // Cargar empresas disponibles para el usuario desde Supabase
       const empresas = await EmpresasService.getEmpresasByUsuario(user.id);
-      console.log('✅ Empresas cargadas desde Firebase:', empresas.length);
+      console.log('✅ Empresas cargadas desde Supabase:', empresas.length);
       
       setEmpresasDisponibles(empresas);
 
