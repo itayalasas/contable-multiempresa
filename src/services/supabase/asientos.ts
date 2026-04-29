@@ -1,6 +1,7 @@
 import { supabase } from '../../config/supabase';
 import type { AsientoContable, MovimientoContable } from '../../types';
 import { periodosContablesService } from './periodosContables';
+import { AuthService } from '../auth/authService';
 
 export const asientosSupabaseService = {
   async getAsientosByEmpresa(empresaId: string, limit?: number): Promise<AsientoContable[]> {
@@ -309,13 +310,27 @@ export const asientosSupabaseService = {
     }
   },
 
-  async deleteAsiento(asientoId: string): Promise<void> {
-    const { error } = await supabase
-      .from('asientos_contables')
-      .delete()
-      .eq('id', asientoId);
+  async deleteAsiento(asientoId: string, usuarioId: string, motivo?: string): Promise<void> {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/eliminar-asiento-directo`;
 
-    if (error) throw error;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        ...AuthService.getSupabaseEdgeHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        asientoId,
+        usuarioId,
+        motivo,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || 'No se pudo eliminar el asiento');
+    }
   },
 
   async confirmarAsiento(asientoId: string): Promise<void> {

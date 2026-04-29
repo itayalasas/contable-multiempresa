@@ -5,7 +5,7 @@ export interface EventoExterno {
   empresa_id: string;
   tipo_evento: 'order.paid' | 'order.cancelled' | 'order.updated' | 'refund.completed';
   origen: string;
-  payload: any;
+  payload: unknown;
   procesado: boolean;
   procesado_at?: string;
   factura_id?: string;
@@ -49,14 +49,19 @@ export async function reintentarEvento(eventoId: string) {
   if (eventoError) throw eventoError;
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhooks-orders`;
-  const webhookSecret = import.meta.env.VITE_WEBHOOK_SECRET || 'default-secret-change-in-production';
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (anonKey) {
+    headers.apikey = anonKey;
+    headers.Authorization = `Bearer ${anonKey}`;
+  }
 
   const response = await fetch(webhookUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Webhook-Secret': webhookSecret,
-    },
+    headers,
     body: JSON.stringify(evento.payload),
   });
 

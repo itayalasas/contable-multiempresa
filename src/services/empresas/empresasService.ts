@@ -1,233 +1,99 @@
-import { Empresa, Usuario, ConfiguracionContable } from '../../types';
+import { supabase } from '../../config/supabase';
+import { Empresa, Usuario } from '../../types';
 import { empresasSupabaseService } from '../supabase/empresas';
+import { sincronizarConfiguracionesAprobacionPredeterminadas } from '../supabase/configuracionAprobaciones';
+import { usuariosSupabaseService } from '../supabase/usuarios';
 
 export class EmpresasService {
-  // Obtener empresas por usuario (cargando desde Supabase)
   static async getEmpresasByUsuario(usuarioId: string): Promise<Empresa[]> {
     try {
-      console.log('🔄 Cargando empresas para usuario:', usuarioId);
-
-      // Obtener empresas desde Supabase
-      const empresas = await empresasSupabaseService.getEmpresasByUsuario(usuarioId);
-      console.log('✅ Empresas cargadas desde Supabase:', empresas.length);
-
-      return empresas;
+      return await empresasSupabaseService.getEmpresasByUsuario(usuarioId);
     } catch (error) {
-      console.error('❌ Error obteniendo empresas:', error);
-      throw new Error('No se pudieron cargar las empresas: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      console.error('Error obteniendo empresas por usuario:', error);
+      throw new Error(`No se pudieron cargar las empresas: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   }
-  
-  // Obtener empresas por país (desde Supabase)
+
   static async getEmpresasByPais(paisId: string): Promise<Empresa[]> {
-    try {
-      console.log('🔄 Cargando empresas por país:', paisId);
-
-      const empresas = await empresasSupabaseService.getEmpresasByPais(paisId);
-      console.log(`✅ Empresas filtradas para ${paisId}:`, empresas.length);
-      return empresas;
-    } catch (error) {
-      console.error('❌ Error obteniendo empresas por país:', error);
-      throw error;
-    }
+    return empresasSupabaseService.getEmpresasByPais(paisId);
   }
 
-  // Obtener empresa por ID (desde Supabase)
   static async getEmpresa(empresaId: string): Promise<Empresa | null> {
-    try {
-      console.log('🔄 Buscando empresa por ID:', empresaId);
-
-      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
-
-      if (empresa) {
-        console.log('✅ Empresa encontrada:', empresa.nombre);
-      } else {
-        console.log('⚠️ Empresa no encontrada');
-      }
-
-      return empresa;
-    } catch (error) {
-      console.error('❌ Error obteniendo empresa:', error);
-      throw error;
-    }
+    return empresasSupabaseService.getEmpresa(empresaId);
   }
 
-  // Crear nueva empresa (en Supabase)
   static async crearEmpresa(empresa: Omit<Empresa, 'id'>, usuarioCreadorId: string): Promise<string> {
-    try {
-      console.log('🔄 Creando empresa en Supabase:', empresa.nombre);
+    const usuariosAsignados = empresa.usuariosAsignados.includes(usuarioCreadorId)
+      ? empresa.usuariosAsignados
+      : [...empresa.usuariosAsignados, usuarioCreadorId];
 
-      // Asegurarse de que el usuario creador esté en la lista de usuarios asignados
-      if (!empresa.usuariosAsignados.includes(usuarioCreadorId)) {
-        empresa.usuariosAsignados.push(usuarioCreadorId);
-      }
+    const creada = await empresasSupabaseService.createEmpresa({
+      ...empresa,
+      usuariosAsignados,
+    });
 
-      const empresaId = await empresasSupabaseService.crearEmpresa(empresa);
-      console.log('✅ Empresa creada con ID:', empresaId);
+    await sincronizarConfiguracionesAprobacionPredeterminadas(creada.id, usuarioCreadorId);
 
-      return empresaId;
-    } catch (error) {
-      console.error('❌ Error creando empresa:', error);
-      throw error;
-    }
+    return creada.id;
   }
 
-  // Actualizar empresa (en Supabase)
   static async actualizarEmpresa(empresaId: string, datos: Partial<Empresa>): Promise<void> {
-    try {
-      console.log('🔄 Actualizando empresa en Supabase:', empresaId);
-
-      await empresasSupabaseService.actualizarEmpresa(empresaId, datos);
-      console.log('✅ Empresa actualizada exitosamente');
-    } catch (error) {
-      console.error('❌ Error actualizando empresa:', error);
-      throw error;
-    }
+    await empresasSupabaseService.updateEmpresa(empresaId, datos);
   }
 
-  // Asignar usuario a empresa (en Supabase)
   static async asignarUsuario(empresaId: string, usuarioId: string): Promise<void> {
-    try {
-      console.log('🔄 Asignando usuario a empresa:', { empresaId, usuarioId });
-
-      // Obtener empresa actual
-      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
-      if (!empresa) {
-        throw new Error('Empresa no encontrada');
-      }
-
-      // Verificar si el usuario ya está asignado
-      if (empresa.usuariosAsignados.includes(usuarioId)) {
-        console.log('⚠️ El usuario ya está asignado a esta empresa');
-        return;
-      }
-
-      // Actualizar lista de usuarios asignados
-      const usuariosAsignados = [...empresa.usuariosAsignados, usuarioId];
-      await empresasSupabaseService.actualizarEmpresa(empresaId, { usuariosAsignados });
-
-      console.log('✅ Usuario asignado exitosamente');
-    } catch (error) {
-      console.error('❌ Error asignando usuario:', error);
-      throw error;
-    }
+    await usuariosSupabaseService.asignarEmpresa(usuarioId, empresaId);
   }
 
-  // Desasignar usuario de empresa (en Supabase)
   static async desasignarUsuario(empresaId: string, usuarioId: string): Promise<void> {
-    try {
-      console.log('🔄 Desasignando usuario de empresa:', { empresaId, usuarioId });
-
-      // Obtener empresa actual
-      const empresa = await empresasSupabaseService.getEmpresa(empresaId);
-      if (!empresa) {
-        throw new Error('Empresa no encontrada');
-      }
-
-      // Verificar si el usuario está asignado
-      if (!empresa.usuariosAsignados.includes(usuarioId)) {
-        console.log('⚠️ El usuario no está asignado a esta empresa');
-        return;
-      }
-
-      // Actualizar lista de usuarios asignados
-      const usuariosAsignados = empresa.usuariosAsignados.filter(id => id !== usuarioId);
-      await empresasSupabaseService.actualizarEmpresa(empresaId, { usuariosAsignados });
-
-      console.log('✅ Usuario desasignado exitosamente');
-    } catch (error) {
-      console.error('❌ Error desasignando usuario:', error);
-      throw error;
-    }
+    await usuariosSupabaseService.desasignarEmpresa(usuarioId, empresaId);
   }
 
-  // Verificar acceso de usuario a empresa (en Supabase)
   static async verificarAccesoUsuario(empresaId: string, usuarioId: string): Promise<boolean> {
     try {
-      // Obtener empresa
       const empresa = await empresasSupabaseService.getEmpresa(empresaId);
-      const tieneAcceso = empresa?.usuariosAsignados.includes(usuarioId) || false;
-
-      console.log(`🔍 Verificando acceso usuario ${usuarioId} a empresa ${empresaId}:`, tieneAcceso);
-      return tieneAcceso;
+      return empresa?.usuariosAsignados.includes(usuarioId) || false;
     } catch (error) {
-      console.error('❌ Error verificando acceso:', error);
+      console.error('Error verificando acceso de usuario:', error);
       return false;
     }
   }
-  
-  // Obtener usuarios asignados a empresa (versión mock)
+
   static async getUsuariosEmpresa(empresaId: string): Promise<Usuario[]> {
     try {
-      console.log('🔄 Cargando usuarios de empresa:', empresaId);
-      
-      // Simular delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Mock de usuarios asignados
-      const usuariosMock: Usuario[] = [
-        {
-          id: 'dev-user-123',
-          nombre: 'Usuario de Desarrollo',
-          email: 'dev@contaempresa.com',
-          rol: 'super_admin', // Super admin para acceso completo
-          empresasAsignadas: ['dev-empresa-pe', 'dev-empresa-co', 'dev-empresa-mx', 'dev-empresa-ar', 'dev-empresa-cl'],
-          permisos: ['admin:all'],
-          activo: true,
-          fechaCreacion: new Date()
-        },
-        {
-          id: 'contador-001',
-          nombre: 'María González',
-          email: 'maria.gonzalez@contaempresa.com',
-          rol: 'contador',
-          empresasAsignadas: [empresaId],
-          permisos: ['contabilidad:read', 'contabilidad:write', 'reportes:read'],
-          activo: true,
-          fechaCreacion: new Date()
-        },
-        {
-          id: 'usuario-001',
-          nombre: 'Carlos Mendoza',
-          email: 'carlos.mendoza@contaempresa.com',
-          rol: 'usuario',
-          empresasAsignadas: [empresaId],
-          permisos: ['contabilidad:read'],
-          activo: true,
-          fechaCreacion: new Date()
-        }
-      ];
-      
-      console.log('✅ Usuarios de empresa cargados:', usuariosMock.length);
-      return usuariosMock;
+      return await usuariosSupabaseService.getUsuariosByEmpresa(empresaId);
     } catch (error) {
-      console.error('❌ Error obteniendo usuarios de empresa:', error);
+      console.error('Error obteniendo usuarios de empresa:', error);
       return [];
     }
   }
-  
-  // Validar número de identificación único por país (versión mock)
+
   static async validarNumeroIdentificacionUnico(
-    numeroIdentificacion: string, 
-    paisId: string, 
-    empresaIdExcluir?: string
+    numeroIdentificacion: string,
+    paisId: string,
+    empresaIdExcluir?: string,
   ): Promise<boolean> {
     try {
-      console.log('🔍 Validando número de identificación único:', { numeroIdentificacion, paisId, empresaIdExcluir });
-      
-      // Simular validación
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // En mock, siempre devolver true para permitir creación
-      console.log('✅ Número de identificación válido');
-      return true;
+      let query = supabase
+        .from('empresas')
+        .select('id', { count: 'exact', head: true })
+        .eq('numero_identificacion', numeroIdentificacion.trim())
+        .eq('pais_id', paisId);
+
+      if (empresaIdExcluir) {
+        query = query.neq('id', empresaIdExcluir);
+      }
+
+      const { count, error } = await query;
+      if (error) throw error;
+
+      return (count || 0) === 0;
     } catch (error) {
-      console.error('❌ Error validando número de identificación único:', error);
+      console.error('Error validando numero de identificacion unico:', error);
       return false;
     }
   }
-  
-  // Obtener estadísticas de empresa (versión mock)
+
   static async getEstadisticasEmpresa(empresaId: string): Promise<{
     totalUsuarios: number;
     totalAsientos: number;
@@ -235,24 +101,40 @@ export class EmpresasService {
     ultimaActividad: Date | null;
   }> {
     try {
-      console.log('🔄 Cargando estadísticas de empresa:', empresaId);
-      
-      // Simular delay
-      await new Promise(resolve => setTimeout(resolve, 400));
-      
-      // Mock de estadísticas
-      const estadisticas = {
-        totalUsuarios: Math.floor(Math.random() * 10) + 1,
-        totalAsientos: Math.floor(Math.random() * 100) + 5,
-        totalCuentas: Math.floor(Math.random() * 50) + 25,
-        ultimaActividad: new Date()
+      const [usuarios, asientos, cuentas] = await Promise.all([
+        supabase.from('usuarios').select('id, fecha_creacion', { count: 'exact' }).contains('empresas_asignadas', [empresaId]),
+        supabase.from('asientos_contables').select('id, fecha_creacion', { count: 'exact' }).eq('empresa_id', empresaId),
+        supabase.from('plan_cuentas').select('id, fecha_creacion', { count: 'exact' }).eq('empresa_id', empresaId).eq('activa', true),
+      ]);
+
+      if (usuarios.error) throw usuarios.error;
+      if (asientos.error) throw asientos.error;
+      if (cuentas.error) throw cuentas.error;
+
+      const fechas = [
+        ...(usuarios.data || []).map((row: any) => row.fecha_creacion),
+        ...(asientos.data || []).map((row: any) => row.fecha_creacion),
+        ...(cuentas.data || []).map((row: any) => row.fecha_creacion),
+      ].filter(Boolean);
+
+      const ultimaActividad = fechas.length > 0
+        ? new Date(fechas.sort().slice(-1)[0])
+        : null;
+
+      return {
+        totalUsuarios: usuarios.count || 0,
+        totalAsientos: asientos.count || 0,
+        totalCuentas: cuentas.count || 0,
+        ultimaActividad,
       };
-      
-      console.log('✅ Estadísticas cargadas:', estadisticas);
-      return estadisticas;
     } catch (error) {
-      console.error('❌ Error obteniendo estadísticas de empresa:', error);
-      return { totalUsuarios: 0, totalAsientos: 0, totalCuentas: 0, ultimaActividad: null };
+      console.error('Error obteniendo estadisticas de empresa:', error);
+      return {
+        totalUsuarios: 0,
+        totalAsientos: 0,
+        totalCuentas: 0,
+        ultimaActividad: null,
+      };
     }
   }
 }

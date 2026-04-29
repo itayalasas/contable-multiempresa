@@ -270,7 +270,7 @@ function Tesoreria() {
     }
   };
 
-  // Cargar datos mock en Firebase
+  // Punto de extension reservado para cargas iniciales controladas
 
   // Obtener el nombre de la cuenta para un movimiento
   const getCuentaNombre = (cuentaId: string): string => {

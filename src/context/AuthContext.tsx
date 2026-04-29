@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Usuario } from '../types';
 import { AuthService } from '../services/auth/authService';
 import { usuariosSupabaseService } from '../services/supabase/usuarios';
@@ -28,8 +28,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
+    if (initializedRef.current) {
+      return;
+    }
+
+    initializedRef.current = true;
+
     const initializeAuth = async () => {
       try {
         setError(null);
@@ -163,7 +170,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('✅ Metadata actualizado');
           }
 
-          await usuariosSupabaseService.updateUltimaConexion(authUser.id);
+          try {
+            await usuariosSupabaseService.updateUltimaConexion(authUser.id);
+          } catch (ultimaConexionError) {
+            console.warn('No se pudo actualizar la ultima conexion sin bloquear el login:', ultimaConexionError);
+          }
         }
 
         const enrichedUser: Usuario = {

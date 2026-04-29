@@ -69,7 +69,6 @@ export const useModals = () => {
     onConfirm: () => {}
   });
 
-  // Funciones para el modal de confirmación
   const showConfirm = (options: {
     title: string;
     message: string;
@@ -91,7 +90,9 @@ export const useModals = () => {
           await options.onConfirm();
           closeConfirm();
         } catch (error) {
-          console.error('Error en confirmación:', error);
+          console.error('Error en confirmacion:', error);
+          const message = error instanceof Error ? error.message : 'Ocurrio un error al procesar la accion.';
+          showError('No se pudo completar la accion', message, false);
           setConfirmModal(prev => ({ ...prev, loading: false }));
         }
       },
@@ -103,7 +104,6 @@ export const useModals = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
   };
 
-  // Funciones para el modal de notificación
   const showNotification = (options: {
     title: string;
     message: string;
@@ -123,31 +123,50 @@ export const useModals = () => {
     setNotificationModal(prev => ({ ...prev, isOpen: false }));
   };
 
-  // Funciones de conveniencia - DESHABILITADAS para no interrumpir el flujo
   const showSuccess = (title: string, message: string) => {
-    // Notificaciones de éxito deshabilitadas
-    console.log('✅', title, message);
+    console.log('SUCCESS', title, message);
+    showNotification({
+      title,
+      message,
+      type: 'success',
+      autoClose: true
+    });
   };
 
   const showError = (title: string, message: string, autoClose: boolean = false) => {
-    // Solo mostrar errores en consola, no modal
-    console.error('❌', title, message);
+    console.error('ERROR', title, message);
+    showNotification({
+      title,
+      message,
+      type: 'error',
+      autoClose
+    });
   };
 
   const showWarning = (title: string, message: string) => {
-    // Advertencias deshabilitadas
-    console.warn('⚠️', title, message);
+    console.warn('WARNING', title, message);
+    showNotification({
+      title,
+      message,
+      type: 'warning',
+      autoClose: false
+    });
   };
 
   const showInfo = (title: string, message: string) => {
-    // Información deshabilitada
-    console.info('ℹ️', title, message);
+    console.info('INFO', title, message);
+    showNotification({
+      title,
+      message,
+      type: 'info',
+      autoClose: true
+    });
   };
 
   const confirmDelete = (title: string, message: string, onConfirm: () => void | Promise<void>) => {
     showConfirm({
-      title: title,
-      message: message,
+      title,
+      message,
       type: 'danger',
       confirmText: 'Eliminar',
       cancelText: 'Cancelar',
@@ -188,6 +207,8 @@ export const useModals = () => {
             resolve(value);
           } catch (error) {
             console.error('Error en input modal:', error);
+            const message = error instanceof Error ? error.message : 'Ocurrio un error al procesar la accion.';
+            showError('No se pudo completar la accion', message, false);
             setInputModal(prev => ({ ...prev, loading: false }));
           }
         }
@@ -212,34 +233,25 @@ export const useModals = () => {
         cancelText: 'Cancelar',
         multiline: false,
         rows: 3,
+        loading: false,
         onConfirm: (value: string) => {
           closeInput();
           resolve(value);
         }
       });
-      const originalOnConfirm = inputModal.onConfirm;
-      const handleCancel = () => {
-        closeInput();
-        resolve(null);
-      };
     });
   };
 
   return {
-    // Estados
     confirmModal,
     notificationModal,
     inputModal,
-
-    // Funciones de control
     showConfirm,
     closeConfirm,
     showNotification,
     closeNotification,
     showInput,
     closeInput,
-
-    // Funciones de conveniencia
     showSuccess,
     showError,
     showWarning,

@@ -68,6 +68,21 @@ export interface CrearNotaCreditoInput {
   }[];
 }
 
+export function construirPayloadActualizacionNotaCredito(input: CrearNotaCreditoInput) {
+  return {
+    empresa_id: input.empresa_id,
+    factura_referencia_id: input.factura_referencia_id,
+    motivo: input.motivo,
+    tipo_anulacion: input.tipo_anulacion,
+    observaciones: input.observaciones || '',
+    simulacion: Boolean(input.simulacion),
+    items: (input.items || []).map((item) => ({
+      factura_item_id: item.factura_item_id,
+      cantidad_anular: item.cantidad_anular,
+    })),
+  };
+}
+
 export async function actualizarNotaCreditoCompleta(notaId: string, input: CrearNotaCreditoInput) {
   const notaActual = await obtenerNotaCreditoPorId(notaId);
 

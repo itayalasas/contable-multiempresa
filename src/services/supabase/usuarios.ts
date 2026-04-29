@@ -61,10 +61,11 @@ export const usuariosSupabaseService = {
     if (updates.nombre) updateData.nombre = updates.nombre;
     if (updates.email) updateData.email = updates.email;
     if (updates.rol) updateData.rol = updates.rol;
-    if (updates.empresasAsignadas) updateData.empresas_asignadas = updates.empresasAsignadas;
+    if (updates.empresasAsignadas !== undefined) updateData.empresas_asignadas = updates.empresasAsignadas;
     if (updates.permisos) updateData.permisos = updates.permisos;
     if (updates.avatar !== undefined) updateData.avatar = updates.avatar;
     if (updates.paisId !== undefined) updateData.pais_id = updates.paisId;
+    if (updates.auth0Id !== undefined) updateData.auth0_id = updates.auth0Id;
     if (updates.activo !== undefined) updateData.activo = updates.activo;
     if (updates.configuracion) updateData.configuracion = updates.configuracion;
     if (updates.metadata !== undefined) updateData.metadata = updates.metadata;
@@ -75,6 +76,10 @@ export const usuariosSupabaseService = {
       .eq('id', usuarioId);
 
     if (error) throw error;
+
+    if (updates.empresasAsignadas !== undefined) {
+      await sincronizarEmpresasUsuario(usuarioId, updates.empresasAsignadas);
+    }
   },
 
   async updateUltimaConexion(usuarioId: string): Promise<void> {
@@ -250,5 +255,41 @@ export const usuariosSupabaseService = {
       }));
   },
 };
+
+async function sincronizarEmpresasUsuario(usuarioId: string, empresasAsignadas: string[]): Promise<void> {
+  const { data: empresas, error } = await supabase
+    .from('empresas')
+    .select('id, usuarios_asignados');
+
+  if (error) throw error;
+
+  for (const empresa of empresas || []) {
+    const usuariosActuales = Array.isArray(empresa.usuarios_asignados) ? empresa.usuarios_asignados : [];
+    const debeEstarAsignado = empresasAsignadas.includes(empresa.id);
+    const estaAsignado = usuariosActuales.includes(usuarioId);
+
+    if (debeEstarAsignado && !estaAsignado) {
+      const { error: updateError } = await supabase
+        .from('empresas')
+        .update({
+          usuarios_asignados: [...usuariosActuales, usuarioId],
+        })
+        .eq('id', empresa.id);
+
+      if (updateError) throw updateError;
+    }
+
+    if (!debeEstarAsignado && estaAsignado) {
+      const { error: updateError } = await supabase
+        .from('empresas')
+        .update({
+          usuarios_asignados: usuariosActuales.filter((id: string) => id !== usuarioId),
+        })
+        .eq('id', empresa.id);
+
+      if (updateError) throw updateError;
+    }
+  }
+}
 
 export const getUsuariosByEmpresa = usuariosSupabaseService.getUsuariosByEmpresa;

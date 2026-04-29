@@ -1,4 +1,5 @@
 import { supabase } from '../../config/supabase';
+import { AuthService } from '../auth/authService';
 
 export interface SolicitudAutorizacion {
   id: string;
@@ -7,6 +8,7 @@ export interface SolicitudAutorizacion {
   tablaAfectada: string;
   registroId: string;
   datosRegistro: any;
+  datosModificados?: any;
   motivo: string;
   estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA';
   solicitadoPor: string;
@@ -55,6 +57,7 @@ export const autorizacionesService = {
       tablaAfectada: data.tabla_afectada,
       registroId: data.registro_id,
       datosRegistro: data.datos_originales,
+      datosModificados: data.datos_modificados,
       motivo: data.motivo,
       estado: data.estado.toUpperCase() as 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA',
       solicitadoPor: data.solicitante_id,
@@ -91,6 +94,7 @@ export const autorizacionesService = {
       tablaAfectada: item.tabla_afectada,
       registroId: item.registro_id,
       datosRegistro: item.datos_originales,
+      datosModificados: item.datos_modificados,
       motivo: item.motivo,
       estado: item.estado.toUpperCase() as 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA',
       solicitadoPor: item.solicitante_id,
@@ -134,6 +138,7 @@ export const autorizacionesService = {
       tablaAfectada: item.tabla_afectada,
       registroId: item.registro_id,
       datosRegistro: item.datos_originales,
+      datosModificados: item.datos_modificados,
       motivo: item.motivo,
       estado: item.estado.toUpperCase() as 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA',
       solicitadoPor: item.solicitante_id,
@@ -155,7 +160,7 @@ export const autorizacionesService = {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          ...AuthService.getSupabaseEdgeHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -186,7 +191,7 @@ export const autorizacionesService = {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          ...AuthService.getSupabaseEdgeHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

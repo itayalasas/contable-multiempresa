@@ -86,6 +86,33 @@ export interface CrearFacturaInput {
   }[];
 }
 
+export interface PayloadActualizacionFacturaAprobable {
+  cliente_id: string;
+  tipo_documento: string;
+  fecha_emision: string;
+  fecha_vencimiento?: string;
+  subtotal: string;
+  total_iva: string;
+  total: string;
+  moneda: string;
+  tipo_cambio: number;
+  observaciones?: string;
+  metadata: any;
+  items: {
+    numero_linea: number;
+    descripcion: string;
+    cantidad: number;
+    precio_unitario: number;
+    descuento_porcentaje: number;
+    descuento_monto: string;
+    tasa_iva: number;
+    monto_iva: string;
+    subtotal: string;
+    total: string;
+    cuenta_contable_id?: string;
+  }[];
+}
+
 export const calcularTotalesFactura = (items: CrearFacturaInput['items']) => {
   const subtotal = items.reduce((sum, item) => {
     const itemSubtotal = item.cantidad * item.precio_unitario;
@@ -109,6 +136,54 @@ export const calcularTotalesFactura = (items: CrearFacturaInput['items']) => {
     subtotal,
     totalIva,
     total: subtotal + totalIva,
+  };
+};
+
+export const normalizarItemsFactura = (items: CrearFacturaInput['items']) => {
+  return items.map((item, index) => {
+    const itemSubtotal = item.cantidad * item.precio_unitario;
+    const descuentoMonto = item.descuento_porcentaje
+      ? itemSubtotal * (item.descuento_porcentaje / 100)
+      : 0;
+    const baseImponible = itemSubtotal - descuentoMonto;
+    const tasa = item.tasa_iva ?? 0.22;
+    const montoIva = baseImponible * tasa;
+    const itemTotal = baseImponible + montoIva;
+
+    return {
+      numero_linea: index + 1,
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      precio_unitario: item.precio_unitario,
+      descuento_porcentaje: item.descuento_porcentaje || 0,
+      descuento_monto: descuentoMonto.toFixed(2),
+      tasa_iva: tasa,
+      monto_iva: montoIva.toFixed(2),
+      subtotal: baseImponible.toFixed(2),
+      total: itemTotal.toFixed(2),
+      cuenta_contable_id: item.cuenta_contable_id,
+    };
+  });
+};
+
+export const construirPayloadActualizacionFactura = (
+  input: CrearFacturaInput
+): PayloadActualizacionFacturaAprobable => {
+  const { subtotal, totalIva, total } = calcularTotalesFactura(input.items);
+
+  return {
+    cliente_id: input.cliente_id,
+    tipo_documento: input.tipo_documento || 'e-ticket',
+    fecha_emision: input.fecha_emision || new Date().toISOString().split('T')[0],
+    fecha_vencimiento: input.fecha_vencimiento,
+    subtotal: subtotal.toFixed(2),
+    total_iva: totalIva.toFixed(2),
+    total: total.toFixed(2),
+    moneda: input.moneda || 'UYU',
+    tipo_cambio: input.tipo_cambio || 1,
+    observaciones: input.observaciones,
+    metadata: input.metadata || {},
+    items: normalizarItemsFactura(input.items),
   };
 };
 
@@ -296,22 +371,22 @@ export async function actualizarFacturaConItems(
   facturaId: string,
   input: CrearFacturaInput
 ) {
-  const { subtotal, totalIva, total } = calcularTotalesFactura(input.items);
+  const payload = construirPayloadActualizacionFactura(input);
 
   const { data: facturaActualizada, error: facturaError } = await supabase
     .from('facturas_venta')
     .update({
-      cliente_id: input.cliente_id,
-      tipo_documento: input.tipo_documento || 'e-ticket',
-      fecha_emision: input.fecha_emision || new Date().toISOString().split('T')[0],
-      fecha_vencimiento: input.fecha_vencimiento,
-      subtotal: subtotal.toFixed(2),
-      total_iva: totalIva.toFixed(2),
-      total: total.toFixed(2),
-      moneda: input.moneda || 'UYU',
-      tipo_cambio: input.tipo_cambio || 1,
-      observaciones: input.observaciones,
-      metadata: input.metadata || {},
+      cliente_id: payload.cliente_id,
+      tipo_documento: payload.tipo_documento,
+      fecha_emision: payload.fecha_emision,
+      fecha_vencimiento: payload.fecha_vencimiento,
+      subtotal: payload.subtotal,
+      total_iva: payload.total_iva,
+      total: payload.total,
+      moneda: payload.moneda,
+      tipo_cambio: payload.tipo_cambio,
+      observaciones: payload.observaciones,
+      metadata: payload.metadata,
     })
     .eq('id', facturaId)
     .select()
@@ -326,31 +401,10 @@ export async function actualizarFacturaConItems(
 
   if (deleteError) throw deleteError;
 
-  const itemsToInsert = input.items.map((item, index) => {
-    const itemSubtotal = item.cantidad * item.precio_unitario;
-    const descuentoMonto = item.descuento_porcentaje
-      ? itemSubtotal * (item.descuento_porcentaje / 100)
-      : 0;
-    const baseImponible = itemSubtotal - descuentoMonto;
-    const tasa = item.tasa_iva ?? 0.22;
-    const montoIva = baseImponible * tasa;
-    const itemTotal = baseImponible + montoIva;
-
-    return {
-      factura_id: facturaId,
-      numero_linea: index + 1,
-      descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      precio_unitario: item.precio_unitario,
-      descuento_porcentaje: item.descuento_porcentaje || 0,
-      descuento_monto: descuentoMonto,
-      tasa_iva: tasa,
-      monto_iva: montoIva.toFixed(2),
-      subtotal: baseImponible.toFixed(2),
-      total: itemTotal.toFixed(2),
-      cuenta_contable_id: item.cuenta_contable_id,
-    };
-  });
+  const itemsToInsert = payload.items.map((item) => ({
+    factura_id: facturaId,
+    ...item,
+  }));
 
   const { error: itemsError } = await supabase
     .from('facturas_venta_items')

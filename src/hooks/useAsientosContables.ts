@@ -91,7 +91,7 @@ export const useAsientosContables = (empresaId: string | undefined) => {
   }, [empresaId, asientos]);
 
   // Eliminar asiento con actualización optimista
-  const eliminarAsiento = useCallback(async (asientoId: string) => {
+  const eliminarAsiento = useCallback(async (asientoId: string, usuarioId: string, motivo?: string) => {
     if (!empresaId) throw new Error('No hay empresa seleccionada');
 
     // Guardar asiento para poder revertir
@@ -103,7 +103,7 @@ export const useAsientosContables = (empresaId: string | undefined) => {
 
     try {
       // 2. Eliminar en Supabase
-      await asientosSupabaseService.deleteAsiento(asientoId);
+      await asientosSupabaseService.deleteAsiento(asientoId, usuarioId, motivo);
     } catch (error) {
       // 3. Revertir si hay error - restaurar el asiento en su posición original
       setAsientos(prev => {

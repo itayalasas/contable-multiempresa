@@ -28,6 +28,138 @@ export interface ConfiguracionAprobacionInput {
   creado_por?: string;
 }
 
+const CONFIGURACIONES_APROBACION_PREDETERMINADAS: Omit<
+  ConfiguracionAprobacionInput,
+  'empresa_id' | 'creado_por'
+>[] = [
+  {
+    modulo: 'ventas',
+    entidad: 'facturas_venta',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de facturas de venta ya emitidas',
+    icono: 'Receipt',
+    activo: true,
+  },
+  {
+    modulo: 'ventas',
+    entidad: 'facturas_venta',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de facturas de venta ya emitidas',
+    icono: 'Receipt',
+    activo: true,
+  },
+  {
+    modulo: 'compras',
+    entidad: 'facturas_compra',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de facturas de compra registradas',
+    icono: 'Receipt',
+    activo: true,
+  },
+  {
+    modulo: 'compras',
+    entidad: 'facturas_compra',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de facturas de compra registradas',
+    icono: 'Receipt',
+    activo: true,
+  },
+  {
+    modulo: 'contabilidad',
+    entidad: 'asientos_contables',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de asientos contables',
+    icono: 'BookOpen',
+    activo: true,
+  },
+  {
+    modulo: 'contabilidad',
+    entidad: 'asientos_contables',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de asientos contables',
+    icono: 'BookOpen',
+    activo: true,
+  },
+  {
+    modulo: 'tesoreria',
+    entidad: 'movimientos_tesoreria',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de movimientos de tesorería registrados',
+    icono: 'DollarSign',
+    activo: true,
+  },
+  {
+    modulo: 'tesoreria',
+    entidad: 'movimientos_tesoreria',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de movimientos de tesorería registrados',
+    icono: 'DollarSign',
+    activo: true,
+  },
+  {
+    modulo: 'finanzas',
+    entidad: 'pagos_cliente',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de cobros de clientes registrados',
+    icono: 'Wallet',
+    activo: true,
+  },
+  {
+    modulo: 'finanzas',
+    entidad: 'pagos_cliente',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de cobros de clientes registrados',
+    icono: 'Wallet',
+    activo: true,
+  },
+  {
+    modulo: 'finanzas',
+    entidad: 'pagos_proveedor',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de pagos a proveedores registrados',
+    icono: 'CreditCard',
+    activo: true,
+  },
+  {
+    modulo: 'finanzas',
+    entidad: 'pagos_proveedor',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de pagos a proveedores registrados',
+    icono: 'CreditCard',
+    activo: true,
+  },
+  {
+    modulo: 'ventas',
+    entidad: 'notas_credito',
+    accion: 'editar',
+    requiere_aprobacion: true,
+    descripcion: 'Modificación de notas de crédito emitidas',
+    icono: 'FileText',
+    activo: true,
+  },
+  {
+    modulo: 'ventas',
+    entidad: 'notas_credito',
+    accion: 'eliminar',
+    requiere_aprobacion: true,
+    descripcion: 'Eliminación de notas de crédito emitidas',
+    icono: 'FileText',
+    activo: true,
+  },
+];
+
 export const obtenerConfiguracionAprobaciones = async (
   empresaId: string
 ): Promise<ConfiguracionAprobacion[]> => {
@@ -75,18 +207,39 @@ export const verificarRequiereAprobacion = async (
   entidad: string,
   accion: 'crear' | 'editar' | 'eliminar'
 ): Promise<boolean> => {
-  const { data, error } = await supabase
-    .from('configuracion_aprobaciones')
-    .select('requiere_aprobacion')
-    .eq('empresa_id', empresaId)
-    .eq('modulo', modulo)
-    .eq('entidad', entidad)
-    .eq('accion', accion)
-    .eq('activo', true)
-    .maybeSingle();
+  const consultarConfiguracion = async () => {
+    return await supabase
+      .from('configuracion_aprobaciones')
+      .select('requiere_aprobacion')
+      .eq('empresa_id', empresaId)
+      .eq('modulo', modulo)
+      .eq('entidad', entidad)
+      .eq('accion', accion)
+      .eq('activo', true)
+      .maybeSingle();
+  };
+
+  let { data, error } = await consultarConfiguracion();
 
   if (error) {
     console.error('Error al verificar si requiere aprobación:', error);
+    return false;
+  }
+
+  if (!data) {
+    try {
+      await sincronizarConfiguracionesAprobacionPredeterminadas(empresaId);
+      const retry = await consultarConfiguracion();
+      data = retry.data;
+      error = retry.error;
+    } catch (syncError) {
+      console.error('Error sincronizando configuraciones predeterminadas:', syncError);
+      return false;
+    }
+  }
+
+  if (error) {
+    console.error('Error al verificar si requiere aprobaciÃ³n luego de sincronizar:', error);
     return false;
   }
 
@@ -111,6 +264,33 @@ export const crearConfiguracionAprobacion = async (
   }
 
   return data;
+};
+
+export const sincronizarConfiguracionesAprobacionPredeterminadas = async (
+  empresaId: string,
+  usuarioId?: string
+): Promise<number> => {
+  const payload = CONFIGURACIONES_APROBACION_PREDETERMINADAS.map((config) => ({
+    ...config,
+    empresa_id: empresaId,
+    creado_por: usuarioId,
+    modificado_por: usuarioId,
+  }));
+
+  const { data, error } = await supabase
+    .from('configuracion_aprobaciones')
+    .upsert(payload, {
+      onConflict: 'empresa_id,modulo,entidad,accion',
+      ignoreDuplicates: false,
+    })
+    .select('id');
+
+  if (error) {
+    console.error('Error sincronizando configuraciones de aprobacion:', error);
+    throw new Error(`No se pudieron sincronizar las configuraciones de aprobacion: ${error.message}`);
+  }
+
+  return data?.length || 0;
 };
 
 export const actualizarConfiguracionAprobacion = async (

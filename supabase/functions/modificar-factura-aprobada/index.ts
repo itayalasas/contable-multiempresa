@@ -10,8 +10,43 @@ const corsHeaders = {
 interface ModificarFacturaBody {
   solicitudId: string;
   facturaId: string;
-  datosModificados: any;
+  datosModificados: Record<string, unknown> & { items?: unknown[] };
   usuarioId: string;
+  auditoriaMetadata?: AuditoriaRequestMetadata;
+}
+
+interface AuditoriaRequestMetadata {
+  ip_address?: string | null;
+  user_agent?: string | null;
+}
+
+function normalizarItemsFactura(items: unknown[] = []) {
+  return items.map((item, index) => {
+    const row = (item && typeof item === "object") ? item as Record<string, unknown> : {};
+    const cantidad = Number(row.cantidad || 0);
+    const precioUnitario = Number(row.precio_unitario || 0);
+    const descuentoPorcentaje = Number(row.descuento_porcentaje || 0);
+    const itemSubtotal = cantidad * precioUnitario;
+    const descuentoMonto = itemSubtotal * (descuentoPorcentaje / 100);
+    const baseImponible = itemSubtotal - descuentoMonto;
+    const tasaIva = Number(row.tasa_iva ?? 0.22);
+    const montoIva = baseImponible * tasaIva;
+    const total = baseImponible + montoIva;
+
+    return {
+      numero_linea: Number(row.numero_linea || index + 1),
+      descripcion: String(row.descripcion || ""),
+      cantidad,
+      precio_unitario: precioUnitario,
+      descuento_porcentaje: descuentoPorcentaje,
+      descuento_monto: descuentoMonto.toFixed(2),
+      tasa_iva: tasaIva,
+      monto_iva: montoIva.toFixed(2),
+      subtotal: baseImponible.toFixed(2),
+      total: total.toFixed(2),
+      cuenta_contable_id: row.cuenta_contable_id || null,
+    };
+  });
 }
 
 Deno.serve(async (req: Request) => {
@@ -29,8 +64,13 @@ Deno.serve(async (req: Request) => {
 
     const body: ModificarFacturaBody = await req.json();
     const { solicitudId, facturaId, datosModificados, usuarioId } = body;
+    const auditoriaMetadata = getAuditoriaRequestMetadata(req, body.auditoriaMetadata);
 
-    console.log("🔄 Modificando factura:", facturaId);
+    if (!datosModificados || typeof datosModificados !== "object") {
+      throw new Error("La solicitud aprobada no contiene datos validos para modificar la factura");
+    }
+
+    console.log("Modificando factura aprobada:", facturaId);
 
     const { data: facturaOriginal, error: facturaError } = await supabase
       .from("facturas_venta")
@@ -42,9 +82,37 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Factura no encontrada: ${facturaError?.message}`);
     }
 
-    const empresaId = facturaOriginal.empresa_id;
+    const { data: itemsOriginales, error: itemsOriginalesError } = await supabase
+      .from("facturas_venta_items")
+      .select("*")
+      .eq("factura_id", facturaId)
+      .order("numero_linea", { ascending: true });
 
-    console.log("📝 Registrando auditoría - factura original");
+    if (itemsOriginalesError) {
+      throw new Error(`No se pudieron obtener los items originales: ${itemsOriginalesError.message}`);
+    }
+
+    const empresaId = facturaOriginal.empresa_id;
+    const itemsNormalizados = Array.isArray(datosModificados.items)
+      ? normalizarItemsFactura(datosModificados.items)
+      : [];
+
+    const payloadFactura = {
+      cliente_id: datosModificados.cliente_id ?? facturaOriginal.cliente_id,
+      tipo_documento: datosModificados.tipo_documento ?? facturaOriginal.tipo_documento,
+      fecha_emision: datosModificados.fecha_emision ?? facturaOriginal.fecha_emision,
+      fecha_vencimiento: datosModificados.fecha_vencimiento ?? facturaOriginal.fecha_vencimiento,
+      subtotal: datosModificados.subtotal ?? facturaOriginal.subtotal,
+      total_iva: datosModificados.total_iva ?? facturaOriginal.total_iva,
+      total: datosModificados.total ?? facturaOriginal.total,
+      moneda: datosModificados.moneda ?? facturaOriginal.moneda,
+      tipo_cambio: datosModificados.tipo_cambio ?? facturaOriginal.tipo_cambio,
+      observaciones: datosModificados.observaciones ?? facturaOriginal.observaciones,
+      metadata: datosModificados.metadata ?? facturaOriginal.metadata,
+      updated_by: usuarioId,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error: auditFacturaError } = await supabase
       .from("auditoria_cambios")
       .insert({
@@ -52,17 +120,79 @@ Deno.serve(async (req: Request) => {
         tabla_afectada: "facturas_venta",
         registro_id: facturaId,
         tipo_operacion: "modificar",
-        datos_anteriores: facturaOriginal,
-        datos_nuevos: datosModificados,
+        datos_anteriores: {
+          ...facturaOriginal,
+          items: itemsOriginales || [],
+        },
+        datos_nuevos: {
+          ...payloadFactura,
+          items: itemsNormalizados,
+        },
         usuario_id: usuarioId,
         solicitud_aprobacion_id: solicitudId,
+        ip_address: auditoriaMetadata.ip_address,
+        user_agent: auditoriaMetadata.user_agent,
       });
 
     if (auditFacturaError) {
-      console.warn("⚠️ Error al registrar auditoría factura:", auditFacturaError.message);
+      console.warn("Error al registrar auditoria de factura:", auditFacturaError.message);
     }
 
-    console.log("🗑️ Eliminando asientos contables anteriores");
+    for (const itemOriginal of itemsOriginales || []) {
+      const itemNuevo = itemsNormalizados.find((item) => item.numero_linea === itemOriginal.numero_linea) || null;
+      const { error: auditItemError } = await supabase
+        .from("auditoria_cambios")
+        .insert({
+          empresa_id: empresaId,
+          tabla_afectada: "facturas_venta_items",
+          registro_id: itemOriginal.id,
+          tipo_operacion: itemNuevo ? "modificar" : "eliminar",
+          datos_anteriores: itemOriginal,
+          datos_nuevos: itemNuevo,
+          usuario_id: usuarioId,
+          solicitud_aprobacion_id: solicitudId,
+          ip_address: auditoriaMetadata.ip_address,
+          user_agent: auditoriaMetadata.user_agent,
+          metadata: {
+            factura_id: facturaId,
+            numero_linea: itemOriginal.numero_linea,
+          },
+        });
+
+      if (auditItemError) {
+        console.warn("Error al registrar auditoria de item:", auditItemError.message);
+      }
+    }
+
+    const lineasNuevasSinOriginal = itemsNormalizados.filter((itemNuevo) => {
+      return !(itemsOriginales || []).some((itemOriginal) => itemOriginal.numero_linea === itemNuevo.numero_linea);
+    });
+
+    for (const itemNuevo of lineasNuevasSinOriginal) {
+      const { error: auditNewItemError } = await supabase
+        .from("auditoria_cambios")
+        .insert({
+          empresa_id: empresaId,
+          tabla_afectada: "facturas_venta_items",
+          registro_id: `${facturaId}:${itemNuevo.numero_linea}`,
+          tipo_operacion: "crear",
+          datos_anteriores: null,
+          datos_nuevos: itemNuevo,
+          usuario_id: usuarioId,
+          solicitud_aprobacion_id: solicitudId,
+          ip_address: auditoriaMetadata.ip_address,
+          user_agent: auditoriaMetadata.user_agent,
+          metadata: {
+            factura_id: facturaId,
+            numero_linea: itemNuevo.numero_linea,
+          },
+        });
+
+      if (auditNewItemError) {
+        console.warn("Error al registrar auditoria del nuevo item:", auditNewItemError.message);
+      }
+    }
+
     const { data: asientosAnteriores, error: asientosQueryError } = await supabase
       .from("asientos_contables")
       .select("*")
@@ -82,11 +212,13 @@ Deno.serve(async (req: Request) => {
             datos_nuevos: null,
             usuario_id: usuarioId,
             solicitud_aprobacion_id: solicitudId,
+            ip_address: auditoriaMetadata.ip_address,
+            user_agent: auditoriaMetadata.user_agent,
             metadata: { motivo: "regeneracion_por_modificacion_factura" },
           });
 
         if (auditAsientoError) {
-          console.warn("⚠️ Error al registrar auditoría asiento:", auditAsientoError.message);
+          console.warn("Error al registrar auditoria de asiento:", auditAsientoError.message);
         }
       }
 
@@ -97,48 +229,59 @@ Deno.serve(async (req: Request) => {
         .eq("documento_origen_tipo", "factura_venta");
 
       if (deleteAsientosError) {
-        console.warn("⚠️ Error al eliminar asientos anteriores:", deleteAsientosError.message);
-      } else {
-        console.log(`✅ ${asientosAnteriores.length} asiento(s) eliminado(s)`);
+        console.warn("Error al eliminar asientos anteriores:", deleteAsientosError.message);
       }
     }
 
-    console.log("💾 Actualizando factura");
     const { error: updateFacturaError } = await supabase
       .from("facturas_venta")
-      .update(datosModificados)
+      .update(payloadFactura)
       .eq("id", facturaId);
 
     if (updateFacturaError) {
       throw new Error(`Error al actualizar factura: ${updateFacturaError.message}`);
     }
 
-    console.log("🔄 Regenerando asientos contables");
-    const regenerarUrl = `${supabaseUrl}/functions/v1/generar-asiento-factura`;
-    const regenerarResponse = await fetch(regenerarUrl, {
+    if (itemsNormalizados.length > 0) {
+      const { error: deleteItemsError } = await supabase
+        .from("facturas_venta_items")
+        .delete()
+        .eq("factura_id", facturaId);
+
+      if (deleteItemsError) {
+        throw new Error(`No se pudieron eliminar los items anteriores: ${deleteItemsError.message}`);
+      }
+
+      const { error: insertItemsError } = await supabase
+        .from("facturas_venta_items")
+        .insert(itemsNormalizados.map((item) => ({
+          factura_id: facturaId,
+          ...item,
+        })));
+
+      if (insertItemsError) {
+        throw new Error(`No se pudieron insertar los items actualizados: ${insertItemsError.message}`);
+      }
+    }
+
+    const regenerarResponse = await fetch(`${supabaseUrl}/functions/v1/generar-asiento-factura`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${supabaseKey}`,
       },
-      body: JSON.stringify({
-        facturaId: facturaId,
-      }),
+      body: JSON.stringify({ facturaId }),
     });
 
     if (!regenerarResponse.ok) {
-      const error = await regenerarResponse.json();
-      console.warn("⚠️ Error al regenerar asientos:", error.error);
-    } else {
-      console.log("✅ Asientos contables regenerados");
+      const error = await regenerarResponse.json().catch(() => ({}));
+      console.warn("Error al regenerar asientos:", error.error || "desconocido");
     }
 
     const montoAnterior = parseFloat(facturaOriginal.total || 0);
-    const montoNuevo = parseFloat(datosModificados.total || montoAnterior);
+    const montoNuevo = parseFloat(String(payloadFactura.total || montoAnterior));
 
     if (montoAnterior !== montoNuevo) {
-      console.log("💰 Monto cambió, actualizando tesorería y pagos");
-
       const { data: movimientos, error: movimientosError } = await supabase
         .from("movimientos_tesoreria")
         .select("*")
@@ -157,11 +300,13 @@ Deno.serve(async (req: Request) => {
               datos_nuevos: { ...mov, monto: montoNuevo },
               usuario_id: usuarioId,
               solicitud_aprobacion_id: solicitudId,
+              ip_address: auditoriaMetadata.ip_address,
+              user_agent: auditoriaMetadata.user_agent,
               metadata: { motivo: "actualizacion_por_modificacion_factura" },
             });
 
           if (auditMovError) {
-            console.warn("⚠️ Error al registrar auditoría movimiento:", auditMovError.message);
+            console.warn("Error al registrar auditoria de movimiento:", auditMovError.message);
           }
         }
 
@@ -171,9 +316,7 @@ Deno.serve(async (req: Request) => {
           .eq("metadata->>factura_id", facturaId);
 
         if (updateMovError) {
-          console.warn("⚠️ Error al actualizar movimientos:", updateMovError.message);
-        } else {
-          console.log("✅ Movimientos de tesorería actualizados");
+          console.warn("Error al actualizar movimientos:", updateMovError.message);
         }
       }
 
@@ -195,11 +338,13 @@ Deno.serve(async (req: Request) => {
               datos_nuevos: { ...pago, monto: montoNuevo },
               usuario_id: usuarioId,
               solicitud_aprobacion_id: solicitudId,
+              ip_address: auditoriaMetadata.ip_address,
+              user_agent: auditoriaMetadata.user_agent,
               metadata: { motivo: "actualizacion_por_modificacion_factura" },
             });
 
           if (auditPagoError) {
-            console.warn("⚠️ Error al registrar auditoría pago:", auditPagoError.message);
+            console.warn("Error al registrar auditoria de pago:", auditPagoError.message);
           }
         }
 
@@ -209,14 +354,10 @@ Deno.serve(async (req: Request) => {
           .eq("factura_id", facturaId);
 
         if (updatePagosError) {
-          console.warn("⚠️ Error al actualizar pagos:", updatePagosError.message);
-        } else {
-          console.log("✅ Pagos actualizados");
+          console.warn("Error al actualizar pagos:", updatePagosError.message);
         }
       }
     }
-
-    console.log("✅ Factura modificada exitosamente");
 
     return new Response(
       JSON.stringify({
@@ -229,14 +370,14 @@ Deno.serve(async (req: Request) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error("Error:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : "Error desconocido al modificar la factura aprobada",
       }),
       {
         status: 400,
@@ -244,7 +385,19 @@ Deno.serve(async (req: Request) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   }
 });
+
+function getAuditoriaRequestMetadata(req: Request, metadata?: AuditoriaRequestMetadata): Required<AuditoriaRequestMetadata> {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  return {
+    ip_address: metadata?.ip_address
+      || req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-real-ip")
+      || forwardedFor?.split(",")[0]?.trim()
+      || null,
+    user_agent: metadata?.user_agent || req.headers.get("user-agent") || null,
+  };
+}

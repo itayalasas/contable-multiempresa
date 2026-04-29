@@ -26,10 +26,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  }, [location.pathname, isMobile]);
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!isMobile) return;

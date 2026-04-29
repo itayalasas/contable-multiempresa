@@ -9,6 +9,8 @@ import {
   obtenerFacturaPorId,
   emitirFactura,
   regenerarAsientoContable,
+  construirPayloadActualizacionFactura,
+  type CrearFacturaInput,
   type FacturaVenta,
 } from '../../services/supabase/facturas';
 import { supabase } from '../../config/supabase';
@@ -21,6 +23,7 @@ import { SolicitudAprobacionModal } from '../../components/ventas/SolicitudAprob
 import { usePermissions } from '../../hooks/usePermissions';
 import { ProtectedButton } from '../../components/common/ProtectedButton';
 import { useRequiereAprobacion } from '../../hooks/useRequiereAprobacion';
+import { aprobacionesService } from '../../services/supabase/aprobaciones';
 
 export default function Facturas() {
   const { empresaActual, usuario } = useSesion();
@@ -30,6 +33,7 @@ export default function Facturas() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [facturaEdit, setFacturaEdit] = useState<FacturaVenta | null>(null);
+  const [requiereAprobacionEdicion, setRequiereAprobacionEdicion] = useState(false);
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [facturaDetalle, setFacturaDetalle] = useState<FacturaVenta | null>(null);
   const [showSolicitudModal, setShowSolicitudModal] = useState(false);
@@ -113,12 +117,14 @@ export default function Facturas() {
 
   const handleNuevaFactura = () => {
     setFacturaEdit(null);
+    setRequiereAprobacionEdicion(false);
     setShowModal(true);
   };
 
   const handleEditFactura = async (factura: FacturaVenta) => {
     if (factura.estado === 'borrador') {
       setFacturaEdit(factura);
+      setRequiereAprobacionEdicion(false);
       setShowModal(true);
       return;
     }
@@ -129,14 +135,23 @@ export default function Facturas() {
       factura.total
     );
 
-    if (requiereAprobacion) {
-      setFacturaParaSolicitud(factura);
-      setSolicitudTipo('modificar');
-      setShowSolicitudModal(true);
-    } else {
-      setFacturaEdit(factura);
-      setShowModal(true);
+    setFacturaEdit(factura);
+    setRequiereAprobacionEdicion(requiereAprobacion);
+    setShowModal(true);
+  };
+
+  const handleSolicitarAprobacionEdicion = async (input: CrearFacturaInput, motivo: string) => {
+    if (!empresaActual || !usuario || !facturaEdit) {
+      throw new Error('No hay contexto suficiente para solicitar la aprobacion');
     }
+
+    await aprobacionesService.solicitarModificacion(
+      empresaActual.id,
+      facturaEdit.id,
+      construirPayloadActualizacionFactura(input),
+      motivo,
+      usuario.id
+    );
   };
 
   const handleEmitirFactura = (factura: FacturaVenta) => {
@@ -1240,13 +1255,28 @@ export default function Facturas() {
       {showModal && (
         <FacturaModal
           factura={facturaEdit}
+          requiereAprobacionEdicion={requiereAprobacionEdicion}
+          onSolicitarAprobacionEdicion={handleSolicitarAprobacionEdicion}
           onClose={() => {
             setShowModal(false);
             setFacturaEdit(null);
+            setRequiereAprobacionEdicion(false);
           }}
           onSuccess={() => {
+            const eraEdicion = Boolean(facturaEdit);
             setShowModal(false);
             setFacturaEdit(null);
+            const fueSolicitudAprobacion = requiereAprobacionEdicion;
+            setRequiereAprobacionEdicion(false);
+            mostrarNotificacion(
+              'success',
+              'Operacion completada',
+              fueSolicitudAprobacion
+                ? 'La solicitud de aprobacion fue enviada correctamente. Los cambios se aplicaran al aprobarse.'
+                : eraEdicion
+                  ? 'La factura fue actualizada correctamente.'
+                  : 'La prefactura fue guardada correctamente.'
+            );
             cargarFacturas();
             cargarEstadisticas();
           }}

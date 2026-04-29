@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSesion } from '../../context/SesionContext';
-import { crearFactura, obtenerFacturaPorId, actualizarFacturaConItems, type CrearFacturaInput, type FacturaVenta } from '../../services/supabase/facturas';
+import {
+  actualizarFacturaConItems,
+  crearFactura,
+  obtenerFacturaPorId,
+  type CrearFacturaInput,
+  type FacturaVenta,
+} from '../../services/supabase/facturas';
 import { obtenerClientes, type Cliente } from '../../services/supabase/clientes';
 import { SearchableSelect } from '../common/SearchableSelect';
 
@@ -8,6 +14,8 @@ interface FacturaModalProps {
   factura: FacturaVenta | null;
   onClose: () => void;
   onSuccess: () => void;
+  requiereAprobacionEdicion?: boolean;
+  onSolicitarAprobacionEdicion?: (input: CrearFacturaInput, motivo: string) => Promise<void>;
 }
 
 interface ItemFactura {
@@ -19,11 +27,29 @@ interface ItemFactura {
   tasa_iva: number;
 }
 
-export default function FacturaModal({ factura, onClose, onSuccess }: FacturaModalProps) {
+function crearItemVacio(): ItemFactura {
+  return {
+    id: Math.random().toString(),
+    descripcion: '',
+    cantidad: 1,
+    precio_unitario: 0,
+    descuento_porcentaje: 0,
+    tasa_iva: 0.22,
+  };
+}
+
+export default function FacturaModal({
+  factura,
+  onClose,
+  onSuccess,
+  requiereAprobacionEdicion = false,
+  onSolicitarAprobacionEdicion,
+}: FacturaModalProps) {
   const { empresaActual } = useSesion();
   const [loading, setLoading] = useState(false);
   const [cargandoFactura, setCargandoFactura] = useState(false);
   const esBorrador = !factura || factura.estado === 'borrador';
+  const necesitaAprobacion = Boolean(factura?.id && !esBorrador && requiereAprobacionEdicion);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteId, setClienteId] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState('e-ticket');
@@ -31,16 +57,9 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
   const [fechaVencimiento, setFechaVencimiento] = useState('');
   const [moneda, setMoneda] = useState('UYU');
   const [observaciones, setObservaciones] = useState('');
-  const [items, setItems] = useState<ItemFactura[]>([
-    {
-      id: Math.random().toString(),
-      descripcion: '',
-      cantidad: 1,
-      precio_unitario: 0,
-      descuento_porcentaje: 0,
-      tasa_iva: 0.22,
-    },
-  ]);
+  const [motivoAprobacion, setMotivoAprobacion] = useState('');
+  const [errorFormulario, setErrorFormulario] = useState<string | null>(null);
+  const [items, setItems] = useState<ItemFactura[]>([crearItemVacio()]);
 
   useEffect(() => {
     if (empresaActual) {
@@ -70,16 +89,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
           tasa_iva: Number(item.tasa_iva ?? 0.22),
         }));
 
-        setItems(itemsDetalle.length > 0 ? itemsDetalle : [
-          {
-            id: Math.random().toString(),
-            descripcion: '',
-            cantidad: 1,
-            precio_unitario: 0,
-            descuento_porcentaje: 0,
-            tasa_iva: 0.22,
-          },
-        ]);
+        setItems(itemsDetalle.length > 0 ? itemsDetalle : [crearItemVacio()]);
       } catch (error) {
         console.error('Error cargando factura:', error);
       } finally {
@@ -101,24 +111,14 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
   };
 
   const agregarItem = () => {
-    setItems([
-      ...items,
-      {
-        id: Math.random().toString(),
-        descripcion: '',
-        cantidad: 1,
-        precio_unitario: 0,
-        descuento_porcentaje: 0,
-        tasa_iva: 0.22,
-      },
-    ]);
+    setItems([...items, crearItemVacio()]);
   };
 
   const eliminarItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
   };
 
-  const actualizarItem = (id: string, campo: keyof ItemFactura, valor: any) => {
+  const actualizarItem = (id: string, campo: keyof ItemFactura, valor: string | number) => {
     setItems(
       items.map((item) =>
         item.id === id ? { ...item, [campo]: valor } : item
@@ -149,56 +149,68 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
     return items.reduce((sum, item) => sum + calcularIVAItem(item), 0);
   };
 
-  const calcularTotalFactura = () => {
-    return calcularSubtotalFactura() + calcularIVAFactura();
-  };
+  const construirInput = (): CrearFacturaInput => ({
+    empresa_id: empresaActual!.id,
+    cliente_id: clienteId,
+    tipo_documento: tipoDocumento,
+    fecha_emision: fechaEmision,
+    fecha_vencimiento: fechaVencimiento || undefined,
+    moneda,
+    observaciones,
+    estado: 'borrador',
+    items: items.map((item) => ({
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      precio_unitario: item.precio_unitario,
+      descuento_porcentaje: item.descuento_porcentaje,
+      tasa_iva: item.tasa_iva,
+    })),
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!empresaActual || !clienteId) {
-      alert('Debe seleccionar un cliente');
+      setErrorFormulario('Debe seleccionar un cliente');
       return;
     }
 
     if (items.length === 0) {
-      alert('Debe agregar al menos un item');
+      setErrorFormulario('Debe agregar al menos un item');
       return;
     }
 
     if (items.some((item) => !item.descripcion || item.cantidad <= 0 || item.precio_unitario <= 0)) {
-      alert('Todos los items deben tener descripción, cantidad y precio válidos');
+      setErrorFormulario('Todos los items deben tener descripcion, cantidad y precio validos');
+      return;
+    }
+
+    if (necesitaAprobacion && !motivoAprobacion.trim()) {
+      setErrorFormulario('Debe ingresar el motivo de la modificacion para enviar la solicitud');
       return;
     }
 
     setLoading(true);
-    try {
-      const input: CrearFacturaInput = {
-        empresa_id: empresaActual.id,
-        cliente_id: clienteId,
-        tipo_documento: tipoDocumento,
-        fecha_emision: fechaEmision,
-        fecha_vencimiento: fechaVencimiento || undefined,
-        moneda,
-        observaciones,
-        estado: 'borrador',
-        items: items.map((item) => ({
-          descripcion: item.descripcion,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
-          descuento_porcentaje: item.descuento_porcentaje,
-          tasa_iva: item.tasa_iva,
-        })),
-      };
+    setErrorFormulario(null);
 
-      if (factura?.id) {
+    try {
+      const input = construirInput();
+
+      if (factura?.id && necesitaAprobacion) {
+        if (!onSolicitarAprobacionEdicion) {
+          throw new Error('No se configuro el flujo de aprobacion para esta factura');
+        }
+
+        await onSolicitarAprobacionEdicion(input, motivoAprobacion.trim());
+      } else if (factura?.id) {
         await actualizarFacturaConItems(factura.id, input);
       } else {
         await crearFactura(input);
       }
+
       onSuccess();
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      setErrorFormulario(error.message || 'No se pudo guardar la factura');
     } finally {
       setLoading(false);
     }
@@ -232,13 +244,27 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
           {cargandoFactura && (
             <div className="text-sm text-gray-500">Cargando datos de la prefactura...</div>
           )}
+
+          {errorFormulario && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorFormulario}
+            </div>
+          )}
+
+          {necesitaAprobacion && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Esta factura ya fue emitida. Los cambios se enviaran a aprobacion y solo se aplicaran cuando un
+              supervisor o administrador los apruebe. La auditoria y los asientos se regeneraran con esa aprobacion.
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <SearchableSelect
               label="Cliente"
               required
               options={clientes.map((cliente) => ({
                 value: cliente.id,
-                label: `${cliente.razon_social} - ${cliente.numero_documento}`
+                label: `${cliente.razon_social} - ${cliente.numero_documento}`,
               }))}
               value={clienteId}
               onChange={setClienteId}
@@ -251,7 +277,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               options={[
                 { value: 'e-ticket', label: 'e-Ticket' },
                 { value: 'e-factura', label: 'e-Factura' },
-                { value: 'factura_exportacion', label: 'Factura Exportación' },
+                { value: 'factura_exportacion', label: 'Factura Exportacion' },
               ]}
               value={tipoDocumento}
               onChange={setTipoDocumento}
@@ -260,7 +286,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha de Emisión *
+                Fecha de Emision *
               </label>
               <input
                 type="date"
@@ -288,7 +314,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               required
               options={[
                 { value: 'UYU', label: 'Pesos Uruguayos (UYU)' },
-                { value: 'USD', label: 'Dólares (USD)' },
+                { value: 'USD', label: 'Dolares (USD)' },
                 { value: 'EUR', label: 'Euros (EUR)' },
               ]}
               value={moneda}
@@ -309,6 +335,22 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               placeholder="Observaciones adicionales..."
             />
           </div>
+
+          {necesitaAprobacion && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Motivo de la modificacion *
+              </label>
+              <textarea
+                value={motivoAprobacion}
+                onChange={(e) => setMotivoAprobacion(e.target.value)}
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Explique que cambio y por que requiere aprobacion..."
+                required={necesitaAprobacion}
+              />
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -341,16 +383,14 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
                   <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Descripción *
+                        Descripcion *
                       </label>
                       <input
                         type="text"
                         value={item.descripcion}
-                        onChange={(e) =>
-                          actualizarItem(item.id, 'descripcion', e.target.value)
-                        }
+                        onChange={(e) => actualizarItem(item.id, 'descripcion', e.target.value)}
                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                        placeholder="Descripción del producto/servicio"
+                        placeholder="Descripcion del producto/servicio"
                         required
                       />
                     </div>
@@ -363,9 +403,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
                         type="number"
                         step="0.01"
                         value={item.cantidad}
-                        onChange={(e) =>
-                          actualizarItem(item.id, 'cantidad', parseFloat(e.target.value) || 0)
-                        }
+                        onChange={(e) => actualizarItem(item.id, 'cantidad', parseFloat(e.target.value) || 0)}
                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                         required
                       />
@@ -380,11 +418,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
                         step="0.01"
                         value={item.precio_unitario}
                         onChange={(e) =>
-                          actualizarItem(
-                            item.id,
-                            'precio_unitario',
-                            parseFloat(e.target.value) || 0
-                          )
+                          actualizarItem(item.id, 'precio_unitario', parseFloat(e.target.value) || 0)
                         }
                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                         required
@@ -400,11 +434,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
                         step="0.01"
                         value={item.descuento_porcentaje}
                         onChange={(e) =>
-                          actualizarItem(
-                            item.id,
-                            'descuento_porcentaje',
-                            parseFloat(e.target.value) || 0
-                          )
+                          actualizarItem(item.id, 'descuento_porcentaje', parseFloat(e.target.value) || 0)
                         }
                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                       />
@@ -416,9 +446,7 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
                       </label>
                       <select
                         value={item.tasa_iva}
-                        onChange={(e) =>
-                          actualizarItem(item.id, 'tasa_iva', parseFloat(e.target.value))
-                        }
+                        onChange={(e) => actualizarItem(item.id, 'tasa_iva', parseFloat(e.target.value))}
                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                       >
                         <option value="0">0%</option>
@@ -452,7 +480,9 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               </div>
               <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">
                 <span>Total:</span>
-                <span className="text-blue-600">${calcularTotalFactura().toFixed(2)}</span>
+                <span className="text-blue-600">
+                  ${(calcularSubtotalFactura() + calcularIVAFactura()).toFixed(2)}
+                </span>
               </div>
             </div>
           </div>
@@ -470,7 +500,11 @@ export default function FacturaModal({ factura, onClose, onSuccess }: FacturaMod
               disabled={loading || cargandoFactura}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Guardando...' : factura ? 'Guardar cambios' : 'Guardar Prefactura'}
+              {loading
+                ? (necesitaAprobacion ? 'Enviando solicitud...' : 'Guardando...')
+                : factura
+                  ? (necesitaAprobacion ? 'Enviar a aprobacion' : 'Guardar cambios')
+                  : 'Guardar Prefactura'}
             </button>
           </div>
         </form>

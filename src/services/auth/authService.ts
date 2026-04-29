@@ -101,6 +101,22 @@ export class AuthService {
     return localStorage.getItem('access_token');
   }
 
+  static getAuthorizationHeader(): string {
+    const accessToken = this.getAccessToken();
+    const fallbackAnon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    return `Bearer ${accessToken || fallbackAnon}`;
+  }
+
+  static getSupabaseEdgeHeaders(): Record<string, string> {
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+    return {
+      'Authorization': `Bearer ${anonKey}`,
+      'apikey': anonKey,
+    };
+  }
+
   static getRefreshToken(): string | null {
     return localStorage.getItem('refresh_token');
   }

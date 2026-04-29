@@ -105,7 +105,6 @@ export const useConciliacion = (empresaId: string | undefined) => {
     conciliarMovimientos,
     revertirConciliacion,
     importarExtractoBancario,
-    cargarDatosMockEnFirebase: async () => false,
     recargarDatos: cargarDatos,
     limpiarError: () => setError(null),
   };

@@ -3,12 +3,29 @@ import type { Empresa } from '../../types';
 
 export const empresasSupabaseService = {
   async getEmpresasByUsuario(usuarioId: string): Promise<Empresa[]> {
-    const { data, error } = await supabase
+    const { data: usuario, error: usuarioError } = await supabase
+      .from('usuarios')
+      .select('empresas_asignadas')
+      .eq('id', usuarioId)
+      .maybeSingle();
+
+    if (usuarioError) throw usuarioError;
+
+    const empresasIds = Array.isArray(usuario?.empresas_asignadas) ? usuario.empresas_asignadas : [];
+
+    let query = supabase
       .from('empresas')
       .select('*')
-      .contains('usuarios_asignados', [usuarioId])
       .eq('activa', true)
       .order('nombre');
+
+    if (empresasIds.length > 0) {
+      query = query.in('id', empresasIds);
+    } else {
+      query = query.contains('usuarios_asignados', [usuarioId]);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

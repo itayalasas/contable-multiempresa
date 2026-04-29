@@ -1,8 +1,11 @@
 import { supabase } from '../../config/supabase';
+import { AuthService } from '../auth/authService';
 
 export type TipoSolicitud =
   | 'modificar_factura'
   | 'eliminar_factura'
+  | 'modificar_nota_credito'
+  | 'eliminar_nota_credito'
   | 'modificar_asiento'
   | 'eliminar_asiento'
   | 'modificar_movimiento_tesoreria'
@@ -64,7 +67,7 @@ export const aprobacionesService = {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          ...AuthService.getSupabaseEdgeHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -106,7 +109,7 @@ export const aprobacionesService = {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          ...AuthService.getSupabaseEdgeHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -178,7 +181,7 @@ export const aprobacionesService = {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          ...AuthService.getSupabaseEdgeHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -213,7 +216,7 @@ export const aprobacionesService = {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          ...AuthService.getSupabaseEdgeHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

@@ -15,11 +15,20 @@ import { obtenerFacturaPorId, type FacturaVenta } from '../../services/supabase/
 interface NotaCreditoModalProps {
   facturas: FacturaVenta[];
   notaId?: string | null;
+  requiereAprobacionEdicion?: boolean;
+  onSolicitarAprobacionEdicion?: (input: CrearNotaCreditoInput, motivoAprobacion: string) => Promise<void>;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess }: NotaCreditoModalProps) {
+export default function NotaCreditoModal({
+  facturas,
+  notaId,
+  requiereAprobacionEdicion = false,
+  onSolicitarAprobacionEdicion,
+  onClose,
+  onSuccess,
+}: NotaCreditoModalProps) {
   const { empresaActual } = useSesion();
   const isEdit = !!notaId;
   const [loading, setLoading] = useState(false);
@@ -35,6 +44,7 @@ export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess 
   const [simulacion, setSimulacion] = useState(true);
   const [facturaDetalle, setFacturaDetalle] = useState<FacturaVenta | null>(null);
   const [cantidadAnularPorItem, setCantidadAnularPorItem] = useState<Record<string, number>>({});
+  const [motivoAprobacion, setMotivoAprobacion] = useState('');
 
   const facturaSeleccionada = facturas.find((f) => f.id === facturaId);
 
@@ -111,6 +121,11 @@ export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess 
       return;
     }
 
+    if (isEdit && requiereAprobacionEdicion && !motivoAprobacion.trim()) {
+      setErrorModal({ open: true, message: 'Debe indicar el motivo de la solicitud de aprobación' });
+      return;
+    }
+
     if (tipoAnulacion === 'parcial') {
       const itemsSeleccionados = Object.values(cantidadAnularPorItem).some((cantidad) => cantidad > 0);
       if (!itemsSeleccionados) {
@@ -140,7 +155,11 @@ export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess 
       }
 
       if (isEdit && notaId) {
-        await actualizarNotaCreditoCompleta(notaId, input);
+        if (requiereAprobacionEdicion && onSolicitarAprobacionEdicion) {
+          await onSolicitarAprobacionEdicion(input, motivoAprobacion.trim());
+        } else {
+          await actualizarNotaCreditoCompleta(notaId, input);
+        }
       } else {
         await crearNotaCredito(input);
       }
@@ -207,6 +226,31 @@ export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess 
               </div>
             </div>
           </div>
+
+          {isEdit && requiereAprobacionEdicion && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex">
+                <svg
+                  className="w-5 h-5 text-amber-600 mt-0.5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-amber-800">Esta edición requiere aprobación</h3>
+                  <p className="mt-1 text-sm text-amber-700">
+                    Los cambios no se aplicarán inmediatamente. Se enviará una solicitud a un supervisor o administrador
+                    y todo quedará registrado en auditoría.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <SearchableSelect
@@ -347,6 +391,21 @@ export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess 
             />
           </div>
 
+          {isEdit && requiereAprobacionEdicion && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Motivo de la solicitud de aprobación *
+              </label>
+              <textarea
+                value={motivoAprobacion}
+                onChange={(e) => setMotivoAprobacion(e.target.value)}
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                placeholder="Explique por qué necesita modificar esta nota de crédito..."
+              />
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <input
               id="simulacion-nota-credito"
@@ -392,7 +451,9 @@ export default function NotaCreditoModal({ facturas, notaId, onClose, onSuccess 
                   ? 'Guardando...'
                   : 'Creando...'
                 : isEdit
-                  ? 'Guardar cambios'
+                  ? requiereAprobacionEdicion
+                    ? 'Enviar a aprobación'
+                    : 'Guardar cambios'
                   : 'Crear Nota de Crédito'}
             </button>
           </div>

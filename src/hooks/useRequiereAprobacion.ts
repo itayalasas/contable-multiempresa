@@ -26,7 +26,7 @@ const MAPEO_TRANSACCION_A_ENTIDAD: Record<TipoTransaccion, { modulo: string; ent
   'nota_credito': { modulo: 'ventas', entidad: 'notas_credito', tabla: 'notas_credito' },
   'factura_compra': { modulo: 'compras', entidad: 'facturas_compra', tabla: 'facturas_compra' },
   'pago_proveedor': { modulo: 'finanzas', entidad: 'pagos_proveedor', tabla: 'pagos_proveedor' },
-  'cobro_cliente': { modulo: 'finanzas', entidad: 'cobros_cliente', tabla: 'cobros_cliente' },
+  'cobro_cliente': { modulo: 'finanzas', entidad: 'pagos_cliente', tabla: 'pagos_cliente' },
   'movimiento_tesoreria': { modulo: 'tesoreria', entidad: 'movimientos_tesoreria', tabla: 'movimientos_tesoreria' },
   'transferencia': { modulo: 'tesoreria', entidad: 'transferencias', tabla: 'transferencias' }
 };
@@ -42,6 +42,8 @@ const MAPEO_TIPO_SOLICITUD: Record<string, TipoSolicitud> = {
   'asiento_contable_eliminar': 'eliminar_asiento',
   'factura_venta_modificar': 'modificar_factura',
   'factura_venta_eliminar': 'eliminar_factura',
+  'nota_credito_modificar': 'modificar_nota_credito',
+  'nota_credito_eliminar': 'eliminar_nota_credito',
   'movimiento_tesoreria_modificar': 'modificar_movimiento_tesoreria',
   'movimiento_tesoreria_eliminar': 'eliminar_movimiento_tesoreria',
   'pago_proveedor_modificar': 'modificar_pago_proveedor',

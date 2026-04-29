@@ -43,4 +43,4 @@
 [[headers]]
   for = "/"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.auth0.com https://auth-dev.contaempresa.online; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.auth0.com https://auth-dev.contaempresa.online https://*.firebaseapp.com; frame-src https://*.auth0.com https://auth-dev.contaempresa.online;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.auth0.com https://auth-dev.contaempresa.online; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.auth0.com https://auth-dev.contaempresa.online; frame-src https://*.auth0.com https://auth-dev.contaempresa.online;"

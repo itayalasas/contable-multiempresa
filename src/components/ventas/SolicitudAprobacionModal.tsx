@@ -8,6 +8,7 @@ interface SolicitudAprobacionModalProps {
   tipo: 'modificar' | 'eliminar';
   usuarioId: string;
   empresaId: string;
+  datosModificados?: Record<string, unknown> | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -17,6 +18,7 @@ export const SolicitudAprobacionModal: React.FC<SolicitudAprobacionModalProps> =
   tipo,
   usuarioId,
   empresaId,
+  datosModificados,
   onClose,
   onSuccess,
 }) => {
@@ -37,10 +39,14 @@ export const SolicitudAprobacionModal: React.FC<SolicitudAprobacionModalProps> =
 
     try {
       if (tipo === 'modificar') {
+        if (!datosModificados) {
+          throw new Error('La solicitud no incluye cambios a aprobar');
+        }
+
         await aprobacionesService.solicitarModificacion(
           empresaId,
           factura.id,
-          {},
+          datosModificados,
           motivo,
           usuarioId
         );

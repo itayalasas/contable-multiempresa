@@ -11,6 +11,12 @@ interface EliminarFacturaBody {
   solicitudId: string;
   facturaId: string;
   usuarioId: string;
+  auditoriaMetadata?: AuditoriaRequestMetadata;
+}
+
+interface AuditoriaRequestMetadata {
+  ip_address?: string | null;
+  user_agent?: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -28,6 +34,7 @@ Deno.serve(async (req: Request) => {
 
     const body: EliminarFacturaBody = await req.json();
     const { solicitudId, facturaId, usuarioId } = body;
+    const auditoriaMetadata = getAuditoriaRequestMetadata(req, body.auditoriaMetadata);
 
     console.log("🗑️ Eliminando factura y registros asociados:", facturaId);
 
@@ -55,6 +62,8 @@ Deno.serve(async (req: Request) => {
         datos_nuevos: null,
         usuario_id: usuarioId,
         solicitud_aprobacion_id: solicitudId,
+        ip_address: auditoriaMetadata.ip_address,
+        user_agent: auditoriaMetadata.user_agent,
       });
 
     if (auditFacturaError) {
@@ -80,6 +89,8 @@ Deno.serve(async (req: Request) => {
             datos_nuevos: null,
             usuario_id: usuarioId,
             solicitud_aprobacion_id: solicitudId,
+            ip_address: auditoriaMetadata.ip_address,
+            user_agent: auditoriaMetadata.user_agent,
           });
 
         if (auditItemError) {
@@ -119,6 +130,8 @@ Deno.serve(async (req: Request) => {
             datos_nuevos: null,
             usuario_id: usuarioId,
             solicitud_aprobacion_id: solicitudId,
+            ip_address: auditoriaMetadata.ip_address,
+            user_agent: auditoriaMetadata.user_agent,
           });
 
         if (auditAsientoError) {
@@ -158,6 +171,8 @@ Deno.serve(async (req: Request) => {
             datos_nuevos: null,
             usuario_id: usuarioId,
             solicitud_aprobacion_id: solicitudId,
+            ip_address: auditoriaMetadata.ip_address,
+            user_agent: auditoriaMetadata.user_agent,
           });
 
         if (auditMovError) {
@@ -196,6 +211,8 @@ Deno.serve(async (req: Request) => {
             datos_nuevos: null,
             usuario_id: usuarioId,
             solicitud_aprobacion_id: solicitudId,
+            ip_address: auditoriaMetadata.ip_address,
+            user_agent: auditoriaMetadata.user_agent,
           });
 
         if (auditPagoError) {
@@ -236,6 +253,8 @@ Deno.serve(async (req: Request) => {
             datos_nuevos: { ...comision, factura_venta_comision_id: null, estado: "pendiente" },
             usuario_id: usuarioId,
             solicitud_aprobacion_id: solicitudId,
+            ip_address: auditoriaMetadata.ip_address,
+            user_agent: auditoriaMetadata.user_agent,
             metadata: { motivo: "factura_comision_eliminada" },
           });
 
@@ -301,3 +320,15 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+function getAuditoriaRequestMetadata(req: Request, metadata?: AuditoriaRequestMetadata): Required<AuditoriaRequestMetadata> {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  return {
+    ip_address: metadata?.ip_address
+      || req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-real-ip")
+      || forwardedFor?.split(",")[0]?.trim()
+      || null,
+    user_agent: metadata?.user_agent || req.headers.get("user-agent") || null,
+  };
+}

@@ -4,6 +4,8 @@ import {
   obtenerNotasCredito,
   enviarNotaCreditoDGI,
   eliminarNotaCredito,
+  construirPayloadActualizacionNotaCredito,
+  type CrearNotaCreditoInput,
   type NotaCredito,
 } from '../../services/supabase/notasCredito';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -12,16 +14,20 @@ import NotaCreditoModal from '../../components/ventas/NotaCreditoModal';
 import NotaCreditoDetalleModal from '../../components/ventas/NotaCreditoDetalleModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { NotificationModal } from '../../components/common/NotificationModal';
+import { useRequiereAprobacion } from '../../hooks/useRequiereAprobacion';
+import { aprobacionesService } from '../../services/supabase/aprobaciones';
 
 export default function NotasCredito() {
   const { hasPermission } = usePermissions();
-  const { empresaActual } = useSesion();
+  const { empresaActual, usuario } = useSesion();
+  const { verificarSiRequiereAprobacion } = useRequiereAprobacion();
   const [notas, setNotas] = useState<NotaCredito[]>([]);
   const [facturas, setFacturas] = useState<FacturaVenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [detalleNotaId, setDetalleNotaId] = useState<string | null>(null);
   const [editarNotaId, setEditarNotaId] = useState<string | null>(null);
+  const [requiereAprobacionEdicion, setRequiereAprobacionEdicion] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -92,24 +98,102 @@ export default function NotasCredito() {
   };
 
   const handleEditarNota = (nota: NotaCredito) => {
-    setEditarNotaId(nota.id);
+    void (async () => {
+      const { requiereAprobacion } = await verificarSiRequiereAprobacion(
+        'nota_credito',
+        'modificar',
+        Math.abs(Number(nota.total || 0))
+      );
+
+      setRequiereAprobacionEdicion(requiereAprobacion);
+      setEditarNotaId(nota.id);
+    })();
   };
 
   const handleEliminarNota = (nota: NotaCredito) => {
-    setConfirmModal({
-      show: true,
-      title: 'Eliminar nota de crédito',
-      message: `¿Desea eliminar la nota de crédito ${nota.numero_nota}? Esta acción no se puede deshacer.`,
-      onConfirm: async () => {
+    void (async () => {
+      const { requiereAprobacion } = await verificarSiRequiereAprobacion(
+        'nota_credito',
+        'eliminar',
+        Math.abs(Number(nota.total || 0))
+      );
+
+      if (requiereAprobacion) {
         try {
-          await eliminarNotaCredito(nota.id);
-          mostrarNotificacion('success', 'Nota eliminada', 'La nota de crédito fue eliminada correctamente.');
-          cargarDatos();
+          if (!empresaActual || !usuario?.id) {
+            throw new Error('No hay contexto suficiente para solicitar la aprobación');
+          }
+
+          const motivo = window.prompt(
+            `La eliminación de la nota de crédito ${nota.numero_nota} requiere aprobación.\n\nIngrese el motivo de la solicitud:`
+          );
+
+          if (!motivo?.trim()) {
+            return;
+          }
+
+          await aprobacionesService.solicitarEliminacionGenerica(
+            empresaActual.id,
+            'notas_credito',
+            nota.id,
+            'eliminar_nota_credito',
+            motivo.trim(),
+            usuario.id
+          );
+
+          mostrarNotificacion(
+            'success',
+            'Solicitud enviada',
+            'La eliminación de la nota de crédito fue enviada a aprobación. Quedará pendiente hasta su revisión.'
+          );
+          await cargarDatos();
         } catch (error: any) {
           mostrarNotificacion('error', 'Error', error.message);
         }
-      },
-    });
+        return;
+      }
+
+      setConfirmModal({
+        show: true,
+        title: 'Eliminar nota de crédito',
+        message: `¿Desea eliminar la nota de crédito ${nota.numero_nota}? Esta acción no se puede deshacer.`,
+        onConfirm: async () => {
+          try {
+            await eliminarNotaCredito(nota.id);
+            mostrarNotificacion('success', 'Nota eliminada', 'La nota de crédito fue eliminada correctamente.');
+            cargarDatos();
+          } catch (error: any) {
+            mostrarNotificacion('error', 'Error', error.message);
+          }
+        },
+      });
+    })();
+  };
+
+  const handleSolicitarAprobacionEdicion = async (
+    notaId: string,
+    input: CrearNotaCreditoInput,
+    motivoAprobacion: string
+  ) => {
+    if (!empresaActual || !usuario?.id) {
+      throw new Error('No hay contexto suficiente para solicitar aprobación');
+    }
+
+    await aprobacionesService.solicitarModificacionGenerica(
+      empresaActual.id,
+      'notas_credito',
+      notaId,
+      'modificar_nota_credito',
+      construirPayloadActualizacionNotaCredito(input),
+      motivoAprobacion,
+      usuario.id
+    );
+
+    mostrarNotificacion(
+      'success',
+      'Solicitud enviada',
+      'La modificación de la nota de crédito fue enviada a aprobación. Los cambios se aplicarán una vez aprobados.'
+    );
   };
 
   const mostrarNotificacion = (
@@ -417,9 +501,17 @@ export default function NotasCredito() {
         <NotaCreditoModal
           facturas={facturas}
           notaId={editarNotaId}
-          onClose={() => setEditarNotaId(null)}
+          requiereAprobacionEdicion={requiereAprobacionEdicion}
+          onSolicitarAprobacionEdicion={(input, motivoAprobacion) =>
+            handleSolicitarAprobacionEdicion(editarNotaId, input, motivoAprobacion)
+          }
+          onClose={() => {
+            setEditarNotaId(null);
+            setRequiereAprobacionEdicion(false);
+          }}
           onSuccess={() => {
             setEditarNotaId(null);
+            setRequiereAprobacionEdicion(false);
             cargarDatos();
           }}
         />

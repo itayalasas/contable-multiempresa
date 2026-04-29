@@ -78,7 +78,8 @@ function AsientosContables() {
   } = useModals();
 
   // Hook para sistema de aprobaciones
-  const { procesarConAprobacion } = useRequiereAprobacion();
+  const { procesarConAprobacion, verificarSiRequiereAprobacion } = useRequiereAprobacion();
+  const [requiereAprobacionEdicion, setRequiereAprobacionEdicion] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -208,10 +209,18 @@ function AsientosContables() {
   }, [searchTerm, selectedPeriod]);
 
   const openModal = async (type: 'create' | 'edit' | 'view', asiento?: AsientoContable) => {
+    setRequiereAprobacionEdicion(false);
     setModalType(type);
     if (asiento) {
       setSelectedAsiento(asiento);
       if (type === 'edit') {
+        const totalDebito = asiento.movimientos.reduce((sum, m) => sum + (m.debito || 0), 0);
+        const { requiereAprobacion } = await verificarSiRequiereAprobacion(
+          'asiento_contable',
+          'modificar',
+          totalDebito
+        );
+        setRequiereAprobacionEdicion(requiereAprobacion);
         setFormData({
           numero: asiento.numero,
           fecha: asiento.fecha,
@@ -427,11 +436,22 @@ function AsientosContables() {
   const handleDelete = async (asiento: AsientoContable) => {
     if (!empresaActual?.id) return;
 
+    const totalDebito = asiento.movimientos.reduce((sum, m) => sum + (m.debito || 0), 0);
+    const { requiereAprobacion } = await verificarSiRequiereAprobacion(
+      'asiento_contable',
+      'eliminar',
+      totalDebito
+    );
+
     confirmDelete(
       'Confirmar Eliminación',
       `¿Está seguro de que desea eliminar el asiento "${asiento.numero}"?`,
       async () => {
         try {
+          if (!usuario?.id) {
+            throw new Error('No se identifico el usuario que intenta eliminar el asiento');
+          }
+
           // Agregar a la lista de asientos siendo eliminados
           setDeletingAsientos(prev => new Set([...prev, asiento.id]));
 
@@ -444,7 +464,11 @@ function AsientosContables() {
             asiento,
             null,
             async () => {
-              return await eliminarAsiento(asiento.id);
+              return await eliminarAsiento(
+                asiento.id,
+                usuario.id,
+                `Eliminacion directa desde Asientos Contables del asiento ${asiento.numero}`
+              );
             },
             totalDebito
           );
@@ -656,7 +680,7 @@ function AsientosContables() {
             <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
             <div>
               <p className="text-sm font-medium text-blue-800">Cargando cuentas contables...</p>
-              <p className="text-xs text-blue-600">Obteniendo datos desde Firebase</p>
+              <p className="text-xs text-blue-600">Obteniendo datos desde Supabase</p>
             </div>
           </div>
         </div>
@@ -970,6 +994,12 @@ function AsientosContables() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {modalType === 'edit' && requiereAprobacionEdicion && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      La modificación de este asiento generará una solicitud de aprobación. Los cambios quedarán
+                      pendientes hasta que un supervisor o administrador los apruebe.
+                    </div>
+                  )}
                   {/* Información básica */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>

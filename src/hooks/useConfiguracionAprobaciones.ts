@@ -7,6 +7,7 @@ import {
   toggleRequiereAprobacion,
   verificarRequiereAprobacion,
   obtenerResumenPorModulo,
+  sincronizarConfiguracionesAprobacionPredeterminadas,
 } from '../services/supabase/configuracionAprobaciones';
 
 export const useConfiguracionAprobaciones = (empresaId?: string) => {
@@ -26,6 +27,7 @@ export const useConfiguracionAprobaciones = (empresaId?: string) => {
     try {
       setLoading(true);
       setError(null);
+      await sincronizarConfiguracionesAprobacionPredeterminadas(empresaId);
       const data = await obtenerConfiguracionAprobaciones(empresaId);
       setConfiguraciones(data);
 
